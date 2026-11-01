@@ -20,7 +20,11 @@ data class DnsPreset(
 data class DnsBenchmarkResult(
     val preset: DnsPreset,
     val avgPingMs: Int? = null,
+    val minPingMs: Int? = null,
+    val maxPingMs: Int? = null,
     val jitterMs: Int? = null,
+    val sampleCount: Int = 0,
+    val stabilityPercent: Int = 0,
     val isReachable: Boolean = false
 )
 
@@ -28,16 +32,19 @@ data class NetworkOptimizerState(
     val activeTransport: NetworkTransportType = NetworkTransportType.WIFI,
     val transportDetails: String = "Checking active interface...",
     val selectedDnsId: String = "cloudflare",
-    val activeDnsName: String = "Cloudflare 1.1.1.1",
+    val activeDnsName: String = "Cloudflare Gaming",
     val activePingHost: String = "1.1.1.1",
     val privateDnsHostname: String = "one.one.one.one",
     val wifiLowLatencyEnabled: Boolean = false,
     val mobileDataBoostEnabled: Boolean = false,
     val backgroundScanDisabled: Boolean = false,
     val isBenchmarking: Boolean = false,
+    val benchmarkProgress: Float = 0f,
+    val currentRound: Int = 0,
+    val totalRounds: Int = 6,
     val isRepairing: Boolean = false,
     val benchmarkResults: List<DnsBenchmarkResult> = DEFAULT_DNS_PRESETS.map { DnsBenchmarkResult(it) },
-    val statusLog: String = "Ready to benchmark and optimize Wi-Fi or Mobile Data latency."
+    val statusLog: String = "Tap 'Select Stable Network' to sample all DNS servers over several seconds."
 ) {
     companion object {
         val DEFAULT_DNS_PRESETS = listOf(

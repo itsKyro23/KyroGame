@@ -18,19 +18,17 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AutoFixHigh
-import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.CellTower
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Dns
-import androidx.compose.material.icons.filled.NetworkCheck
 import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Router
@@ -44,6 +42,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
@@ -102,9 +101,11 @@ fun NetworkOptimizerScreen(
         )
     }
 
-    // Run an initial non-intrusive ping benchmark on page open so latencies are visible
+    // Run an initial multi-pass ping benchmark on page open if not already sampled
     LaunchedEffect(Unit) {
-        repository.benchmarkAllDnsAndSelectStable(autoApplyBest = false)
+        if (netState.benchmarkResults.all { it.sampleCount == 0 } && !netState.isBenchmarking) {
+            repository.benchmarkAllDnsAndSelectStable(autoApplyBest = false, rounds = 3)
+        }
     }
 
     val pingColor = when {
@@ -135,22 +136,23 @@ fun NetworkOptimizerScreen(
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(18.dp),
-                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Row(
+                            modifier = Modifier.weight(1f),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
                             Surface(
                                 shape = RoundedCornerShape(14.dp),
                                 color = pingColor.copy(alpha = 0.16f),
-                                modifier = Modifier.size(46.dp)
+                                modifier = Modifier.size(44.dp)
                             ) {
                                 Box(contentAlignment = Alignment.Center) {
                                     Icon(
@@ -161,11 +163,14 @@ fun NetworkOptimizerScreen(
                                         },
                                         contentDescription = null,
                                         tint = pingColor,
-                                        modifier = Modifier.size(24.dp)
+                                        modifier = Modifier.size(22.dp)
                                     )
                                 }
                             }
-                            Column {
+                            Column(
+                                modifier = Modifier.weight(1f),
+                                verticalArrangement = Arrangement.spacedBy(2.dp)
+                            ) {
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -175,7 +180,9 @@ fun NetworkOptimizerScreen(
                                         style = MaterialTheme.typography.labelSmall,
                                         fontWeight = FontWeight.Bold,
                                         color = pingColor,
-                                        letterSpacing = 0.8.sp
+                                        letterSpacing = 0.6.sp,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
                                     )
                                     Box(
                                         modifier = Modifier
@@ -188,42 +195,85 @@ fun NetworkOptimizerScreen(
                                     text = netState.activeDnsName,
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onSurface
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                                 Text(
-                                    text = "Target: ${netState.activePingHost} • DoT: ${netState.privateDnsHostname}",
+                                    text = "IP: ${netState.activePingHost} • ${netState.privateDnsHostname}",
                                     style = MaterialTheme.typography.labelSmall,
                                     fontFamily = FontFamily.Monospace,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    fontSize = 10.sp
+                                    fontSize = 10.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                             }
                         }
 
-                        // Live Ping Pill
+                        // Live Ping Pill (Fixed minimum width so it never collapses)
                         Surface(
                             shape = RoundedCornerShape(14.dp),
                             color = MaterialTheme.colorScheme.surface,
-                            border = BorderStroke(1.dp, pingColor.copy(alpha = 0.45f))
+                            border = BorderStroke(1.dp, pingColor.copy(alpha = 0.45f)),
+                            modifier = Modifier.widthIn(min = 82.dp)
                         ) {
                             Column(
-                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
                                 horizontalAlignment = Alignment.CenterHorizontally
                             ) {
                                 Text(
                                     text = stats.pingMs?.let { "${it}ms" } ?: "N/A",
-                                    style = MaterialTheme.typography.titleLarge,
+                                    style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Black,
-                                    color = pingColor
+                                    color = pingColor,
+                                    maxLines = 1
                                 )
                                 Text(
                                     text = "LIVE PING",
                                     style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     fontSize = 9.sp,
-                                    letterSpacing = 0.6.sp
+                                    letterSpacing = 0.6.sp,
+                                    maxLines = 1
                                 )
                             }
+                        }
+                    }
+
+                    // Multi-second Sampling Progress Bar (visible while benchmarking all DNS)
+                    if (netState.isBenchmarking) {
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "Measuring Average Latency (Pass ${netState.currentRound}/${netState.totalRounds})",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = "${(netState.benchmarkProgress * 100).toInt()}%",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                            LinearProgressIndicator(
+                                progress = { netState.benchmarkProgress.coerceIn(0f, 1f) },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(6.dp)
+                                    .clip(RoundedCornerShape(3.dp)),
+                                color = MaterialTheme.colorScheme.primary,
+                                trackColor = MaterialTheme.colorScheme.surface
+                            )
                         }
                     }
 
@@ -243,19 +293,22 @@ fun NetworkOptimizerScreen(
                         )
                     }
 
-                    // Primary Action Buttons: Select Stable Network (Auto-DNS) + Repair Network
+                    // Primary Action Buttons: Select Stable Network (Multi-Second Average) + Repair Network
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         Button(
                             onClick = {
                                 scope.launch {
-                                    val best = repository.benchmarkAllDnsAndSelectStable(autoApplyBest = true)
+                                    val best = repository.benchmarkAllDnsAndSelectStable(
+                                        autoApplyBest = true,
+                                        rounds = 6
+                                    )
                                     if (best != null) {
                                         Toast.makeText(
                                             context,
-                                            "Selected Stable DNS: ${best.name} (${best.primaryIp})",
+                                            "Applied Stable DNS: ${best.name} (${best.primaryIp})",
                                             Toast.LENGTH_SHORT
                                         ).show()
                                     }
@@ -267,34 +320,37 @@ fun NetworkOptimizerScreen(
                                 containerColor = MaterialTheme.colorScheme.primary,
                                 contentColor = Color.White
                             ),
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
                             modifier = Modifier
-                                .weight(1.25f)
-                                .height(46.dp)
+                                .weight(1.3f)
+                                .height(42.dp)
                                 .testTag("select_stable_network_button")
                         ) {
                             if (netState.isBenchmarking) {
                                 CircularProgressIndicator(
-                                    modifier = Modifier.size(16.dp),
+                                    modifier = Modifier.size(14.dp),
                                     strokeWidth = 2.dp,
                                     color = Color.White
                                 )
-                                Spacer(modifier = Modifier.width(8.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
                                 Text(
-                                    text = "Scanning...",
+                                    text = "Averaging (${netState.currentRound}/${netState.totalRounds})...",
                                     fontWeight = FontWeight.Bold,
-                                    fontSize = 12.sp
+                                    fontSize = 11.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                             } else {
                                 Icon(
                                     imageVector = Icons.Default.AutoFixHigh,
                                     contentDescription = null,
-                                    modifier = Modifier.size(17.dp)
+                                    modifier = Modifier.size(15.dp)
                                 )
-                                Spacer(modifier = Modifier.width(6.dp))
+                                Spacer(modifier = Modifier.width(5.dp))
                                 Text(
                                     text = "Select Stable Network",
                                     fontWeight = FontWeight.Bold,
-                                    fontSize = 12.sp,
+                                    fontSize = 11.sp,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
                                 )
@@ -318,23 +374,25 @@ fun NetworkOptimizerScreen(
                                 containerColor = MaterialTheme.colorScheme.surface,
                                 contentColor = MaterialTheme.colorScheme.onSurface
                             ),
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
                             modifier = Modifier
-                                .weight(0.85f)
-                                .height(46.dp)
+                                .weight(0.9f)
+                                .height(42.dp)
                                 .testTag("repair_network_button")
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Build,
                                 contentDescription = null,
                                 tint = KyroCyan,
-                                modifier = Modifier.size(16.dp)
+                                modifier = Modifier.size(14.dp)
                             )
-                            Spacer(modifier = Modifier.width(6.dp))
+                            Spacer(modifier = Modifier.width(5.dp))
                             Text(
-                                text = if (netState.isRepairing) "Repairing..." else "Repair / Flush",
+                                text = if (netState.isRepairing) "Repairing..." else "Repair Network",
                                 fontWeight = FontWeight.Bold,
-                                fontSize = 12.sp,
-                                maxLines = 1
+                                fontSize = 11.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
                     }
@@ -356,7 +414,7 @@ fun NetworkOptimizerScreen(
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(18.dp),
+                        .padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
                     Row(
@@ -393,7 +451,7 @@ fun NetworkOptimizerScreen(
                                 onClick = { selectedTransportTab = transport },
                                 modifier = Modifier
                                     .weight(1f)
-                                    .height(44.dp)
+                                    .height(42.dp)
                                     .testTag("transport_tab_${transport.name.lowercase()}"),
                                 shape = RoundedCornerShape(12.dp),
                                 color = if (isSelected) {
@@ -426,7 +484,8 @@ fun NetworkOptimizerScreen(
                                         text = if (transport == NetworkTransportType.WIFI) "Wi-Fi Mode" else "Mobile Data",
                                         style = MaterialTheme.typography.labelMedium,
                                         fontWeight = FontWeight.Bold,
-                                        color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
+                                        color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1
                                     )
                                     if (isCurrentlyActive) {
                                         Spacer(modifier = Modifier.width(6.dp))
@@ -549,19 +608,24 @@ fun NetworkOptimizerScreen(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    modifier = Modifier.weight(1f),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     Icon(
                         imageVector = Icons.Default.Dns,
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(20.dp)
+                        modifier = Modifier.size(18.dp)
                     )
-                    Spacer(modifier = Modifier.width(8.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        text = "STABLE GAMING DNS SERVERS",
+                        text = "GAMING DNS SERVERS",
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.Bold,
-                        letterSpacing = 0.8.sp
+                        letterSpacing = 0.6.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
 
@@ -574,7 +638,7 @@ fun NetworkOptimizerScreen(
                             }
                         },
                         shape = RoundedCornerShape(10.dp),
-                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
                         modifier = Modifier.height(30.dp)
                     ) {
                         Text(
@@ -587,7 +651,7 @@ fun NetworkOptimizerScreen(
                     FilledTonalButton(
                         onClick = {
                             scope.launch {
-                                repository.benchmarkAllDnsAndSelectStable(autoApplyBest = false)
+                                repository.benchmarkAllDnsAndSelectStable(autoApplyBest = false, rounds = 5)
                             }
                         },
                         enabled = !netState.isBenchmarking,
@@ -602,7 +666,7 @@ fun NetworkOptimizerScreen(
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
-                            text = "Test All",
+                            text = "Benchmark",
                             style = MaterialTheme.typography.labelSmall,
                             fontWeight = FontWeight.Bold,
                             fontSize = 10.sp
@@ -726,7 +790,11 @@ private fun DnsResolverCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column(modifier = Modifier.weight(1f)) {
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(end = 8.dp)
+                ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -735,7 +803,9 @@ private fun DnsResolverCard(
                             text = preset.name,
                             style = MaterialTheme.typography.titleSmall,
                             fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface
+                            color = MaterialTheme.colorScheme.onSurface,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                         Surface(
                             shape = RoundedCornerShape(6.dp),
@@ -757,20 +827,26 @@ private fun DnsResolverCard(
                         style = MaterialTheme.typography.labelSmall,
                         fontFamily = FontFamily.Monospace,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontSize = 10.sp
+                        fontSize = 10.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
 
-                // Measured Ping & Jitter Badge
+                // Measured Multi-Pass Average Ping & Stability Badge
                 Column(horizontalAlignment = Alignment.End) {
                     Text(
-                        text = benchmark.avgPingMs?.let { "${it}ms" } ?: "-- ms",
-                        style = MaterialTheme.typography.titleMedium,
+                        text = benchmark.avgPingMs?.let { "Avg ${it}ms" } ?: "-- ms",
+                        style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.Black,
                         color = pingColor
                     )
                     Text(
-                        text = benchmark.jitterMs?.let { "Jitter ±${it}ms" } ?: "Ready",
+                        text = if (benchmark.sampleCount > 0) {
+                            "Jitter ±${benchmark.jitterMs ?: 0}ms • ${benchmark.stabilityPercent}% Stable"
+                        } else {
+                            "Waiting for sample"
+                        },
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontSize = 9.sp

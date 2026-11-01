@@ -37,6 +37,8 @@ import com.kyro.game.space.data.model.formatDownscaleClean
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -595,64 +597,119 @@ class GameSpaceRepository(
         }
     }
 
-    suspend fun benchmarkAllDnsAndSelectStable(autoApplyBest: Boolean = true): DnsPreset? = withContext(Dispatchers.IO) {
+    suspend fun benchmarkAllDnsAndSelectStable(
+        autoApplyBest: Boolean = true,
+        rounds: Int = if (autoApplyBest) 6 else 3
+    ): DnsPreset? = withContext(Dispatchers.IO) {
+        val totalRounds = rounds.coerceIn(2, 10)
         val (transportType, transportDetails) = detectNetworkTransport()
+        val presets = NetworkOptimizerState.DEFAULT_DNS_PRESETS
+        val samplesById = presets.associate { it.id to mutableListOf<Int>() }
+
         _networkOptimizerState.value = _networkOptimizerState.value.copy(
             activeTransport = transportType,
             transportDetails = transportDetails,
             isBenchmarking = true,
-            statusLog = "Benchmarking latency & jitter across 6 global gaming DNS nodes..."
+            benchmarkProgress = 0.05f,
+            currentRound = 1,
+            totalRounds = totalRounds,
+            statusLog = "Sampling all ${presets.size} DNS servers over ${totalRounds}s to calculate average latency & stability..."
         )
 
-        val updatedResults = mutableListOf<DnsBenchmarkResult>()
-        for (preset in NetworkOptimizerState.DEFAULT_DNS_PRESETS) {
-            val samples = mutableListOf<Int>()
-            repeat(3) {
-                val (ms, ok) = measureRealPing(preset.primaryIp, 53)
-                if (ok && ms != null) {
-                    samples.add(ms)
+        for (round in 1..totalRounds) {
+            coroutineScope {
+                val jobs = presets.map { preset ->
+                    async {
+                        val (ms, ok) = measureRealPing(preset.primaryIp, 53)
+                        Pair(preset.id, if (ok) ms else null)
+                    }
+                }
+                jobs.forEach { deferred ->
+                    val (id, pingVal) = deferred.await()
+                    if (pingVal != null) {
+                        samplesById[id]?.add(pingVal)
+                    }
                 }
             }
-            val result = if (samples.isNotEmpty()) {
-                val avg = samples.sum() / samples.size
-                val jitter = (samples.maxOrNull() ?: avg) - (samples.minOrNull() ?: avg)
-                DnsBenchmarkResult(
-                    preset = preset,
-                    avgPingMs = avg,
-                    jitterMs = jitter,
-                    isReachable = true
-                )
-            } else {
-                DnsBenchmarkResult(
-                    preset = preset,
-                    avgPingMs = null,
-                    jitterMs = null,
-                    isReachable = false
-                )
+
+            // Build live intermediate results after this round
+            val intermediate = presets.map { preset ->
+                val list = samplesById[preset.id].orEmpty()
+                if (list.isNotEmpty()) {
+                    val avg = list.sum() / list.size
+                    val minVal = list.minOrNull() ?: avg
+                    val maxVal = list.maxOrNull() ?: avg
+                    val jitter = maxVal - minVal
+                    val stability = ((list.size * 100) / round).coerceIn(0, 100)
+                    DnsBenchmarkResult(
+                        preset = preset,
+                        avgPingMs = avg,
+                        minPingMs = minVal,
+                        maxPingMs = maxVal,
+                        jitterMs = jitter,
+                        sampleCount = list.size,
+                        stabilityPercent = stability,
+                        isReachable = true
+                    )
+                } else {
+                    DnsBenchmarkResult(
+                        preset = preset,
+                        avgPingMs = null,
+                        minPingMs = null,
+                        maxPingMs = null,
+                        jitterMs = null,
+                        sampleCount = 0,
+                        stabilityPercent = 0,
+                        isReachable = false
+                    )
+                }
             }
-            updatedResults.add(result)
+
+            val progress = round.toFloat() / totalRounds.toFloat()
+            _networkOptimizerState.value = _networkOptimizerState.value.copy(
+                isBenchmarking = true,
+                benchmarkProgress = progress,
+                currentRound = round,
+                totalRounds = totalRounds,
+                benchmarkResults = intermediate,
+                statusLog = "Sampling all DNS servers (Pass $round/$totalRounds • ${(progress * 100).toInt()}%) — Averaging ping & jitter..."
+            )
+
+            if (round < totalRounds) {
+                delay(if (autoApplyBest) 650L else 350L)
+            }
         }
 
-        val sortedResults = updatedResults.sortedWith(
+        val finalSorted = _networkOptimizerState.value.benchmarkResults.sortedWith(
             compareBy<DnsBenchmarkResult> { !it.isReachable }
+                .thenByDescending { it.stabilityPercent }
                 .thenBy { (it.avgPingMs ?: 9999) + ((it.jitterMs ?: 0) / 2) }
         )
 
-        val bestCandidate = sortedResults.firstOrNull { it.isReachable }?.preset
-            ?: NetworkOptimizerState.DEFAULT_DNS_PRESETS.first()
+        val bestResult = finalSorted.firstOrNull { it.isReachable }
+        val bestCandidate = bestResult?.preset ?: presets.first()
+        val bestAvgStr = bestResult?.avgPingMs?.let { "${it}ms avg" } ?: "ready"
+        val bestJitterStr = bestResult?.jitterMs?.let { "±${it}ms jitter" } ?: ""
 
         _networkOptimizerState.value = _networkOptimizerState.value.copy(
             isBenchmarking = false,
-            benchmarkResults = sortedResults,
+            benchmarkProgress = 1f,
+            currentRound = totalRounds,
+            totalRounds = totalRounds,
+            benchmarkResults = finalSorted,
             statusLog = if (autoApplyBest) {
-                "Selected most stable network route: ${bestCandidate.name} (${bestCandidate.primaryIp})"
+                "Most stable DNS selected: ${bestCandidate.name} (${bestCandidate.primaryIp} • $bestAvgStr $bestJitterStr)"
             } else {
-                "Benchmark complete. Lowest latency: ${bestCandidate.name} (${bestCandidate.primaryIp})"
+                "Multi-pass average complete. Most stable: ${bestCandidate.name} (${bestCandidate.primaryIp} • $bestAvgStr $bestJitterStr)"
             }
         )
 
         if (autoApplyBest) {
             applyDnsPreset(bestCandidate)
+            // Keep the detailed multi-pass summary message visible
+            _networkOptimizerState.value = _networkOptimizerState.value.copy(
+                statusLog = "Applied most stable DNS: ${bestCandidate.name} (${bestCandidate.primaryIp} • $bestAvgStr $bestJitterStr)"
+            )
         } else {
             sampleDeviceStats()
         }
