@@ -1,8 +1,10 @@
 package com.kyro.game.space.data.model
 
+import android.os.Build
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlin.math.roundToInt
 
 enum class GameOptimizationMode(val label: String, val systemModeId: Int) {
     STANDARD("Standard", 1),
@@ -10,11 +12,68 @@ enum class GameOptimizationMode(val label: String, val systemModeId: Int) {
     CUSTOM("Custom", 2)
 }
 
+enum class GameApiTarget(val label: String, val shortTag: String, val commandHint: String) {
+    ANDROID_15_BELOW(
+        label = "Under Android 15 (≤ A15)",
+        shortTag = "≤A15",
+        commandHint = "device_config put game_overlay"
+    ),
+    ANDROID_16_PLUS(
+        label = "Android 16+ (A16+)",
+        shortTag = "A16+",
+        commandHint = "cmd game set"
+    );
+
+    companion object {
+        fun detectDefaultForDevice(): GameApiTarget {
+            val releaseMajor = Build.VERSION.RELEASE
+                ?.takeWhile { it.isDigit() }
+                ?.toIntOrNull() ?: 0
+            return if (Build.VERSION.SDK_INT >= 36 || releaseMajor >= 16) {
+                ANDROID_16_PLUS
+            } else {
+                ANDROID_15_BELOW
+            }
+        }
+    }
+}
+
+fun formatDownscaleClean(value: Float): String {
+    val clamped = ((value * 20f).roundToInt() / 20f).coerceIn(0.3f, 1.0f)
+    val twoDec = String.format(Locale.US, "%.2f", clamped)
+    return if (twoDec.endsWith("0")) {
+        twoDec.dropLast(1)
+    } else {
+        twoDec
+    }
+}
+
 data class GameCustomConfig(
     val mode: GameOptimizationMode = GameOptimizationMode.STANDARD,
     val downscaleFactor: Float = 1.0f, // 0.3f .. 1.0f
-    val fpsLimit: Int = 60
-)
+    val fpsLimit: Int = 60,
+    val apiTarget: GameApiTarget = GameApiTarget.detectDefaultForDevice()
+) {
+    fun buildShellCommand(packageName: String): String {
+        val scaleStr = formatDownscaleClean(downscaleFactor)
+        val fpsStr = fpsLimit.toString()
+        val modeId = mode.systemModeId
+
+        return when (apiTarget) {
+            GameApiTarget.ANDROID_16_PLUS -> {
+                "cmd game set --mode $modeId --downscale $scaleStr --fps $fpsStr $packageName"
+            }
+            GameApiTarget.ANDROID_15_BELOW -> {
+                if (mode == GameOptimizationMode.STANDARD && downscaleFactor >= 0.99f) {
+                    "device_config delete game_overlay $packageName; cmd game mode 1 $packageName 2>/dev/null || true"
+                } else {
+                    val overlaySpec = "mode=2,downscaleFactor=$scaleStr,fps=$fpsStr:mode=3,downscaleFactor=$scaleStr,fps=$fpsStr"
+                    "device_config put game_overlay $packageName $overlaySpec; cmd game mode $modeId $packageName 2>/dev/null || true"
+                }
+            }
+        }
+    }
+}
 
 data class GameItem(
     val packageName: String,
@@ -36,8 +95,8 @@ data class GameItem(
 
     val formattedConfigSummary: String
         get() {
-            val scaleStr = String.format(Locale.US, "%.2fx", customConfig.downscaleFactor)
-            return "${customConfig.mode.label} • $scaleStr • ${customConfig.fpsLimit} FPS"
+            val scaleStr = "${formatDownscaleClean(customConfig.downscaleFactor)}x"
+            return "${customConfig.mode.label} • $scaleStr • ${customConfig.fpsLimit} FPS • ${customConfig.apiTarget.shortTag}"
         }
 
     companion object {

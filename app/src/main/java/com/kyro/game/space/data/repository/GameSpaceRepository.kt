@@ -21,11 +21,13 @@ import com.kyro.game.space.data.model.ConnectionOverview
 import com.kyro.game.space.data.model.ConnectionStatus
 import com.kyro.game.space.data.model.DeviceStats
 import com.kyro.game.space.data.model.ExecutionMethod
+import com.kyro.game.space.data.model.GameApiTarget
 import com.kyro.game.space.data.model.GameCustomConfig
 import com.kyro.game.space.data.model.GameItem
 import com.kyro.game.space.data.model.GameOptimizationMode
 import com.kyro.game.space.data.model.ManualAdbInfo
 import com.kyro.game.space.data.model.ShizukuInfo
+import com.kyro.game.space.data.model.formatDownscaleClean
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -202,7 +204,13 @@ class GameSpaceRepository(
                     ?: GameOptimizationMode.STANDARD
                 val scale = parts[1].toFloatOrNull()?.coerceIn(0.3f, 1.0f) ?: 1.0f
                 val fps = parts[2].toIntOrNull() ?: 60
-                GameCustomConfig(mode = mode, downscaleFactor = scale, fpsLimit = fps)
+                val target = if (parts.size >= 4) {
+                    GameApiTarget.entries.firstOrNull { it.name == parts[3] }
+                        ?: GameApiTarget.detectDefaultForDevice()
+                } else {
+                    GameApiTarget.detectDefaultForDevice()
+                }
+                GameCustomConfig(mode = mode, downscaleFactor = scale, fpsLimit = fps, apiTarget = target)
             } else null
         } catch (_: Throwable) {
             null
@@ -220,43 +228,30 @@ class GameSpaceRepository(
         val sanitizedConfig = config.copy(downscaleFactor = sanitizedScale)
         val serialized = String.format(
             Locale.US,
-            "%s|%.2f|%d",
+            "%s|%.2f|%d|%s",
             sanitizedConfig.mode.name,
             sanitizedConfig.downscaleFactor,
-            sanitizedConfig.fpsLimit
+            sanitizedConfig.fpsLimit,
+            sanitizedConfig.apiTarget.name
         )
         prefs.edit().putString("game_cfg_$packageName", serialized).apply()
         _gameConfigs.value = _gameConfigs.value.toMutableMap().apply {
             put(packageName, sanitizedConfig)
         }
 
-        // Build Android Game Overlay & Game Mode shell command
-        val scaleStr = String.format(Locale.US, "%.2f", sanitizedConfig.downscaleFactor)
+        val scaleStr = formatDownscaleClean(sanitizedConfig.downscaleFactor)
         val fpsStr = sanitizedConfig.fpsLimit.toString()
-        val modeCode = when (sanitizedConfig.mode) {
-            GameOptimizationMode.STANDARD -> 1
-            GameOptimizationMode.PERFORMANCE -> 2
-            GameOptimizationMode.CUSTOM -> 2
-        }
-
-        val shellCmd = if (sanitizedConfig.mode == GameOptimizationMode.STANDARD &&
-            sanitizedConfig.downscaleFactor >= 0.99f
-        ) {
-            "device_config delete game_overlay $packageName; cmd game mode 1 $packageName 2>/dev/null || true"
-        } else {
-            val overlaySpec = "mode=2,downscaleFactor=$scaleStr,fps=$fpsStr:mode=3,downscaleFactor=$scaleStr,fps=$fpsStr"
-            "device_config put game_overlay $packageName $overlaySpec; cmd game mode $modeCode $packageName 2>/dev/null || true"
-        }
+        val shellCmd = sanitizedConfig.buildShellCommand(packageName)
 
         return try {
             val cmdRes = executeCommand(shellCmd)
             if (cmdRes.isSuccess) {
-                Result.success("Applied ${sanitizedConfig.mode.label} (${scaleStr}x • ${fpsStr} FPS) via ${executionMethod.value.name}")
+                Result.success("Applied ${sanitizedConfig.mode.label} (${scaleStr}x • ${fpsStr} FPS • ${sanitizedConfig.apiTarget.shortTag})")
             } else {
-                Result.success("Saved ${sanitizedConfig.mode.label} (${scaleStr}x • ${fpsStr} FPS). Connect Shizuku/Daemon to enforce kernel/overlay limits.")
+                Result.success("Saved ${sanitizedConfig.mode.label} (${scaleStr}x • ${fpsStr} FPS • ${sanitizedConfig.apiTarget.shortTag}). Connect Shizuku/Daemon to apply.")
             }
         } catch (_: Throwable) {
-            Result.success("Saved ${sanitizedConfig.mode.label} (${scaleStr}x • ${fpsStr} FPS)")
+            Result.success("Saved ${sanitizedConfig.mode.label} (${scaleStr}x • ${fpsStr} FPS • ${sanitizedConfig.apiTarget.shortTag})")
         }
     }
 

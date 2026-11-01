@@ -6,25 +6,26 @@ import android.os.Build
 import android.view.Display
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Android
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.PhotoSizeSelectSmall
 import androidx.compose.material.icons.filled.Speed
+import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -51,15 +52,17 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.DialogProperties
+import com.kyro.game.space.data.model.GameApiTarget
 import com.kyro.game.space.data.model.GameCustomConfig
 import com.kyro.game.space.data.model.GameItem
 import com.kyro.game.space.data.model.GameOptimizationMode
-import java.util.Locale
+import com.kyro.game.space.data.model.formatDownscaleClean
 import kotlin.math.roundToInt
 
 /**
@@ -102,8 +105,12 @@ fun GameCustomizeDialog(
 ) {
     val context = LocalContext.current
     val (maxDeviceFps, fpsOptions) = remember(context) { getDeviceSupportedFpsLimits(context) }
+    val autoDetectedTarget = remember { GameApiTarget.detectDefaultForDevice() }
 
     val initialConfig = game.customConfig
+    var selectedApiTarget by remember(game.packageName) {
+        mutableStateOf(initialConfig.apiTarget)
+    }
     var selectedMode by remember(game.packageName) { mutableStateOf(initialConfig.mode) }
     var downscaleFactor by remember(game.packageName) {
         mutableFloatStateOf(initialConfig.downscaleFactor.coerceIn(0.3f, 1.0f))
@@ -116,6 +123,15 @@ fun GameCustomizeDialog(
         }
         val closest = fpsOptions.minByOrNull { kotlin.math.abs(it - startFps) } ?: maxDeviceFps
         mutableIntStateOf(closest)
+    }
+
+    val previewConfig = remember(selectedMode, downscaleFactor, selectedFps, selectedApiTarget) {
+        GameCustomConfig(
+            mode = selectedMode,
+            downscaleFactor = downscaleFactor,
+            fpsLimit = selectedFps,
+            apiTarget = selectedApiTarget
+        )
     }
 
     AlertDialog(
@@ -138,7 +154,7 @@ fun GameCustomizeDialog(
                     color = MaterialTheme.colorScheme.primary.copy(alpha = 0.16f),
                     modifier = Modifier.size(40.dp)
                 ) {
-                    androidx.compose.foundation.layout.Box(contentAlignment = Alignment.Center) {
+                    Box(contentAlignment = Alignment.Center) {
                         Icon(
                             imageVector = Icons.Default.Tune,
                             contentDescription = null,
@@ -168,8 +184,122 @@ fun GameCustomizeDialog(
                 modifier = Modifier
                     .fillMaxWidth()
                     .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
+                // 0. Android System Command Target (Auto-selected by Android version, manually switchable)
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Android,
+                                contentDescription = null,
+                                tint = Color(0xFF00E676),
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Text(
+                                text = "ANDROID ENGINE TARGET",
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = 0.8.sp,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant,
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.35f))
+                        ) {
+                            Text(
+                                text = "Auto: ${autoDetectedTarget.shortTag} (SDK ${Build.VERSION.SDK_INT})",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontSize = 10.sp,
+                                modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp)
+                            )
+                        }
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        GameApiTarget.entries.forEach { target ->
+                            val isSelected = selectedApiTarget == target
+                            Surface(
+                                onClick = { selectedApiTarget = target },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .testTag("api_target_${target.name.lowercase()}"),
+                                shape = RoundedCornerShape(12.dp),
+                                color = if (isSelected) {
+                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.22f)
+                                } else {
+                                    MaterialTheme.colorScheme.surfaceVariant
+                                },
+                                border = BorderStroke(
+                                    width = if (isSelected) 1.5.dp else 1.dp,
+                                    color = if (isSelected) {
+                                        MaterialTheme.colorScheme.primary
+                                    } else {
+                                        MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)
+                                    }
+                                )
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+                                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                    ) {
+                                        if (isSelected) {
+                                            Icon(
+                                                imageVector = Icons.Default.Check,
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.primary,
+                                                modifier = Modifier.size(14.dp)
+                                            )
+                                        }
+                                        Text(
+                                            text = target.label,
+                                            style = MaterialTheme.typography.labelMedium,
+                                            fontWeight = FontWeight.Bold,
+                                            color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurface,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                            fontSize = 11.sp
+                                        )
+                                    }
+                                    Text(
+                                        text = target.commandHint,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontFamily = FontFamily.Monospace,
+                                        color = if (isSelected) {
+                                            MaterialTheme.colorScheme.primary
+                                        } else {
+                                            MaterialTheme.colorScheme.onSurfaceVariant
+                                        },
+                                        fontSize = 9.sp,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.25f))
+
                 // 1. Optimization Mode Section
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Row(
@@ -216,7 +346,7 @@ fun GameCustomizeDialog(
                                 },
                                 modifier = Modifier
                                     .weight(1f)
-                                    .height(42.dp)
+                                    .height(40.dp)
                                     .testTag("mode_chip_${mode.name.lowercase()}"),
                                 shape = RoundedCornerShape(12.dp),
                                 color = if (isSelected) {
@@ -233,7 +363,7 @@ fun GameCustomizeDialog(
                                     }
                                 )
                             ) {
-                                androidx.compose.foundation.layout.Box(
+                                Box(
                                     contentAlignment = Alignment.Center,
                                     modifier = Modifier.padding(horizontal = 4.dp)
                                 ) {
@@ -248,17 +378,6 @@ fun GameCustomizeDialog(
                             }
                         }
                     }
-
-                    Text(
-                        text = when (selectedMode) {
-                            GameOptimizationMode.STANDARD -> "Balanced system profile with native resolution and standard frame pacing."
-                            GameOptimizationMode.PERFORMANCE -> "Prioritizes maximum frame rate and GPU throughput for competitive play."
-                            GameOptimizationMode.CUSTOM -> "User-defined resolution downscale ratio and custom hardware FPS target."
-                        },
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontSize = 11.sp
-                    )
                 }
 
                 HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.25f))
@@ -295,8 +414,9 @@ fun GameCustomizeDialog(
                             border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.4f))
                         ) {
                             val pct = (downscaleFactor * 100).roundToInt()
+                            val cleanScale = formatDownscaleClean(downscaleFactor)
                             Text(
-                                text = String.format(Locale.US, "%.2fx (%d%%)", downscaleFactor, pct),
+                                text = "${cleanScale}x ($pct%)",
                                 style = MaterialTheme.typography.labelSmall,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.primary,
@@ -308,12 +428,11 @@ fun GameCustomizeDialog(
                     Slider(
                         value = downscaleFactor,
                         onValueChange = { rawValue ->
-                            // Snap to 0.05 increments between 0.30 and 1.00
                             val stepped = ((rawValue * 20f).roundToInt() / 20f).coerceIn(0.3f, 1.0f)
                             downscaleFactor = stepped
                         },
                         valueRange = 0.3f..1.0f,
-                        steps = 13, // (1.0 - 0.3) / 0.05 - 1 = 13 intermediate steps
+                        steps = 13,
                         colors = SliderDefaults.colors(
                             thumbColor = MaterialTheme.colorScheme.primary,
                             activeTrackColor = MaterialTheme.colorScheme.primary,
@@ -329,13 +448,13 @@ fun GameCustomizeDialog(
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Text(
-                            text = "0.3x (Max FPS Boost)",
+                            text = "0.3 (Min Scale)",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             fontSize = 10.sp
                         )
                         Text(
-                            text = "1.0x (Native Res)",
+                            text = "1.0 (Native Res)",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             fontSize = 10.sp
@@ -388,7 +507,7 @@ fun GameCustomizeDialog(
                                     modifier = Modifier.size(12.dp)
                                 )
                                 Text(
-                                    text = "Max Support: ${maxDeviceFps} FPS",
+                                    text = "Max Support: $maxDeviceFps FPS",
                                     style = MaterialTheme.typography.labelSmall,
                                     fontWeight = FontWeight.Bold,
                                     color = Color(0xFF00E676),
@@ -437,25 +556,40 @@ fun GameCustomizeDialog(
                         }
                     }
 
-                    Text(
-                        text = "Detected display hardware supports up to ${maxDeviceFps}Hz. Settings are applied via Android Game Overlay / Shizuku / ADB Daemon.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontSize = 11.sp
-                    )
+                    // Live Command Preview Box
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = Color(0xFF0E0E14),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Terminal,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(15.dp)
+                            )
+                            Text(
+                                text = previewConfig.buildShellCommand(game.packageName),
+                                style = MaterialTheme.typography.labelSmall,
+                                fontFamily = FontFamily.Monospace,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontSize = 10.sp
+                            )
+                        }
+                    }
                 }
             }
         },
         confirmButton = {
             Button(
                 onClick = {
-                    onSaveConfig(
-                        GameCustomConfig(
-                            mode = selectedMode,
-                            downscaleFactor = downscaleFactor,
-                            fpsLimit = selectedFps
-                        )
-                    )
+                    onSaveConfig(previewConfig)
                 },
                 shape = RoundedCornerShape(12.dp),
                 colors = ButtonDefaults.buttonColors(

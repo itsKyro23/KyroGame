@@ -33,16 +33,33 @@ class ExampleRobolectricTest {
     org.junit.Assert.assertTrue(options.contains(60))
 
     val repo = com.kyro.game.space.data.repository.GameSpaceRepository(context)
-    val customCfg = com.kyro.game.space.data.model.GameCustomConfig(
+    val a16Cfg = com.kyro.game.space.data.model.GameCustomConfig(
+      mode = com.kyro.game.space.data.model.GameOptimizationMode.PERFORMANCE,
+      downscaleFactor = 0.3f,
+      fpsLimit = 120,
+      apiTarget = com.kyro.game.space.data.model.GameApiTarget.ANDROID_16_PLUS
+    )
+    assertEquals(
+      "cmd game set --mode 2 --downscale 0.3 --fps 120 com.garena.game.codm",
+      a16Cfg.buildShellCommand("com.garena.game.codm")
+    )
+
+    val a15Cfg = com.kyro.game.space.data.model.GameCustomConfig(
       mode = com.kyro.game.space.data.model.GameOptimizationMode.CUSTOM,
       downscaleFactor = 0.65f,
-      fpsLimit = maxFps
+      fpsLimit = maxFps,
+      apiTarget = com.kyro.game.space.data.model.GameApiTarget.ANDROID_15_BELOW
     )
-    repo.saveAndApplyGameConfig("com.example.testgame", customCfg)
+    org.junit.Assert.assertTrue(
+      a15Cfg.buildShellCommand("com.garena.game.codm").contains("device_config put game_overlay com.garena.game.codm")
+    )
+
+    repo.saveAndApplyGameConfig("com.example.testgame", a15Cfg)
     val loaded = repo.getGameConfig("com.example.testgame")
     assertEquals(com.kyro.game.space.data.model.GameOptimizationMode.CUSTOM, loaded.mode)
     assertEquals(0.65f, loaded.downscaleFactor, 0.01f)
     assertEquals(maxFps, loaded.fpsLimit)
+    assertEquals(com.kyro.game.space.data.model.GameApiTarget.ANDROID_15_BELOW, loaded.apiTarget)
     repo.cleanUp()
   }
 }
