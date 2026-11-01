@@ -312,53 +312,41 @@ fun SettingsScreen(
 
                     Spacer(modifier = Modifier.height(14.dp))
 
-                    // Theme Selection
+                    // Dark Theme (Forced Pure Dark Gaming Mode)
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(imageVector = Icons.Default.DarkMode, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                            Icon(
+                                imageVector = Icons.Default.DarkMode,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary
+                            )
                             Spacer(modifier = Modifier.width(10.dp))
-                            Text("Theme Mode", style = MaterialTheme.typography.bodyLarge)
-                        }
-
-                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            listOf("DARK", "LIGHT", "SYSTEM").forEach { mode ->
-                                FilterChip(
-                                    selected = themeMode == mode,
-                                    onClick = { repository.setThemeMode(mode) },
-                                    label = { Text(mode.lowercase().capitalize(), style = MaterialTheme.typography.labelSmall) }
+                            Column {
+                                Text("Theme Style", style = MaterialTheme.typography.bodyLarge)
+                                Text(
+                                    "Permanent OLED Pure Dark",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
                         }
-                    }
 
-                    Spacer(modifier = Modifier.height(14.dp))
-
-                    // Dynamic Color Toggle
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(imageVector = Icons.Default.ColorLens, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                            Spacer(modifier = Modifier.width(10.dp))
-                            Column {
-                                Text("Dynamic Color (Android 12+)", style = MaterialTheme.typography.bodyLarge)
-                                Text("Extract colors from wallpaper", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
-                        }
-                        Switch(
-                            checked = dynamicColor,
-                            onCheckedChange = { repository.setDynamicColor(it) },
-                            colors = SwitchDefaults.colors(
-                                checkedThumbColor = Color.White,
-                                checkedTrackColor = KyroPrimary
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                        ) {
+                            Text(
+                                text = "DARK ONLY",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.primary,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
                             )
-                        )
+                        }
                     }
 
                     Spacer(modifier = Modifier.height(14.dp))

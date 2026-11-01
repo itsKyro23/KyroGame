@@ -45,19 +45,7 @@ class MainActivity : ComponentActivity() {
         checkPermissions()
 
         setContent {
-            val themeMode by repository.themeMode.collectAsState()
-            val dynamicColor by repository.dynamicColor.collectAsState()
-
-            val isDarkTheme = when (themeMode) {
-                "DARK" -> true
-                "LIGHT" -> false
-                else -> isSystemInDarkTheme()
-            }
-
-            GameSpaceTheme(
-                darkTheme = isDarkTheme,
-                dynamicColor = dynamicColor
-            ) {
+            GameSpaceTheme {
                 GameSpaceApp(
                     repository = repository,
                     isUsageAccessGranted = isUsageAccessGranted,

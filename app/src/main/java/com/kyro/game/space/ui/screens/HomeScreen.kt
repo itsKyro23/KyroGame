@@ -237,7 +237,14 @@ fun HomeScreen(
                 isOverlayGranted = isOverlayGranted,
                 isNotificationGranted = isNotificationGranted,
                 onRequestShizuku = {
-                    repository.requestShizukuPermission()
+                    val status = repository.requestShizukuPermission()
+                    when (status) {
+                        "ALREADY_GRANTED" -> Toast.makeText(context, "Kebenaran Shizuku telah aktif dan disahkan!", Toast.LENGTH_SHORT).show()
+                        "REQUESTED" -> Toast.makeText(context, "Meminta kebenaran Shizuku...", Toast.LENGTH_SHORT).show()
+                        "OPENED_SHIZUKU" -> Toast.makeText(context, "Membuka aplikasi Shizuku. Sila pastikan servis Shizuku 'Running'.", Toast.LENGTH_LONG).show()
+                        "NOT_INSTALLED" -> Toast.makeText(context, "Aplikasi Shizuku belum dipasang di peranti.", Toast.LENGTH_LONG).show()
+                        else -> Toast.makeText(context, status, Toast.LENGTH_SHORT).show()
+                    }
                 },
                 onRequestNotification = onRequestNotification
             )

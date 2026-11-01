@@ -10,9 +10,12 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" tools:ignore="QueryAllPackagesPermission" />
+    <uses-permission android:name="moe.shizuku.manager.permission.API_V23" tools:ignore="ProtectedPermissions" />
 
     <queries>
         <package android:name="moe.shizuku.privileged.api" />
+        <package android:name="moe.shizuku.manager" />
+        <package android:name="com.shizuku.manager" />
         <intent>
             <action android:name="android.intent.action.MAIN" />
             <category android:name="android.intent.category.LAUNCHER" />
@@ -32,6 +35,16 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.MyApplication">
+
+        <!-- Shizuku Provider (Mandatory for Shizuku server discovery & app authorization) -->
+        <provider
+            android:name="rikka.shizuku.ShizukuProvider"
+            android:authorities="${applicationId}.shizuku"
+            android:multiprocess="false"
+            android:enabled="true"
+            android:exported="true"
+            android:permission="android.permission.INTERACT_ACROSS_USERS_FULL"
+            tools:ignore="ProtectedPermissions" />
 
         <activity
             android:name=".MainActivity"

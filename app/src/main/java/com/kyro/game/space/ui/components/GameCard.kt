@@ -71,14 +71,9 @@ fun GameCard(
         label = "play_btn_anim"
     )
 
-    // Load app icon bitmap efficiently
+    // Load app icon bitmap from memory cache to prevent scrolling lag
     val appIconBitmap = remember(game.packageName) {
-        try {
-            val drawable = context.packageManager.getApplicationIcon(game.packageName)
-            drawableToBitmap(drawable)
-        } catch (_: Throwable) {
-            null
-        }
+        com.kyro.game.space.util.AppIconCache.getIcon(context, game.packageName)
     }
 
     Card(
@@ -87,7 +82,7 @@ fun GameCard(
             .testTag("game_card_${game.packageName}"),
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant
+            containerColor = Color(0xFF141419)
         ),
         border = androidx.compose.foundation.BorderStroke(
             1.dp,
@@ -98,9 +93,9 @@ fun GameCard(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(122.dp)
+                .height(118.dp)
         ) {
-            // Background Artwork Effect (Enlarged app icon backdrop with enhanced visibility)
+            // Darkened Background Artwork: moody, dark gaming texture that does not glare
             if (appIconBitmap != null) {
                 Image(
                     bitmap = appIconBitmap.asImageBitmap(),
@@ -108,21 +103,34 @@ fun GameCard(
                     contentScale = ContentScale.Crop,
                     modifier = Modifier
                         .fillMaxSize()
-                        .alpha(0.50f)
-                        .scale(1.45f)
+                        .alpha(0.22f)
+                        .scale(1.4f)
                 )
             }
 
-            // Balanced Scrim Overlay: keeps background artwork visible while ensuring text readability
+            // Deep Black & Vignette Scrim: ensures background art is dark and text is ultra-sharp
             Box(
                 modifier = Modifier
                     .fillMaxSize()
                     .background(
                         Brush.verticalGradient(
                             colors = listOf(
-                                Color(0x33101014),
-                                Color(0x7716161B),
-                                Color(0xBF131317)
+                                Color(0x990A0A0E),
+                                Color(0xCC0E0E14),
+                                Color(0xFA101015)
+                            )
+                        )
+                    )
+            )
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.horizontalGradient(
+                            colors = listOf(
+                                Color(0xD90A0A0E),
+                                Color(0x550A0A0E),
+                                Color(0xD90A0A0E)
                             )
                         )
                     )
@@ -254,15 +262,3 @@ fun GameCard(
     }
 }
 
-private fun drawableToBitmap(drawable: Drawable): Bitmap {
-    if (drawable is BitmapDrawable && drawable.bitmap != null) {
-        return drawable.bitmap
-    }
-    val width = if (drawable.intrinsicWidth > 0) drawable.intrinsicWidth else 96
-    val height = if (drawable.intrinsicHeight > 0) drawable.intrinsicHeight else 96
-    val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
-    val canvas = Canvas(bitmap)
-    drawable.setBounds(0, 0, canvas.width, canvas.height)
-    drawable.draw(canvas)
-    return bitmap
-}

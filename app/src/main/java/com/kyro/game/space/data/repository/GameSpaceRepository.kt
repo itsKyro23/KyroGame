@@ -84,11 +84,23 @@ class GameSpaceRepository(
     }
 
     init {
-        initShizukuListeners()
-        updateShizukuStatus()
-        startPeriodicMonitoring()
+        try {
+            initShizukuListeners()
+        } catch (_: Throwable) {
+        }
+        try {
+            updateShizukuStatus()
+        } catch (_: Throwable) {
+        }
+        try {
+            startPeriodicMonitoring()
+        } catch (_: Throwable) {
+        }
         scope.launch {
-            scanAndSyncInstalledApps()
+            try {
+                scanAndSyncInstalledApps()
+            } catch (_: Throwable) {
+            }
         }
     }
 
@@ -395,42 +407,52 @@ class GameSpaceRepository(
         }
     }
 
-    fun updateShizukuStatus() {
-        val isInstalled = isPackageInstalled("moe.shizuku.privileged.api")
-        var isRunning = false
-        var isPermissionGranted = false
-        var version = 0
-        var uid = -1
+    companion object {
+        val KNOWN_SHIZUKU_PACKAGES = listOf(
+            "moe.shizuku.privileged.api",
+            "moe.shizuku.manager",
+            "com.shizuku.manager"
+        )
+    }
 
+    fun updateShizukuStatus() {
         try {
-            if (Shizuku.pingBinder()) {
-                isRunning = true
-                version = Shizuku.getVersion()
-                uid = Shizuku.getUid()
-                isPermissionGranted = Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED
+            var isRunning = false
+            var isPermissionGranted = false
+            var version = 0
+            var uid = -1
+
+            try {
+                if (Shizuku.pingBinder()) {
+                    isRunning = true
+                    version = Shizuku.getVersion()
+                    uid = Shizuku.getUid()
+                    isPermissionGranted = Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED
+                }
+            } catch (_: Throwable) {
             }
+
+            val isInstalled = try {
+                isRunning || KNOWN_SHIZUKU_PACKAGES.any { isPackageInstalled(it) }
+            } catch (_: Throwable) {
+                isRunning
+            }
+
+            val shizuku = ShizukuInfo(
+                isInstalled = isInstalled,
+                isRunning = isRunning,
+                isPermissionGranted = isPermissionGranted,
+                version = version,
+                uid = uid
+            )
+
+            updateConnectionOverview(shizuku = shizuku)
         } catch (_: Throwable) {
         }
-
-        val shizuku = ShizukuInfo(
-            isInstalled = isInstalled,
-            isRunning = isRunning,
-            isPermissionGranted = isPermissionGranted,
-            version = version,
-            uid = uid
-        )
-
-        updateConnectionOverview(shizuku = shizuku)
     }
 
     fun requestShizukuPermission(requestCode: Int = 1001): String {
         return try {
-            val isInstalled = isPackageInstalled("moe.shizuku.privileged.api")
-            if (!isInstalled) {
-                updateShizukuStatus()
-                return "NOT_INSTALLED"
-            }
-
             if (Shizuku.pingBinder()) {
                 val granted = Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED
                 if (granted) {
@@ -441,13 +463,25 @@ class GameSpaceRepository(
                     "REQUESTED"
                 }
             } else {
-                val launchIntent = context.packageManager.getLaunchIntentForPackage("moe.shizuku.privileged.api")
-                if (launchIntent != null) {
-                    launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    context.startActivity(launchIntent)
-                    "OPENED_SHIZUKU"
-                } else {
-                    "SERVICE_NOT_RUNNING"
+                // Try requesting permission or open the manager app
+                try {
+                    Shizuku.requestPermission(requestCode)
+                    "REQUESTED"
+                } catch (_: Throwable) {
+                    val installedPkg = KNOWN_SHIZUKU_PACKAGES.firstOrNull { isPackageInstalled(it) }
+                    if (installedPkg != null) {
+                        val launchIntent = context.packageManager.getLaunchIntentForPackage(installedPkg)
+                        if (launchIntent != null) {
+                            launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            context.startActivity(launchIntent)
+                            "OPENED_SHIZUKU"
+                        } else {
+                            "SERVICE_NOT_RUNNING"
+                        }
+                    } else {
+                        updateShizukuStatus()
+                        "NOT_INSTALLED"
+                    }
                 }
             }
         } catch (e: Throwable) {

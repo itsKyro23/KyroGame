@@ -143,6 +143,13 @@ fun RequiredPermissionsCard(
         )
     )
 
+    val pendingPermissions = permissions.filter { !it.isGranted }
+
+    // If all permissions have been granted, dismiss the card entirely
+    if (pendingPermissions.isEmpty()) {
+        return
+    }
+
     Card(
         modifier = modifier
             .fillMaxWidth()
@@ -167,12 +174,27 @@ fun RequiredPermissionsCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = "REQUIRED PERMISSIONS",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = 0.5.sp
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = "REQUIRED PERMISSIONS",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 0.5.sp
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = MaterialTheme.colorScheme.error.copy(alpha = 0.15f)
+                    ) {
+                        Text(
+                            text = "${pendingPermissions.size} Pending",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.error,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                        )
+                    }
+                }
 
                 // Info App shortcut button
                 TextButton(
@@ -204,7 +226,7 @@ fun RequiredPermissionsCard(
             Spacer(modifier = Modifier.height(14.dp))
 
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                permissions.forEach { perm ->
+                pendingPermissions.forEach { perm ->
                     PermissionRowItem(
                         perm = perm,
                         context = context,
