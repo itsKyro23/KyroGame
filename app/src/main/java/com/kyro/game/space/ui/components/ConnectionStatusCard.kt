@@ -218,9 +218,9 @@ fun ConnectionStatusCard(
                     } else {
                         Spacer(modifier = Modifier.height(6.dp))
                         Text(
-                            text = overview.manualAdb.libAdbDetails,
+                            text = "${overview.manualAdb.libAdbDetails}\n${overview.manualAdb.daemonStatus}",
                             style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = if (overview.manualAdb.isDaemonInjected) KyroGreen else MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
@@ -262,6 +262,16 @@ fun ConnectionStatusCard(
                         shape = RoundedCornerShape(12.dp)
                     ) {
                         Text("Grant", style = MaterialTheme.typography.labelLarge)
+                    }
+                } else if (overview.method == ExecutionMethod.MANUAL_ADB && !overview.manualAdb.isDaemonInjected) {
+                    FilledTonalButton(
+                        onClick = onRequestPermission,
+                        modifier = Modifier
+                            .weight(1f)
+                            .testTag("setup_adb_daemon_button"),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text("Setup / Inject", style = MaterialTheme.typography.labelLarge)
                     }
                 } else {
                     OutlinedButton(

@@ -52,6 +52,9 @@ import com.kyro.game.space.ui.components.PerformanceCards
 import com.kyro.game.space.ui.components.RequiredPermissionsCard
 import kotlinx.coroutines.launch
 
+import com.kyro.game.space.data.model.ExecutionMethod
+import com.kyro.game.space.ui.components.ManualAdbPairingDialog
+
 @Composable
 fun HomeScreen(
     repository: GameSpaceRepository,
@@ -68,6 +71,7 @@ fun HomeScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var showTerminalDialog by remember { mutableStateOf(false) }
+    var showPairingDialog by remember { mutableStateOf(false) }
 
     LazyColumn(
         modifier = modifier
@@ -82,16 +86,20 @@ fun HomeScreen(
                 overview = overview,
                 onReconnect = {
                     repository.updateShizukuStatus()
-                    Toast.makeText(context, "Refreshed connection status", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, "Refreshed connection & daemon status", Toast.LENGTH_SHORT).show()
                 },
                 onRequestPermission = {
-                    val status = repository.requestShizukuPermission()
-                    when (status) {
-                        "ALREADY_GRANTED" -> Toast.makeText(context, "Kebenaran Shizuku telah aktif dan disahkan!", Toast.LENGTH_SHORT).show()
-                        "REQUESTED" -> Toast.makeText(context, "Meminta kebenaran Shizuku...", Toast.LENGTH_SHORT).show()
-                        "OPENED_SHIZUKU" -> Toast.makeText(context, "Membuka aplikasi Shizuku. Sila pastikan servis Shizuku 'Running'.", Toast.LENGTH_LONG).show()
-                        "NOT_INSTALLED" -> Toast.makeText(context, "Aplikasi Shizuku belum dipasang di peranti.", Toast.LENGTH_LONG).show()
-                        else -> Toast.makeText(context, status, Toast.LENGTH_SHORT).show()
+                    if (overview.method == ExecutionMethod.MANUAL_ADB) {
+                        showPairingDialog = true
+                    } else {
+                        val status = repository.requestShizukuPermission()
+                        when (status) {
+                            "ALREADY_GRANTED" -> Toast.makeText(context, "Kebenaran Shizuku telah aktif dan disahkan!", Toast.LENGTH_SHORT).show()
+                            "REQUESTED" -> Toast.makeText(context, "Meminta kebenaran Shizuku...", Toast.LENGTH_SHORT).show()
+                            "OPENED_SHIZUKU" -> Toast.makeText(context, "Membuka aplikasi Shizuku. Sila pastikan servis Shizuku 'Running'.", Toast.LENGTH_LONG).show()
+                            "NOT_INSTALLED" -> Toast.makeText(context, "Aplikasi Shizuku belum dipasang di peranti.", Toast.LENGTH_LONG).show()
+                            else -> Toast.makeText(context, status, Toast.LENGTH_SHORT).show()
+                        }
                     }
                 },
                 onOpenTerminal = {
@@ -232,23 +240,38 @@ fun HomeScreen(
         // Section D: Required Permissions
         item {
             RequiredPermissionsCard(
-                isShizukuGranted = overview.shizuku.isPermissionGranted,
+                isShizukuGranted = overview.shizuku.isPermissionGranted || overview.manualAdb.isDaemonInjected || overview.manualAdb.isConnected,
                 isUsageAccessGranted = isUsageAccessGranted,
                 isOverlayGranted = isOverlayGranted,
                 isNotificationGranted = isNotificationGranted,
                 onRequestShizuku = {
-                    val status = repository.requestShizukuPermission()
-                    when (status) {
-                        "ALREADY_GRANTED" -> Toast.makeText(context, "Kebenaran Shizuku telah aktif dan disahkan!", Toast.LENGTH_SHORT).show()
-                        "REQUESTED" -> Toast.makeText(context, "Meminta kebenaran Shizuku...", Toast.LENGTH_SHORT).show()
-                        "OPENED_SHIZUKU" -> Toast.makeText(context, "Membuka aplikasi Shizuku. Sila pastikan servis Shizuku 'Running'.", Toast.LENGTH_LONG).show()
-                        "NOT_INSTALLED" -> Toast.makeText(context, "Aplikasi Shizuku belum dipasang di peranti.", Toast.LENGTH_LONG).show()
-                        else -> Toast.makeText(context, status, Toast.LENGTH_SHORT).show()
+                    if (overview.method == ExecutionMethod.MANUAL_ADB) {
+                        showPairingDialog = true
+                    } else {
+                        val status = repository.requestShizukuPermission()
+                        when (status) {
+                            "ALREADY_GRANTED" -> Toast.makeText(context, "Kebenaran Shizuku telah aktif dan disahkan!", Toast.LENGTH_SHORT).show()
+                            "REQUESTED" -> Toast.makeText(context, "Meminta kebenaran Shizuku...", Toast.LENGTH_SHORT).show()
+                            "OPENED_SHIZUKU" -> Toast.makeText(context, "Membuka aplikasi Shizuku. Sila pastikan servis Shizuku 'Running'.", Toast.LENGTH_LONG).show()
+                            "NOT_INSTALLED" -> Toast.makeText(context, "Aplikasi Shizuku belum dipasang di peranti.", Toast.LENGTH_LONG).show()
+                            else -> Toast.makeText(context, status, Toast.LENGTH_SHORT).show()
+                        }
                     }
                 },
                 onRequestNotification = onRequestNotification
             )
         }
+    }
+
+    if (showPairingDialog) {
+        ManualAdbPairingDialog(
+            manualAdbInfo = overview.manualAdb,
+            onPair = { h, p, c -> repository.pairManualAdb(h, p, c) },
+            onConnect = { h, p -> repository.connectManualAdb(h, p) },
+            onInjectDaemon = { repository.injectManualAdbDaemon() },
+            onDisconnect = { repository.disconnectManualAdb() },
+            onDismiss = { showPairingDialog = false }
+        )
     }
 
     if (showTerminalDialog) {

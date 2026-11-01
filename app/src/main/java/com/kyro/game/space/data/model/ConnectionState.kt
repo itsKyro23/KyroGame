@@ -23,8 +23,11 @@ data class ShizukuInfo(
 
 data class ManualAdbInfo(
     val isConnected: Boolean = false,
+    val isDaemonInjected: Boolean = false,
+    val daemonPort: Int = 38555,
+    val daemonStatus: String = "Daemon Not Injected",
     val isLibAdbLoaded: Boolean = false,
-    val libAdbDetails: String = "libadb.so: Not Loaded (Native binary not bundled; socket abstraction active)",
+    val libAdbDetails: String = "libadb.so: Ready",
     val host: String = "127.0.0.1",
     val port: Int = 5555,
     val pairingPort: Int = 0,

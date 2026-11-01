@@ -85,6 +85,10 @@ class GameSpaceRepository(
 
     init {
         try {
+            com.kyro.game.space.data.executor.AdbNativeBridge.initialize(context)
+        } catch (_: Throwable) {
+        }
+        try {
             initShizukuListeners()
         } catch (_: Throwable) {
         }
@@ -97,6 +101,11 @@ class GameSpaceRepository(
         } catch (_: Throwable) {
         }
         scope.launch {
+            try {
+                executorFactory.libAdbExecutor.probeDaemonStatus()
+                updateConnectionOverview()
+            } catch (_: Throwable) {
+            }
             try {
                 scanAndSyncInstalledApps()
             } catch (_: Throwable) {
@@ -447,6 +456,13 @@ class GameSpaceRepository(
             )
 
             updateConnectionOverview(shizuku = shizuku)
+            scope.launch {
+                try {
+                    executorFactory.libAdbExecutor.probeDaemonStatus()
+                    updateConnectionOverview()
+                } catch (_: Throwable) {
+                }
+            }
         } catch (_: Throwable) {
         }
     }
@@ -501,6 +517,14 @@ class GameSpaceRepository(
         return res
     }
 
+    suspend fun injectManualAdbDaemon(): Result<String> {
+        val res = executorFactory.libAdbExecutor.injectPersistentDaemonWithExecutor(
+            fallbackExecutor = executorFactory.shizukuExecutor
+        )
+        updateConnectionOverview()
+        return res
+    }
+
     fun disconnectManualAdb() {
         executorFactory.libAdbExecutor.disconnect()
         updateConnectionOverview()
@@ -511,6 +535,7 @@ class GameSpaceRepository(
         val executor = executorFactory.getExecutor(currentMethod)
         val result = executor.execute(command)
 
+        updateConnectionOverview()
         _connectionState.value = _connectionState.value.copy(
             lastCommandLog = "[$currentMethod] \$ $command\n${if (result.isSuccess) result.stdout else result.stderr}"
         )
@@ -524,6 +549,9 @@ class GameSpaceRepository(
 
         val manualAdb = ManualAdbInfo(
             isConnected = libAdb.isConnectedSession,
+            isDaemonInjected = libAdb.isDaemonInjected,
+            daemonPort = com.kyro.game.space.data.executor.LibAdbCommandExecutor.DAEMON_PORT,
+            daemonStatus = libAdb.daemonStatusText,
             isLibAdbLoaded = com.kyro.game.space.data.executor.AdbNativeBridge.isNativeLoaded,
             libAdbDetails = com.kyro.game.space.data.executor.AdbNativeBridge.statusMessage,
             host = libAdb.currentHost,
@@ -549,15 +577,18 @@ class GameSpaceRepository(
                 }
             }
             ExecutionMethod.MANUAL_ADB -> {
-                if (manualAdb.isConnected) {
-                    Pair(
+                when {
+                    manualAdb.isDaemonInjected -> Pair(
+                        ConnectionStatus.CONNECTED,
+                        "Persistent Daemon Active (127.0.0.1:${manualAdb.daemonPort}) • Sambungan kekal aktif walaupun Wireless Debugging OFF!"
+                    )
+                    manualAdb.isConnected -> Pair(
                         ConnectionStatus.CONNECTED,
                         "Connected to Wireless ADB at ${manualAdb.host}:${manualAdb.port}"
                     )
-                } else {
-                    Pair(
+                    else -> Pair(
                         ConnectionStatus.DISCONNECTED,
-                        manualAdb.error ?: "Disconnected. Enter pairing details in Settings."
+                        manualAdb.error ?: "Disconnected. Pair & Connect Wireless ADB di Settings untuk inject Daemon."
                     )
                 }
             }

@@ -141,8 +141,8 @@ fun SettingsScreen(
 
                     // Option 2: Manual ADB (libadb.so)
                     ExecutionOptionRow(
-                        title = "Manual ADB Pairing (libadb.so)",
-                        subtitle = "Android Wireless Debugging pairing protocol with native/socket bridge.",
+                        title = "Manual ADB + Daemon (libadb.so)",
+                        subtitle = "${overview.manualAdb.libAdbDetails}\n${overview.manualAdb.daemonStatus}",
                         icon = Icons.Default.Wifi,
                         selected = overview.method == ExecutionMethod.MANUAL_ADB,
                         onClick = {
@@ -187,7 +187,7 @@ fun SettingsScreen(
                                     containerColor = MaterialTheme.colorScheme.primary
                                 )
                             ) {
-                                Text("Pair & Connect ADB")
+                                Text(if (overview.manualAdb.isDaemonInjected) "Daemon Active (Setup)" else "Pair, Connect & Inject")
                             }
                         }
 
@@ -445,6 +445,7 @@ fun SettingsScreen(
             manualAdbInfo = overview.manualAdb,
             onPair = { h, p, c -> repository.pairManualAdb(h, p, c) },
             onConnect = { h, p -> repository.connectManualAdb(h, p) },
+            onInjectDaemon = { repository.injectManualAdbDaemon() },
             onDisconnect = { repository.disconnectManualAdb() },
             onDismiss = { showPairingDialog = false }
         )
