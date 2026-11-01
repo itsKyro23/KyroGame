@@ -22,17 +22,28 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.Cable
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.OpenInNew
+import androidx.compose.material.icons.filled.Security
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -50,6 +61,7 @@ data class PermissionRequirement(
     val description: String,
     val icon: ImageVector,
     val isGranted: Boolean,
+    val isRestrictedTarget: Boolean = false,
     val onGrant: (Context) -> Unit
 )
 
@@ -64,6 +76,9 @@ fun RequiredPermissionsCard(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    var showRestrictedGuideDialog by remember { mutableStateOf(false) }
+    var restrictedDialogTargetAction by remember { mutableStateOf("") }
+    var restrictedDialogTitle by remember { mutableStateOf("") }
 
     val permissions = listOf(
         PermissionRequirement(
@@ -80,11 +95,18 @@ fun RequiredPermissionsCard(
             description = "Required to track actual screen time and playtime for each game.",
             icon = Icons.Default.BarChart,
             isGranted = isUsageAccessGranted,
+            isRestrictedTarget = true,
             onGrant = { ctx ->
-                val intent = Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS).apply {
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !isUsageAccessGranted) {
+                    restrictedDialogTitle = "Usage Access"
+                    restrictedDialogTargetAction = Settings.ACTION_USAGE_ACCESS_SETTINGS
+                    showRestrictedGuideDialog = true
+                } else {
+                    val intent = Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS).apply {
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                    ctx.startActivity(intent)
                 }
-                ctx.startActivity(intent)
             }
         ),
         PermissionRequirement(
@@ -93,14 +115,21 @@ fun RequiredPermissionsCard(
             description = "Powers the in-game Floating HUD performance window overlay.",
             icon = Icons.Default.Layers,
             isGranted = isOverlayGranted,
+            isRestrictedTarget = true,
             onGrant = { ctx ->
-                val intent = Intent(
-                    Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                    Uri.parse("package:${ctx.packageName}")
-                ).apply {
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !isOverlayGranted) {
+                    restrictedDialogTitle = "Display Over Other Apps"
+                    restrictedDialogTargetAction = Settings.ACTION_MANAGE_OVERLAY_PERMISSION
+                    showRestrictedGuideDialog = true
+                } else {
+                    val intent = Intent(
+                        Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                        Uri.parse("package:${ctx.packageName}")
+                    ).apply {
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                    ctx.startActivity(intent)
                 }
-                ctx.startActivity(intent)
             }
         ),
         PermissionRequirement(
@@ -119,7 +148,7 @@ fun RequiredPermissionsCard(
             .testTag("required_permissions_card"),
         shape = RoundedCornerShape(22.dp),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)
+            containerColor = MaterialTheme.colorScheme.surfaceVariant
         ),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
@@ -128,12 +157,38 @@ fun RequiredPermissionsCard(
                 .fillMaxWidth()
                 .padding(18.dp)
         ) {
-            Text(
-                text = "REQUIRED PERMISSIONS",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = 0.5.sp
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "REQUIRED PERMISSIONS",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 0.5.sp
+                )
+
+                // Info App shortcut button
+                TextButton(
+                    onClick = { openAppInfo(context) },
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(4.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Security,
+                        contentDescription = null,
+                        modifier = Modifier.size(14.dp),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = "Info Aplikasi (⋮)",
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+
             Spacer(modifier = Modifier.height(4.dp))
             Text(
                 text = "Grant specific permissions to unlock in-game overlay, playtime tracking, and elevated system controls.",
@@ -145,111 +200,240 @@ fun RequiredPermissionsCard(
 
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 permissions.forEach { perm ->
-                    PermissionRowItem(perm = perm, context = context)
+                    PermissionRowItem(
+                        perm = perm,
+                        context = context,
+                        onOpenAppInfo = { openAppInfo(context) }
+                    )
                 }
             }
         }
+    }
+
+    if (showRestrictedGuideDialog) {
+        AlertDialog(
+            onDismissRequest = { showRestrictedGuideDialog = false },
+            icon = {
+                Icon(
+                    imageVector = Icons.Default.Security,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(32.dp)
+                )
+            },
+            title = {
+                Text(
+                    text = "Penting: Cara Buka 'Setelan Dibatasi'",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Column {
+                    Text(
+                        text = "Pada Android 13/14/15/16, suis kebenaran aplikasi APK disekat oleh sistem dan berwarna kelabu ('Controlled by restricted setting').\n\n" +
+                                "Sila ikut langkah ini:\n" +
+                                "1. Tekan butang '1. Buka Info Aplikasi' di bawah.\n" +
+                                "2. Di halaman Info Aplikasi, tekan menu 3 titik (⋮) di bucu kanan atas.\n" +
+                                "3. Pilih 'Izinkan setelan dibatasi' (Allow restricted settings).\n" +
+                                "4. Masukkan PIN / cap jari telefon anda.\n" +
+                                "5. Selepas itu, tekan '2. Buka Tetapan Izin' untuk mengaktifkan suis!",
+                        style = MaterialTheme.typography.bodyMedium,
+                        lineHeight = 20.sp
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        openAppInfo(context)
+                    },
+                    shape = RoundedCornerShape(10.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primary
+                    )
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.OpenInNew,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("1. Buka Info Aplikasi (⋮)")
+                }
+            },
+            dismissButton = {
+                OutlinedButton(
+                    onClick = {
+                        showRestrictedGuideDialog = false
+                        val intent = Intent(restrictedDialogTargetAction).apply {
+                            if (restrictedDialogTargetAction == Settings.ACTION_MANAGE_OVERLAY_PERMISSION) {
+                                data = Uri.parse("package:${context.packageName}")
+                            }
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        }
+                        context.startActivity(intent)
+                    },
+                    shape = RoundedCornerShape(10.dp)
+                ) {
+                    Text("2. Buka Tetapan Izin")
+                }
+            }
+        )
     }
 }
 
 @Composable
 private fun PermissionRowItem(
     perm: PermissionRequirement,
-    context: Context
+    context: Context,
+    onOpenAppInfo: () -> Unit
 ) {
     Surface(
         modifier = Modifier
             .fillMaxWidth()
             .testTag("permission_item_${perm.id}"),
         shape = RoundedCornerShape(16.dp),
-        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f)
+        color = MaterialTheme.colorScheme.surface
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Surface(
-                shape = CircleShape,
-                color = if (perm.isGranted) KyroGreen.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceVariant,
-                modifier = Modifier.size(38.dp)
+        Column(modifier = Modifier.padding(14.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        imageVector = perm.icon,
-                        contentDescription = null,
-                        tint = if (perm.isGranted) KyroGreen else MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.width(12.dp))
-
-            Column(modifier = Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = perm.name,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Box(
-                        modifier = Modifier
-                            .size(7.dp)
-                            .clip(CircleShape)
-                            .background(if (perm.isGranted) KyroGreen else MaterialTheme.colorScheme.error)
-                    )
-                }
-                Spacer(modifier = Modifier.height(2.dp))
-                Text(
-                    text = perm.description,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    lineHeight = 16.sp
-                )
-            }
-
-            Spacer(modifier = Modifier.width(8.dp))
-
-            if (perm.isGranted) {
                 Surface(
-                    shape = RoundedCornerShape(8.dp),
-                    color = KyroGreen.copy(alpha = 0.15f)
+                    shape = CircleShape,
+                    color = if (perm.isGranted) KyroGreen.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceVariant,
+                    modifier = Modifier.size(38.dp)
                 ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
+                    Box(contentAlignment = Alignment.Center) {
                         Icon(
-                            imageVector = Icons.Default.Check,
-                            contentDescription = "Granted",
-                            tint = KyroGreen,
-                            modifier = Modifier.size(14.dp)
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(
-                            text = "Granted",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = KyroGreen,
-                            fontWeight = FontWeight.Bold
+                            imageVector = perm.icon,
+                            contentDescription = null,
+                            tint = if (perm.isGranted) KyroGreen else MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(20.dp)
                         )
                     }
                 }
-            } else {
-                FilledTonalButton(
-                    onClick = { perm.onGrant(context) },
-                    modifier = Modifier.testTag("grant_button_${perm.id}"),
-                    shape = RoundedCornerShape(10.dp),
-                    colors = ButtonDefaults.filledTonalButtonColors(
-                        containerColor = MaterialTheme.colorScheme.primaryContainer,
-                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+
+                Spacer(modifier = Modifier.width(12.dp))
+
+                Column(modifier = Modifier.weight(1f)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = perm.name,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Box(
+                            modifier = Modifier
+                                .size(7.dp)
+                                .clip(CircleShape)
+                                .background(if (perm.isGranted) KyroGreen else MaterialTheme.colorScheme.error)
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = perm.description,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        lineHeight = 16.sp
                     )
+                }
+
+                Spacer(modifier = Modifier.width(8.dp))
+
+                if (perm.isGranted) {
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = KyroGreen.copy(alpha = 0.15f)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Check,
+                                contentDescription = "Granted",
+                                tint = KyroGreen,
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "Granted",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = KyroGreen,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                } else {
+                    FilledTonalButton(
+                        onClick = { perm.onGrant(context) },
+                        modifier = Modifier.testTag("grant_button_${perm.id}"),
+                        shape = RoundedCornerShape(10.dp),
+                        colors = ButtonDefaults.filledTonalButtonColors(
+                            containerColor = MaterialTheme.colorScheme.primaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    ) {
+                        Text(text = "Grant", style = MaterialTheme.typography.labelSmall)
+                    }
+                }
+            }
+
+            // If not granted and subject to Android 13+ restricted setting, show quick unlock tip
+            if (!perm.isGranted && perm.isRestrictedTarget && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant
                 ) {
-                    Text(text = "Grant", style = MaterialTheme.typography.labelSmall)
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 10.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Info,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "Suis kelabu? Buka Info Aplikasi > 3 titik (⋮) > Izinkan setelan dibatasi.",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.weight(1f),
+                            lineHeight = 14.sp
+                        )
+                        TextButton(
+                            onClick = onOpenAppInfo,
+                            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 6.dp, vertical = 0.dp)
+                        ) {
+                            Text(
+                                text = "Buka (⋮)",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
                 }
             }
         }
+    }
+}
+
+private fun openAppInfo(context: Context) {
+    try {
+        val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+            data = Uri.parse("package:${context.packageName}")
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        context.startActivity(intent)
+    } catch (_: Exception) {
     }
 }

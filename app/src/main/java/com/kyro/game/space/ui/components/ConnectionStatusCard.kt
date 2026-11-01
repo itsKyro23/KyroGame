@@ -77,9 +77,9 @@ fun ConnectionStatusCard(
             .animateContentSize(),
         shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.85f)
+            containerColor = MaterialTheme.colorScheme.surfaceVariant
         ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Column(
             modifier = Modifier
@@ -161,7 +161,7 @@ fun ConnectionStatusCard(
             Surface(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(14.dp),
-                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.6f)
+                color = MaterialTheme.colorScheme.surface
             ) {
                 Column(modifier = Modifier.padding(14.dp)) {
                     Row(verticalAlignment = Alignment.Top) {
@@ -188,6 +188,23 @@ fun ConnectionStatusCard(
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
+
+                        if (!overview.shizuku.isRunning && overview.shizuku.isInstalled) {
+                            val context = androidx.compose.ui.platform.LocalContext.current
+                            Spacer(modifier = Modifier.height(10.dp))
+                            OutlinedButton(
+                                onClick = {
+                                    val launchIntent = context.packageManager.getLaunchIntentForPackage("moe.shizuku.privileged.api")
+                                    if (launchIntent != null) {
+                                        context.startActivity(launchIntent)
+                                    }
+                                },
+                                shape = RoundedCornerShape(10.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text("Buka Aplikasi Shizuku (Mula Service)")
+                            }
+                        }
                     } else {
                         Spacer(modifier = Modifier.height(6.dp))
                         Text(
