@@ -423,12 +423,35 @@ class GameSpaceRepository(
         updateConnectionOverview(shizuku = shizuku)
     }
 
-    fun requestShizukuPermission(requestCode: Int = 1001) {
-        try {
-            if (Shizuku.pingBinder() && Shizuku.checkSelfPermission() != PackageManager.PERMISSION_GRANTED) {
-                Shizuku.requestPermission(requestCode)
+    fun requestShizukuPermission(requestCode: Int = 1001): String {
+        return try {
+            val isInstalled = isPackageInstalled("moe.shizuku.privileged.api")
+            if (!isInstalled) {
+                updateShizukuStatus()
+                return "NOT_INSTALLED"
             }
-        } catch (_: Throwable) {
+
+            if (Shizuku.pingBinder()) {
+                val granted = Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED
+                if (granted) {
+                    updateShizukuStatus()
+                    "ALREADY_GRANTED"
+                } else {
+                    Shizuku.requestPermission(requestCode)
+                    "REQUESTED"
+                }
+            } else {
+                val launchIntent = context.packageManager.getLaunchIntentForPackage("moe.shizuku.privileged.api")
+                if (launchIntent != null) {
+                    launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    context.startActivity(launchIntent)
+                    "OPENED_SHIZUKU"
+                } else {
+                    "SERVICE_NOT_RUNNING"
+                }
+            }
+        } catch (e: Throwable) {
+            "ERROR: ${e.localizedMessage ?: e.message}"
         }
     }
 

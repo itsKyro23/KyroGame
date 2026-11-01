@@ -34,21 +34,21 @@ private val DarkColorScheme = darkColorScheme(
 private val LightColorScheme = lightColorScheme(
     primary = KyroPrimary,
     onPrimary = Color.White,
-    primaryContainer = Color(0xFFFFDAD6),
-    onPrimaryContainer = Color(0xFF410002),
-    secondary = Color(0xFF775653),
+    primaryContainer = Color(0xFFFFEBEE),
+    onPrimaryContainer = Color(0xFFB71C1C),
+    secondary = Color(0xFF5D5E66),
     onSecondary = Color.White,
-    secondaryContainer = Color(0xFFF2E6E5),
-    onSecondaryContainer = Color(0xFF2C1513),
-    tertiary = Color(0xFF006874),
+    secondaryContainer = Color(0xFFF1F3F8),
+    onSecondaryContainer = Color(0xFF1E2024),
+    tertiary = Color(0xFF007A87),
     onTertiary = Color.White,
-    background = Color(0xFFF7F8FA),
-    onBackground = Color(0xFF191C1E),
+    background = Color(0xFFF5F6FA),
+    onBackground = Color(0xFF16181B),
     surface = Color(0xFFFFFFFF),
-    onSurface = Color(0xFF191C1E),
-    surfaceVariant = Color(0xFFF0F2F5),
-    onSurfaceVariant = Color(0xFF44474E),
-    outline = Color(0xFFD3D6DC)
+    onSurface = Color(0xFF16181B),
+    surfaceVariant = Color(0xFFFFFFFF),
+    onSurfaceVariant = Color(0xFF5A5E69),
+    outline = Color(0xFFE2E4EB)
 )
 
 @Composable

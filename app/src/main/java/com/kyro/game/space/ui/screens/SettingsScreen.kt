@@ -96,11 +96,15 @@ fun SettingsScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .testTag("execution_method_card"),
-                shape = RoundedCornerShape(22.dp),
+                shape = RoundedCornerShape(20.dp),
                 colors = CardDefaults.cardColors(
                     containerColor = MaterialTheme.colorScheme.surfaceVariant
                 ),
-                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                border = androidx.compose.foundation.BorderStroke(
+                    1.dp,
+                    MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)
+                ),
+                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
             ) {
                 Column(
                     modifier = Modifier
@@ -133,7 +137,7 @@ fun SettingsScreen(
                         }
                     )
 
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(10.dp))
 
                     // Option 2: Manual ADB (libadb.so)
                     ExecutionOptionRow(
@@ -146,7 +150,7 @@ fun SettingsScreen(
                         }
                     )
 
-                    Spacer(modifier = Modifier.height(14.dp))
+                    Spacer(modifier = Modifier.height(16.dp))
 
                     // Action buttons based on selected method
                     Row(
@@ -156,8 +160,14 @@ fun SettingsScreen(
                         if (overview.method == ExecutionMethod.SHIZUKU) {
                             Button(
                                 onClick = {
-                                    repository.requestShizukuPermission()
-                                    Toast.makeText(context, "Requested Shizuku permission", Toast.LENGTH_SHORT).show()
+                                    val status = repository.requestShizukuPermission()
+                                    when (status) {
+                                        "ALREADY_GRANTED" -> Toast.makeText(context, "Kebenaran Shizuku telah aktif dan disahkan!", Toast.LENGTH_SHORT).show()
+                                        "REQUESTED" -> Toast.makeText(context, "Meminta kebenaran Shizuku...", Toast.LENGTH_SHORT).show()
+                                        "OPENED_SHIZUKU" -> Toast.makeText(context, "Membuka aplikasi Shizuku. Sila pastikan servis Shizuku 'Running'.", Toast.LENGTH_LONG).show()
+                                        "NOT_INSTALLED" -> Toast.makeText(context, "Aplikasi Shizuku belum dipasang di peranti.", Toast.LENGTH_LONG).show()
+                                        else -> Toast.makeText(context, status, Toast.LENGTH_SHORT).show()
+                                    }
                                 },
                                 modifier = Modifier
                                     .weight(1f)
@@ -201,11 +211,15 @@ fun SettingsScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .testTag("floating_hud_card"),
-                shape = RoundedCornerShape(22.dp),
+                shape = RoundedCornerShape(20.dp),
                 colors = CardDefaults.cardColors(
                     containerColor = MaterialTheme.colorScheme.surfaceVariant
                 ),
-                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                border = androidx.compose.foundation.BorderStroke(
+                    1.dp,
+                    MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)
+                ),
+                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
             ) {
                 Column(
                     modifier = Modifier
@@ -274,11 +288,15 @@ fun SettingsScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .testTag("general_settings_card"),
-                shape = RoundedCornerShape(22.dp),
+                shape = RoundedCornerShape(20.dp),
                 colors = CardDefaults.cardColors(
                     containerColor = MaterialTheme.colorScheme.surfaceVariant
                 ),
-                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                border = androidx.compose.foundation.BorderStroke(
+                    1.dp,
+                    MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)
+                ),
+                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
             ) {
                 Column(
                     modifier = Modifier
@@ -398,10 +416,15 @@ fun SettingsScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .testTag("about_card"),
-                shape = RoundedCornerShape(22.dp),
+                shape = RoundedCornerShape(20.dp),
                 colors = CardDefaults.cardColors(
                     containerColor = MaterialTheme.colorScheme.surfaceVariant
-                )
+                ),
+                border = androidx.compose.foundation.BorderStroke(
+                    1.dp,
+                    MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)
+                ),
+                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
             ) {
                 Column(
                     modifier = Modifier
@@ -456,10 +479,23 @@ private fun ExecutionOptionRow(
     selected: Boolean,
     onClick: () -> Unit
 ) {
+    val isDark = MaterialTheme.colorScheme.background == com.kyro.game.space.ui.theme.KyroBackground
+    val containerBg = if (selected) {
+        if (isDark) Color(0xFF2A1517) else Color(0xFFFFEBEE)
+    } else {
+        if (isDark) Color(0xFF1E1E26) else Color(0xFFF3F5F8)
+    }
+    val borderColor = if (selected) {
+        MaterialTheme.colorScheme.primary
+    } else {
+        MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)
+    }
+
     Surface(
         onClick = onClick,
         shape = RoundedCornerShape(14.dp),
-        color = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
+        color = containerBg,
+        border = androidx.compose.foundation.BorderStroke(1.dp, borderColor),
         modifier = Modifier.fillMaxWidth()
     ) {
         Row(

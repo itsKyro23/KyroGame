@@ -85,18 +85,22 @@ fun GameCard(
         modifier = modifier
             .fillMaxWidth()
             .testTag("game_card_${game.packageName}"),
-        shape = RoundedCornerShape(22.dp),
+        shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant
         ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+        border = androidx.compose.foundation.BorderStroke(
+            1.dp,
+            MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(160.dp)
+                .height(122.dp)
         ) {
-            // Background Artwork Effect (Enlarged blurred app icon backdrop)
+            // Background Artwork Effect (Enlarged app icon backdrop with enhanced visibility)
             if (appIconBitmap != null) {
                 Image(
                     bitmap = appIconBitmap.asImageBitmap(),
@@ -104,21 +108,21 @@ fun GameCard(
                     contentScale = ContentScale.Crop,
                     modifier = Modifier
                         .fillMaxSize()
-                        .alpha(0.28f)
-                        .scale(1.8f)
+                        .alpha(0.50f)
+                        .scale(1.45f)
                 )
             }
 
-            // Dark Scrim Overlay for high-contrast readability
+            // Balanced Scrim Overlay: keeps background artwork visible while ensuring text readability
             Box(
                 modifier = Modifier
                     .fillMaxSize()
                     .background(
                         Brush.verticalGradient(
                             colors = listOf(
-                                Color(0xCC111114),
-                                Color(0xF018181D),
-                                Color(0xFF131317)
+                                Color(0x33101014),
+                                Color(0x7716161B),
+                                Color(0xBF131317)
                             )
                         )
                     )
@@ -128,7 +132,7 @@ fun GameCard(
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(16.dp),
+                    .padding(horizontal = 14.dp, vertical = 11.dp),
                 verticalArrangement = Arrangement.SpaceBetween
             ) {
                 // Top Row: App Icon, Name, and Remove Button
@@ -139,9 +143,9 @@ fun GameCard(
                     // Crisp Front App Icon
                     Surface(
                         modifier = Modifier
-                            .size(48.dp)
-                            .clip(RoundedCornerShape(14.dp)),
-                        color = Color.DarkGray
+                            .size(42.dp)
+                            .clip(RoundedCornerShape(12.dp)),
+                        color = Color(0xFF22222A)
                     ) {
                         if (appIconBitmap != null) {
                             Image(
@@ -154,12 +158,12 @@ fun GameCard(
                                 imageVector = Icons.Default.VideogameAsset,
                                 contentDescription = null,
                                 tint = Color.White,
-                                modifier = Modifier.padding(10.dp)
+                                modifier = Modifier.padding(8.dp)
                             )
                         }
                     }
 
-                    Spacer(modifier = Modifier.width(12.dp))
+                    Spacer(modifier = Modifier.width(10.dp))
 
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
@@ -173,7 +177,7 @@ fun GameCard(
                         Text(
                             text = game.packageName,
                             style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            color = Color(0xFFC0C2CC),
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
@@ -181,13 +185,13 @@ fun GameCard(
 
                     IconButton(
                         onClick = onRemoveClick,
-                        modifier = Modifier.size(32.dp)
+                        modifier = Modifier.size(28.dp)
                     ) {
                         Icon(
                             imageVector = Icons.Default.DeleteOutline,
                             contentDescription = "Remove from Home",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                            modifier = Modifier.size(20.dp)
+                            tint = Color(0xFFA0A3AF),
+                            modifier = Modifier.size(18.dp)
                         )
                     }
                 }
@@ -196,20 +200,19 @@ fun GameCard(
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.Bottom
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column {
                         Text(
-                            text = "Total Played: ${game.formattedPlaytime}",
+                            text = "Total: ${game.formattedPlaytime}",
                             style = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.SemiBold,
                             color = KyroAccent
                         )
-                        Spacer(modifier = Modifier.height(2.dp))
                         Text(
-                            text = "Last Played: ${game.formattedLastPlayed}",
+                            text = "Last: ${game.formattedLastPlayed}",
                             style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = Color(0xFFB5B7C2)
                         )
                     }
 
@@ -221,24 +224,28 @@ fun GameCard(
                         modifier = Modifier
                             .scale(playButtonScale)
                             .testTag("play_button_${game.packageName}"),
-                        shape = RoundedCornerShape(14.dp),
+                        shape = RoundedCornerShape(12.dp),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = KyroPrimary,
                             contentColor = Color.White
                         ),
-                        elevation = ButtonDefaults.buttonElevation(defaultElevation = 4.dp)
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(
+                            horizontal = 16.dp,
+                            vertical = 6.dp
+                        ),
+                        elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp)
                     ) {
                         Icon(
                             imageVector = Icons.Default.PlayArrow,
                             contentDescription = null,
-                            modifier = Modifier.size(18.dp)
+                            modifier = Modifier.size(16.dp)
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
                             text = "PLAY",
-                            style = MaterialTheme.typography.labelLarge,
+                            style = MaterialTheme.typography.labelMedium,
                             fontWeight = FontWeight.Bold,
-                            letterSpacing = 1.sp
+                            letterSpacing = 0.8.sp
                         )
                     }
                 }

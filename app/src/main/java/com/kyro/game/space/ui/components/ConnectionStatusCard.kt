@@ -75,16 +75,20 @@ fun ConnectionStatusCard(
             .fillMaxWidth()
             .testTag("connection_status_card")
             .animateContentSize(),
-        shape = RoundedCornerShape(24.dp),
+        shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant
         ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        border = androidx.compose.foundation.BorderStroke(
+            1.dp,
+            MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(20.dp)
+                .padding(18.dp)
         ) {
             // Header: Method & Status Pill
             Row(
@@ -158,10 +162,16 @@ fun ConnectionStatusCard(
             Spacer(modifier = Modifier.height(14.dp))
 
             // Details Box
+            val isDark = MaterialTheme.colorScheme.background == com.kyro.game.space.ui.theme.KyroBackground
+            val innerBoxBg = if (isDark) Color(0xFF1E1E26) else Color(0xFFF3F5F8)
             Surface(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(14.dp),
-                color = MaterialTheme.colorScheme.surface
+                color = innerBoxBg,
+                border = androidx.compose.foundation.BorderStroke(
+                    1.dp,
+                    MaterialTheme.colorScheme.outline.copy(alpha = 0.25f)
+                )
             ) {
                 Column(modifier = Modifier.padding(14.dp)) {
                     Row(verticalAlignment = Alignment.Top) {

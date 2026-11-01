@@ -47,6 +47,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -146,11 +147,15 @@ fun RequiredPermissionsCard(
         modifier = modifier
             .fillMaxWidth()
             .testTag("required_permissions_card"),
-        shape = RoundedCornerShape(22.dp),
+        shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant
         ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        border = androidx.compose.foundation.BorderStroke(
+            1.dp,
+            MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
         Column(
             modifier = Modifier
@@ -289,12 +294,18 @@ private fun PermissionRowItem(
     context: Context,
     onOpenAppInfo: () -> Unit
 ) {
+    val isDark = MaterialTheme.colorScheme.background == com.kyro.game.space.ui.theme.KyroBackground
+    val itemBg = if (isDark) Color(0xFF1E1E26) else Color(0xFFF3F5F8)
     Surface(
         modifier = Modifier
             .fillMaxWidth()
             .testTag("permission_item_${perm.id}"),
-        shape = RoundedCornerShape(16.dp),
-        color = MaterialTheme.colorScheme.surface
+        shape = RoundedCornerShape(14.dp),
+        color = itemBg,
+        border = androidx.compose.foundation.BorderStroke(
+            1.dp,
+            MaterialTheme.colorScheme.outline.copy(alpha = 0.25f)
+        )
     ) {
         Column(modifier = Modifier.padding(14.dp)) {
             Row(
