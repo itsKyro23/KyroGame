@@ -4,6 +4,18 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+enum class GameOptimizationMode(val label: String, val systemModeId: Int) {
+    STANDARD("Standard", 1),
+    PERFORMANCE("Performance", 2),
+    CUSTOM("Custom", 2)
+}
+
+data class GameCustomConfig(
+    val mode: GameOptimizationMode = GameOptimizationMode.STANDARD,
+    val downscaleFactor: Float = 1.0f, // 0.3f .. 1.0f
+    val fpsLimit: Int = 60
+)
+
 data class GameItem(
     val packageName: String,
     val appName: String,
@@ -13,13 +25,20 @@ data class GameItem(
     val lastPlayedTimestamp: Long = 0L,
     val versionCode: Long = 0L,
     val versionName: String = "",
-    val isSystemApp: Boolean = false
+    val isSystemApp: Boolean = false,
+    val customConfig: GameCustomConfig = GameCustomConfig()
 ) {
     val formattedPlaytime: String
         get() = formatPlaytime(totalPlaytimeMs)
 
     val formattedLastPlayed: String
         get() = formatLastPlayed(lastPlayedTimestamp)
+
+    val formattedConfigSummary: String
+        get() {
+            val scaleStr = String.format(Locale.US, "%.2fx", customConfig.downscaleFactor)
+            return "${customConfig.mode.label} • $scaleStr • ${customConfig.fpsLimit} FPS"
+        }
 
     companion object {
         fun formatPlaytime(millis: Long): String {

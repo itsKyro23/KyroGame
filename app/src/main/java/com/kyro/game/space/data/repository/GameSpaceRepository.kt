@@ -21,7 +21,9 @@ import com.kyro.game.space.data.model.ConnectionOverview
 import com.kyro.game.space.data.model.ConnectionStatus
 import com.kyro.game.space.data.model.DeviceStats
 import com.kyro.game.space.data.model.ExecutionMethod
+import com.kyro.game.space.data.model.GameCustomConfig
 import com.kyro.game.space.data.model.GameItem
+import com.kyro.game.space.data.model.GameOptimizationMode
 import com.kyro.game.space.data.model.ManualAdbInfo
 import com.kyro.game.space.data.model.ShizukuInfo
 import kotlinx.coroutines.CoroutineScope
@@ -32,6 +34,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -41,6 +44,7 @@ import java.io.File
 import java.net.InetSocketAddress
 import java.net.Socket
 import java.util.Calendar
+import java.util.Locale
 
 class GameSpaceRepository(
     private val context: Context,
@@ -69,6 +73,8 @@ class GameSpaceRepository(
 
     val refreshIntervalMs = MutableStateFlow(prefs.getLong("refresh_interval_ms", 2000L))
     val floatingHudEnabled = MutableStateFlow(prefs.getBoolean("floating_hud_enabled", false))
+
+    private val _gameConfigs = MutableStateFlow<Map<String, GameCustomConfig>>(loadAllSavedGameConfigs())
 
     @Volatile
     private var isProbingDaemon: Boolean = true
@@ -156,12 +162,102 @@ class GameSpaceRepository(
         }
     }
 
-    val allGamesFlow: Flow<List<GameItem>> = dao.getAllGamesFlow().map { entities ->
-        entities.map { it.toGameItem() }
+    val allGamesFlow: Flow<List<GameItem>> = combine(
+        dao.getAllGamesFlow(),
+        _gameConfigs
+    ) { entities, configs ->
+        entities.map { entity ->
+            entity.toGameItem(configs[entity.packageName] ?: getGameConfig(entity.packageName))
+        }
     }
 
-    val homeGamesFlow: Flow<List<GameItem>> = dao.getHomeGamesFlow().map { entities ->
-        entities.map { it.toGameItem() }
+    val homeGamesFlow: Flow<List<GameItem>> = combine(
+        dao.getHomeGamesFlow(),
+        _gameConfigs
+    ) { entities, configs ->
+        entities.map { entity ->
+            entity.toGameItem(configs[entity.packageName] ?: getGameConfig(entity.packageName))
+        }
+    }
+
+    private fun loadAllSavedGameConfigs(): Map<String, GameCustomConfig> {
+        val result = mutableMapOf<String, GameCustomConfig>()
+        try {
+            for ((key, value) in prefs.all) {
+                if (key.startsWith("game_cfg_") && value is String) {
+                    val pkg = key.removePrefix("game_cfg_")
+                    parseGameConfig(value)?.let { result[pkg] = it }
+                }
+            }
+        } catch (_: Throwable) {
+        }
+        return result
+    }
+
+    private fun parseGameConfig(serialized: String): GameCustomConfig? {
+        return try {
+            val parts = serialized.split("|")
+            if (parts.size >= 3) {
+                val mode = GameOptimizationMode.entries.firstOrNull { it.name == parts[0] }
+                    ?: GameOptimizationMode.STANDARD
+                val scale = parts[1].toFloatOrNull()?.coerceIn(0.3f, 1.0f) ?: 1.0f
+                val fps = parts[2].toIntOrNull() ?: 60
+                GameCustomConfig(mode = mode, downscaleFactor = scale, fpsLimit = fps)
+            } else null
+        } catch (_: Throwable) {
+            null
+        }
+    }
+
+    fun getGameConfig(packageName: String): GameCustomConfig {
+        _gameConfigs.value[packageName]?.let { return it }
+        val raw = prefs.getString("game_cfg_$packageName", null) ?: return GameCustomConfig()
+        return parseGameConfig(raw) ?: GameCustomConfig()
+    }
+
+    suspend fun saveAndApplyGameConfig(packageName: String, config: GameCustomConfig): Result<String> {
+        val sanitizedScale = config.downscaleFactor.coerceIn(0.3f, 1.0f)
+        val sanitizedConfig = config.copy(downscaleFactor = sanitizedScale)
+        val serialized = String.format(
+            Locale.US,
+            "%s|%.2f|%d",
+            sanitizedConfig.mode.name,
+            sanitizedConfig.downscaleFactor,
+            sanitizedConfig.fpsLimit
+        )
+        prefs.edit().putString("game_cfg_$packageName", serialized).apply()
+        _gameConfigs.value = _gameConfigs.value.toMutableMap().apply {
+            put(packageName, sanitizedConfig)
+        }
+
+        // Build Android Game Overlay & Game Mode shell command
+        val scaleStr = String.format(Locale.US, "%.2f", sanitizedConfig.downscaleFactor)
+        val fpsStr = sanitizedConfig.fpsLimit.toString()
+        val modeCode = when (sanitizedConfig.mode) {
+            GameOptimizationMode.STANDARD -> 1
+            GameOptimizationMode.PERFORMANCE -> 2
+            GameOptimizationMode.CUSTOM -> 2
+        }
+
+        val shellCmd = if (sanitizedConfig.mode == GameOptimizationMode.STANDARD &&
+            sanitizedConfig.downscaleFactor >= 0.99f
+        ) {
+            "device_config delete game_overlay $packageName; cmd game mode 1 $packageName 2>/dev/null || true"
+        } else {
+            val overlaySpec = "mode=2,downscaleFactor=$scaleStr,fps=$fpsStr:mode=3,downscaleFactor=$scaleStr,fps=$fpsStr"
+            "device_config put game_overlay $packageName $overlaySpec; cmd game mode $modeCode $packageName 2>/dev/null || true"
+        }
+
+        return try {
+            val cmdRes = executeCommand(shellCmd)
+            if (cmdRes.isSuccess) {
+                Result.success("Applied ${sanitizedConfig.mode.label} (${scaleStr}x • ${fpsStr} FPS) via ${executionMethod.value.name}")
+            } else {
+                Result.success("Saved ${sanitizedConfig.mode.label} (${scaleStr}x • ${fpsStr} FPS). Connect Shizuku/Daemon to enforce kernel/overlay limits.")
+            }
+        } catch (_: Throwable) {
+            Result.success("Saved ${sanitizedConfig.mode.label} (${scaleStr}x • ${fpsStr} FPS)")
+        }
     }
 
     suspend fun setAddedToHome(packageName: String, isAdded: Boolean) {
@@ -181,9 +277,15 @@ class GameSpaceRepository(
         return try {
             val launchIntent = context.packageManager.getLaunchIntentForPackage(packageName)
             if (launchIntent != null) {
+                scope.launch {
+                    val cfg = getGameConfig(packageName)
+                    if (cfg.mode != GameOptimizationMode.STANDARD || cfg.downscaleFactor < 0.99f) {
+                        saveAndApplyGameConfig(packageName, cfg)
+                    }
+                    recordGameLaunch(packageName)
+                }
                 launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 context.startActivity(launchIntent)
-                scope.launch { recordGameLaunch(packageName) }
                 true
             } else {
                 false
@@ -744,7 +846,7 @@ class GameSpaceRepository(
         }
     }
 
-    private fun GameEntity.toGameItem() = GameItem(
+    private fun GameEntity.toGameItem(config: GameCustomConfig = GameCustomConfig()) = GameItem(
         packageName = packageName,
         appName = appName,
         isGame = isGame,
@@ -753,6 +855,7 @@ class GameSpaceRepository(
         lastPlayedTimestamp = lastPlayedTimestamp,
         versionCode = versionCode,
         versionName = versionName,
-        isSystemApp = isSystemApp
+        isSystemApp = isSystemApp,
+        customConfig = config
     )
 }

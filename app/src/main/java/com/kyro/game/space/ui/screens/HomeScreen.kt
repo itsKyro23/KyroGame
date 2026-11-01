@@ -48,6 +48,7 @@ import com.kyro.game.space.data.repository.GameSpaceRepository
 import com.kyro.game.space.ui.components.AdbCommandDialog
 import com.kyro.game.space.ui.components.ConnectionStatusCard
 import com.kyro.game.space.ui.components.GameCard
+import com.kyro.game.space.ui.components.GameCustomizeDialog
 import com.kyro.game.space.ui.components.PerformanceCards
 import com.kyro.game.space.ui.components.RequiredPermissionsCard
 import kotlinx.coroutines.launch
@@ -72,6 +73,7 @@ fun HomeScreen(
     val scope = rememberCoroutineScope()
     var showTerminalDialog by remember { mutableStateOf(false) }
     var showPairingDialog by remember { mutableStateOf(false) }
+    var customizingGame by remember { mutableStateOf<GameItem?>(null) }
 
     androidx.compose.runtime.LaunchedEffect(Unit) {
         repository.checkDaemonAndSyncState()
@@ -239,6 +241,9 @@ fun HomeScreen(
                             Toast.makeText(context, "Could not launch ${game.appName}", Toast.LENGTH_SHORT).show()
                         }
                     },
+                    onCustomizeClick = {
+                        customizingGame = game
+                    },
                     onRemoveClick = {
                         scope.launch {
                             repository.setAddedToHome(game.packageName, false)
@@ -292,6 +297,23 @@ fun HomeScreen(
             onDismiss = { showTerminalDialog = false },
             onExecute = { cmd -> repository.executeCommand(cmd) },
             executorName = overview.method.name
+        )
+    }
+
+    customizingGame?.let { targetGame ->
+        // Keep up-to-date with latest config from homeGames if available
+        val liveGame = homeGames.firstOrNull { it.packageName == targetGame.packageName } ?: targetGame
+        GameCustomizeDialog(
+            game = liveGame,
+            onDismiss = { customizingGame = null },
+            onSaveConfig = { newConfig ->
+                customizingGame = null
+                scope.launch {
+                    val res = repository.saveAndApplyGameConfig(liveGame.packageName, newConfig)
+                    val msg = res.getOrElse { "Saved profile for ${liveGame.appName}" }
+                    Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                }
+            }
         )
     }
 }
