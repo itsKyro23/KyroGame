@@ -21,9 +21,9 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.OpenInNew
-import androidx.compose.material.icons.filled.Security
+import androidx.compose.material.icons.filled.Radar
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -31,6 +31,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -38,6 +39,8 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -65,6 +68,7 @@ fun ManualAdbPairingDialog(
     onPair: suspend (host: String, pairingPort: Int, code: String) -> Result<String>,
     onConnect: suspend (host: String, connectPort: Int) -> Result<String>,
     onInjectDaemon: suspend () -> Result<String> = { Result.failure(Exception("Not configured")) },
+    onStartAutoScan: (showNotification: Boolean) -> Unit = {},
     onDisconnect: () -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -82,6 +86,25 @@ fun ManualAdbPairingDialog(
 
     val scope = rememberCoroutineScope()
 
+    // Automatically start mDNS + libadb.so port scanner when this dialog opens
+    DisposableEffect(Unit) {
+        onStartAutoScan(false)
+        onDispose { }
+    }
+
+    // Automatically fill IP Address, Pairing Port, and Connection Port when discovered
+    LaunchedEffect(manualAdbInfo.host, manualAdbInfo.pairingPort, manualAdbInfo.port) {
+        if (manualAdbInfo.host.isNotBlank()) {
+            host = manualAdbInfo.host
+        }
+        if (manualAdbInfo.pairingPort > 0) {
+            pairingPortText = manualAdbInfo.pairingPort.toString()
+        }
+        if (manualAdbInfo.port > 0) {
+            connectPortText = manualAdbInfo.port.toString()
+        }
+    }
+
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
@@ -95,7 +118,7 @@ fun ManualAdbPairingDialog(
                 Spacer(modifier = Modifier.width(10.dp))
                 Column {
                     Text(
-                        text = "libadb.so & Daemon Setup",
+                        text = "Wireless ADB & Daemon Setup",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )
@@ -113,7 +136,7 @@ fun ManualAdbPairingDialog(
                     .fillMaxWidth()
                     .verticalScroll(rememberScrollState())
             ) {
-                // Daemon Status Banner
+                // 1. Persistent Daemon Status Banner
                 val daemonColor = if (manualAdbInfo.isDaemonInjected) KyroGreen else KyroCyan
                 Surface(
                     shape = RoundedCornerShape(12.dp),
@@ -145,9 +168,9 @@ fun ManualAdbPairingDialog(
                             )
                             Text(
                                 text = if (manualAdbInfo.isDaemonInjected) {
-                                    "Komunikasi kekal aktif walaupun Wireless Debugging dimatikan (OFF)."
+                                    "Connection stays active even after Wireless Debugging is turned OFF."
                                 } else {
-                                    "Selepas Connect Wireless ADB, Daemon akan di-inject secara automatik supaya tidak terputus apabila Wireless Debugging OFF."
+                                    "Once connected to Wireless ADB, the Persistent Daemon is automatically injected so communication stays alive when Wireless Debugging is turned OFF."
                                 },
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -157,11 +180,75 @@ fun ManualAdbPairingDialog(
                     }
                 }
 
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // 2. Auto-Scanner Live Status Banner
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant,
+                    border = androidx.compose.foundation.BorderStroke(
+                        1.dp,
+                        MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 10.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        if (manualAdbInfo.isScanning) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(16.dp),
+                                strokeWidth = 2.dp,
+                                color = KyroGreen
+                            )
+                        } else {
+                            Icon(
+                                imageVector = Icons.Default.Radar,
+                                contentDescription = null,
+                                tint = KyroGreen,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "AUTO-SCAN & AUTO-CONNECT ACTIVE",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = KyroGreen
+                            )
+                            Text(
+                                text = manualAdbInfo.scanStatus,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                lineHeight = 13.sp
+                            )
+                        }
+                        IconButton(
+                            onClick = { onStartAutoScan(true) },
+                            modifier = Modifier
+                                .size(32.dp)
+                                .testTag("rescan_adb_btn")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Refresh,
+                                contentDescription = "Rescan Wireless ADB",
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+                }
+
                 Spacer(modifier = Modifier.height(10.dp))
 
-                // Shortcut to Developer Options
+                // 3. Shortcut to Developer Options + Notification Pairing Helper
                 OutlinedButton(
                     onClick = {
+                        // Start interactive notification pairing so user can type 6-digit code in notification shade
+                        onStartAutoScan(true)
                         try {
                             val intent = Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS).apply {
                                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -188,7 +275,10 @@ fun ManualAdbPairingDialog(
                         modifier = Modifier.size(16.dp)
                     )
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text("Buka Developer Options (Wireless Debugging)", style = MaterialTheme.typography.labelMedium)
+                    Text(
+                        "Open Wireless Debugging (Auto-Scan & Pair)",
+                        style = MaterialTheme.typography.labelMedium
+                    )
                 }
 
                 Spacer(modifier = Modifier.height(12.dp))
@@ -196,8 +286,8 @@ fun ManualAdbPairingDialog(
                 OutlinedTextField(
                     value = host,
                     onValueChange = { host = it },
-                    label = { Text("IP Address") },
-                    placeholder = { Text("127.0.0.1 atau Wi-Fi IP") },
+                    label = { Text("IP Address (Auto-Detected)") },
+                    placeholder = { Text("127.0.0.1 or Wi-Fi IP") },
                     modifier = Modifier
                         .fillMaxWidth()
                         .testTag("adb_ip_input"),
@@ -212,7 +302,7 @@ fun ManualAdbPairingDialog(
                         value = pairingPortText,
                         onValueChange = { pairingPortText = it.filter { ch -> ch.isDigit() } },
                         label = { Text("Pairing Port") },
-                        placeholder = { Text("e.g. 37000") },
+                        placeholder = { Text("Auto-scan") },
                         modifier = Modifier
                             .weight(1f)
                             .testTag("adb_pairing_port_input"),
@@ -240,8 +330,8 @@ fun ManualAdbPairingDialog(
                 OutlinedTextField(
                     value = connectPortText,
                     onValueChange = { connectPortText = it.filter { ch -> ch.isDigit() } },
-                    label = { Text("Connection Port (Main Wireless ADB Port)") },
-                    placeholder = { Text("e.g. 41235 atau 5555") },
+                    label = { Text("Connection Port (Auto-Detected)") },
+                    placeholder = { Text("e.g. 41235 or 5555") },
                     modifier = Modifier
                         .fillMaxWidth()
                         .testTag("adb_connect_port_input"),
@@ -261,7 +351,7 @@ fun ManualAdbPairingDialog(
                         onClick = {
                             scope.launch {
                                 isProcessing = true
-                                feedbackMessage = "Menjalankan libadb.so pair $host:$pairingPortText..."
+                                feedbackMessage = "Running libadb.so pair $host:$pairingPortText..."
                                 val pPort = pairingPortText.toIntOrNull() ?: 0
                                 val result = onPair(host.trim(), pPort, pairingCode.trim())
                                 if (result.isSuccess) {
@@ -269,7 +359,7 @@ fun ManualAdbPairingDialog(
                                     feedbackMessage = result.getOrNull()
                                 } else {
                                     isSuccess = false
-                                    feedbackMessage = result.exceptionOrNull()?.message ?: "Pairing gagal"
+                                    feedbackMessage = result.exceptionOrNull()?.message ?: "Pairing failed"
                                 }
                                 isProcessing = false
                             }
@@ -287,7 +377,7 @@ fun ManualAdbPairingDialog(
                         onClick = {
                             scope.launch {
                                 isProcessing = true
-                                feedbackMessage = "Menyambung Wireless ADB & Injecting Daemon..."
+                                feedbackMessage = "Connecting Wireless ADB & Injecting Daemon..."
                                 val cPort = connectPortText.toIntOrNull() ?: 5555
                                 val result = onConnect(host.trim(), cPort)
                                 if (result.isSuccess) {
@@ -295,7 +385,7 @@ fun ManualAdbPairingDialog(
                                     feedbackMessage = result.getOrNull()
                                 } else {
                                     isSuccess = false
-                                    feedbackMessage = result.exceptionOrNull()?.message ?: "Sambungan gagal"
+                                    feedbackMessage = result.exceptionOrNull()?.message ?: "Connection failed"
                                 }
                                 isProcessing = false
                             }
@@ -321,14 +411,14 @@ fun ManualAdbPairingDialog(
                     onClick = {
                         scope.launch {
                             isProcessing = true
-                            feedbackMessage = "Menyuntik (Injecting) Persistent Daemon ke /data/local/tmp..."
+                            feedbackMessage = "Injecting Persistent Daemon into /data/local/tmp..."
                             val res = onInjectDaemon()
                             if (res.isSuccess) {
                                 isSuccess = true
                                 feedbackMessage = res.getOrNull()
                             } else {
                                 isSuccess = false
-                                feedbackMessage = res.exceptionOrNull()?.message ?: "Gagal inject daemon"
+                                feedbackMessage = res.exceptionOrNull()?.message ?: "Failed to inject daemon"
                             }
                             isProcessing = false
                         }
@@ -347,9 +437,9 @@ fun ManualAdbPairingDialog(
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
                         if (manualAdbInfo.isDaemonInjected) {
-                            "Daemon Aktif (Klik untuk Verify Semula)"
+                            "Daemon Active (Tap to Re-Verify)"
                         } else {
-                            "Inject Persistent Daemon Sekarang"
+                            "Inject Persistent Daemon Now"
                         }
                     )
                 }
@@ -359,7 +449,7 @@ fun ManualAdbPairingDialog(
                     OutlinedButton(
                         onClick = {
                             onDisconnect()
-                            feedbackMessage = "Sesi ADB diputuskan."
+                            feedbackMessage = "ADB session disconnected."
                             isSuccess = false
                         },
                         modifier = Modifier
@@ -376,7 +466,7 @@ fun ManualAdbPairingDialog(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("Memproses libadb.so & Daemon...", style = MaterialTheme.typography.bodySmall)
+                        Text("Processing libadb.so & Daemon...", style = MaterialTheme.typography.bodySmall)
                     }
                 }
 

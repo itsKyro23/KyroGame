@@ -32,6 +32,9 @@ data class ManualAdbInfo(
     val port: Int = 5555,
     val pairingPort: Int = 0,
     val pairingCode: String = "",
+    val isScanning: Boolean = false,
+    val scanStatus: String = "Auto-Scan Ready",
+    val autoConnectEnabled: Boolean = true,
     val adbVersion: String = "Android Debug Bridge 1.0.41",
     val error: String? = null
 )

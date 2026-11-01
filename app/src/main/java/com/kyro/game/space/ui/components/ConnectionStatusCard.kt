@@ -162,12 +162,10 @@ fun ConnectionStatusCard(
             Spacer(modifier = Modifier.height(14.dp))
 
             // Details Box
-            val isDark = MaterialTheme.colorScheme.background == com.kyro.game.space.ui.theme.KyroBackground
-            val innerBoxBg = if (isDark) Color(0xFF1E1E26) else Color(0xFFF3F5F8)
             Surface(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(14.dp),
-                color = innerBoxBg,
+                color = Color(0xFF1E1E26),
                 border = androidx.compose.foundation.BorderStroke(
                     1.dp,
                     MaterialTheme.colorScheme.outline.copy(alpha = 0.25f)
@@ -212,7 +210,7 @@ fun ConnectionStatusCard(
                                 shape = RoundedCornerShape(10.dp),
                                 modifier = Modifier.fillMaxWidth()
                             ) {
-                                Text("Buka Aplikasi Shizuku (Mula Service)")
+                                Text("Open Shizuku App (Start Service)")
                             }
                         }
                     } else {

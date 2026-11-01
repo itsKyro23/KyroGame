@@ -69,8 +69,6 @@ fun GameSpaceApp(
     val homeGames by repository.homeGamesFlow.collectAsState(initial = emptyList())
     val allApps by repository.allGamesFlow.collectAsState(initial = emptyList())
 
-    val themeMode by repository.themeMode.collectAsState()
-    val dynamicColor by repository.dynamicColor.collectAsState()
     val refreshIntervalMs by repository.refreshIntervalMs.collectAsState()
     val floatingHudEnabled by repository.floatingHudEnabled.collectAsState()
 
@@ -159,8 +157,6 @@ fun GameSpaceApp(
                     GameSpaceTab.SETTINGS -> SettingsScreen(
                         repository = repository,
                         overview = overview,
-                        themeMode = themeMode,
-                        dynamicColor = dynamicColor,
                         refreshIntervalMs = refreshIntervalMs,
                         floatingHudEnabled = floatingHudEnabled,
                         isOverlayGranted = isOverlayGranted

@@ -195,7 +195,7 @@ class LibAdbCommandExecutor : CommandExecutor {
         val cleanHost = host.trim()
         val cleanCode = pairingCode.trim()
         if (cleanHost.isBlank() || pairingPort <= 0 || cleanCode.length != 6) {
-            val err = "Parameter tidak sah. Masukkan IP (127.0.0.1), Pairing Port > 0, dan 6-digit Pairing Code."
+            val err = "Invalid parameters. Enter a valid IP Address, Pairing Port > 0, and 6-digit Pairing Code."
             lastError = err
             return@withContext Result.failure(IllegalArgumentException(err))
         }
@@ -210,11 +210,26 @@ class LibAdbCommandExecutor : CommandExecutor {
             val combined = "${res.stdout}\n${res.stderr}".trim()
             if (res.isSuccess || combined.contains("Successfully paired", ignoreCase = true)) {
                 lastError = null
+                // Check if Wireless ADB connection port is already advertised via mDNS and auto-connect!
+                val mdnsRes = AdbNativeBridge.runAdbBinary("mdns", "services", timeoutMs = 3000L)
+                val connectLine = mdnsRes.stdout.lines().firstOrNull { it.contains("_adb-tls-connect") }
+                val discoveredPort = connectLine?.split(Regex("\\s+"))?.lastOrNull()
+                    ?.substringAfterLast(":")?.toIntOrNull() ?: 0
+
+                if (discoveredPort > 0) {
+                    val autoConnectRes = connect(cleanHost, discoveredPort)
+                    if (autoConnectRes.isSuccess) {
+                        return@withContext Result.success(
+                            "Paired with $cleanHost:$pairingPort & Auto-Connected to port $discoveredPort!\n${autoConnectRes.getOrNull()}"
+                        )
+                    }
+                }
+
                 return@withContext Result.success(
-                    "Berjaya Pair dengan $cleanHost:$pairingPort!\n$combined\nSekarang tekan '2. Connect & Inject Daemon'."
+                    "Successfully paired with $cleanHost:$pairingPort!\n$combined\nNow tap '2. Connect & Inject' (or let Auto-Connect finish)."
                 )
             } else if (combined.isNotBlank() && !combined.contains("Exec format error", ignoreCase = true)) {
-                val err = "Pairing gagal ke $cleanHost:$pairingPort:\n$combined"
+                val err = "Pairing failed for $cleanHost:$pairingPort:\n$combined"
                 lastError = err
                 return@withContext Result.failure(Exception(err))
             }
@@ -227,9 +242,9 @@ class LibAdbCommandExecutor : CommandExecutor {
                 socket.connect(InetSocketAddress(cleanHost, pairingPort), 3000)
             }
             lastError = null
-            Result.success("Pairing berjaya dihantar ke $cleanHost:$pairingPort.")
+            Result.success("Pairing request sent to $cleanHost:$pairingPort.")
         } catch (e: Throwable) {
-            val msg = "Pairing gagal ke $cleanHost:$pairingPort: ${e.localizedMessage ?: e.javaClass.simpleName}"
+            val msg = "Pairing failed for $cleanHost:$pairingPort: ${e.localizedMessage ?: e.javaClass.simpleName}"
             lastError = msg
             Result.failure(Exception(msg, e))
         }
@@ -246,7 +261,7 @@ class LibAdbCommandExecutor : CommandExecutor {
     ): Result<String> = withContext(Dispatchers.IO) {
         val cleanHost = host.trim()
         if (cleanHost.isBlank() || connectPort <= 0) {
-            val err = "Host atau Connection Port tidak sah ($cleanHost:$connectPort)."
+            val err = "Invalid Host or Connection Port ($cleanHost:$connectPort)."
             lastError = err
             return@withContext Result.failure(IllegalArgumentException(err))
         }
@@ -256,7 +271,7 @@ class LibAdbCommandExecutor : CommandExecutor {
             currentHost = cleanHost
             currentPort = connectPort
             return@withContext Result.success(
-                "Daemon kekal (Persistent Daemon) sudah aktif di port $DAEMON_PORT! Anda boleh mematikan Wireless Debugging dengan selamat."
+                "Persistent Daemon is already active on port $DAEMON_PORT! You can safely turn off Wireless Debugging."
             )
         }
 
@@ -278,13 +293,13 @@ class LibAdbCommandExecutor : CommandExecutor {
                 // Automatically inject the Persistent Daemon so turning off Wireless Debugging won't disconnect!
                 val daemonResult = injectPersistentDaemonViaAdb(target)
                 val msg = buildString {
-                    appendLine("Berjaya sambung ke Wireless ADB ($target).")
+                    appendLine("Connected to Wireless ADB ($target).")
                     appendLine(daemonResult)
                 }.trim()
                 return@withContext Result.success(msg)
             } else if (combined.isNotBlank() && !combined.contains("Exec format error", ignoreCase = true)) {
                 isConnectedSession = false
-                val err = "Gagal sambung ke $target:\n$combined"
+                val err = "Failed to connect to $target:\n$combined"
                 lastError = err
                 return@withContext Result.failure(Exception(err))
             }
@@ -303,7 +318,7 @@ class LibAdbCommandExecutor : CommandExecutor {
             Result.success("Connected to ADB daemon at $cleanHost:$connectPort")
         } catch (e: Throwable) {
             isConnectedSession = false
-            val msg = "Gagal sambung ke $cleanHost:$connectPort (${e.localizedMessage ?: e.javaClass.simpleName})"
+            val msg = "Failed to connect to $cleanHost:$connectPort (${e.localizedMessage ?: e.javaClass.simpleName})"
             lastError = msg
             Result.failure(Exception(msg, e))
         }
@@ -337,20 +352,20 @@ class LibAdbCommandExecutor : CommandExecutor {
                 // 3. Verify that our standalone daemon on 127.0.0.1:38555 responds
                 val verified = probeDaemonStatus()
                 if (verified && isDaemonInjected) {
-                    "✓ Persistent Daemon berjaya di-inject (127.0.0.1:$DAEMON_PORT + TCP 5555)!\n" +
-                            "Komunikasi TIDAK AKAN TERPUTUS walaupun Wireless Debugging dimatikan."
+                    "✓ Persistent Daemon injected (127.0.0.1:$DAEMON_PORT + TCP 5555)!\n" +
+                            "Connection WILL NOT DROP even when Wireless Debugging is turned OFF."
                 } else if (injectRes.isSuccess || injectRes.stdout.contains("DAEMON_INJECTED_OK")) {
                     isDaemonInjected = true
                     isConnectedSession = true
                     daemonStatusText = "Daemon Injected (Loopback Active • Wireless ADB Off Safe)"
-                    "✓ Daemon telah di-inject & TCP 5555 diaktifkan. Sambungan kekal aktif walaupun Wireless Debugging dimatikan."
+                    "✓ Daemon injected & TCP 5555 enabled. Connection stays alive even when Wireless Debugging is OFF."
                 } else {
                     daemonStatusText = "Connected (Direct ADB Mode)"
-                    "Sambungan aktif, tetapi suntikan daemon memberi mesej: ${injectRes.stderr.ifBlank { injectRes.stdout }}"
+                    "Connected, but daemon injection reported: ${injectRes.stderr.ifBlank { injectRes.stdout }}"
                 }
             } catch (e: Throwable) {
                 daemonStatusText = "Daemon Injection Error: ${e.message}"
-                "Ralat suntikan daemon: ${e.localizedMessage ?: e.message}"
+                "Daemon injection error: ${e.localizedMessage ?: e.message}"
             }
         }
 
@@ -363,7 +378,7 @@ class LibAdbCommandExecutor : CommandExecutor {
             // Check if already running
             if (probeDaemonStatus() && isDaemonInjected) {
                 return@withContext Result.success(
-                    "Persistent Daemon sudah aktif di 127.0.0.1:$DAEMON_PORT (UID 2000)! Selamat untuk matikan Wireless Debugging."
+                    "Persistent Daemon is already active at 127.0.0.1:$DAEMON_PORT (UID 2000)! Safe to turn off Wireless Debugging."
                 )
             }
 
@@ -384,13 +399,13 @@ class LibAdbCommandExecutor : CommandExecutor {
                     isConnectedSession = true
                     daemonStatusText = "Daemon Active (127.0.0.1:$DAEMON_PORT • Wireless ADB Off Safe)"
                     return@withContext Result.success(
-                        "✓ Persistent Daemon berjaya di-inject! Komunikasi libadb kini kekal aktif walaupun Wireless Debugging dimatikan."
+                        "✓ Persistent Daemon injected! libadb communication now stays active even when Wireless Debugging is turned OFF."
                     )
                 }
             }
 
             Result.failure(
-                Exception("Sila Pair & Connect Wireless ADB terlebih dahulu (atau aktifkan Shizuku) untuk inject Daemon.")
+                Exception("Please Pair & Connect Wireless ADB first (or enable Shizuku) to inject the Persistent Daemon.")
             )
         }
 
@@ -481,7 +496,7 @@ class LibAdbCommandExecutor : CommandExecutor {
                 return@withContext CommandResult(
                     exitCode = -1,
                     stdout = "",
-                    stderr = "Manual ADB & Daemon belum tersambung. Sila Pair & Connect Wireless ADB di Settings untuk inject Daemon.",
+                    stderr = "Manual ADB & Daemon not connected. Please Pair & Connect Wireless ADB in Settings to inject the Daemon.",
                     isSuccess = false,
                     durationMs = System.currentTimeMillis() - startTime,
                     command = command

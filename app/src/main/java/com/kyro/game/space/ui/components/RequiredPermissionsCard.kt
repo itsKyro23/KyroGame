@@ -196,7 +196,7 @@ fun RequiredPermissionsCard(
                     }
                 }
 
-                // Info App shortcut button
+                // App Info shortcut button
                 TextButton(
                     onClick = { openAppInfo(context) },
                     contentPadding = androidx.compose.foundation.layout.PaddingValues(4.dp)
@@ -209,7 +209,7 @@ fun RequiredPermissionsCard(
                     )
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
-                        text = "Info Aplikasi (⋮)",
+                        text = "App Info (⋮)",
                         style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.Bold
                     )
@@ -250,7 +250,7 @@ fun RequiredPermissionsCard(
             },
             title = {
                 Text(
-                    text = "Penting: Cara Buka 'Setelan Dibatasi'",
+                    text = "How to Unlock 'Restricted Setting'",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
@@ -258,13 +258,13 @@ fun RequiredPermissionsCard(
             text = {
                 Column {
                     Text(
-                        text = "Pada Android 13/14/15/16, suis kebenaran aplikasi APK disekat oleh sistem dan berwarna kelabu ('Controlled by restricted setting').\n\n" +
-                                "Sila ikut langkah ini:\n" +
-                                "1. Tekan butang '1. Buka Info Aplikasi' di bawah.\n" +
-                                "2. Di halaman Info Aplikasi, tekan menu 3 titik (⋮) di bucu kanan atas.\n" +
-                                "3. Pilih 'Izinkan setelan dibatasi' (Allow restricted settings).\n" +
-                                "4. Masukkan PIN / cap jari telefon anda.\n" +
-                                "5. Selepas itu, tekan '2. Buka Tetapan Izin' untuk mengaktifkan suis!",
+                        text = "On Android 13/14/15/16, special permissions for sideloaded APKs are initially greyed out ('Controlled by restricted setting').\n\n" +
+                                "Follow these steps:\n" +
+                                "1. Tap '1. Open App Info (⋮)' below.\n" +
+                                "2. On the App Info screen, tap the 3-dot menu (⋮) in the top-right corner.\n" +
+                                "3. Select 'Allow restricted settings'.\n" +
+                                "4. Verify with your device PIN or fingerprint.\n" +
+                                "5. Then tap '2. Open Permission' to enable the toggle!",
                         style = MaterialTheme.typography.bodyMedium,
                         lineHeight = 20.sp
                     )
@@ -286,7 +286,7 @@ fun RequiredPermissionsCard(
                         modifier = Modifier.size(16.dp)
                     )
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text("1. Buka Info Aplikasi (⋮)")
+                    Text("1. Open App Info (⋮)")
                 }
             },
             dismissButton = {
@@ -303,7 +303,7 @@ fun RequiredPermissionsCard(
                     },
                     shape = RoundedCornerShape(10.dp)
                 ) {
-                    Text("2. Buka Tetapan Izin")
+                    Text("2. Open Permission")
                 }
             }
         )
@@ -316,14 +316,12 @@ private fun PermissionRowItem(
     context: Context,
     onOpenAppInfo: () -> Unit
 ) {
-    val isDark = MaterialTheme.colorScheme.background == com.kyro.game.space.ui.theme.KyroBackground
-    val itemBg = if (isDark) Color(0xFF1E1E26) else Color(0xFFF3F5F8)
     Surface(
         modifier = Modifier
             .fillMaxWidth()
             .testTag("permission_item_${perm.id}"),
         shape = RoundedCornerShape(14.dp),
-        color = itemBg,
+        color = Color(0xFF1E1E26),
         border = androidx.compose.foundation.BorderStroke(
             1.dp,
             MaterialTheme.colorScheme.outline.copy(alpha = 0.25f)
@@ -437,7 +435,7 @@ private fun PermissionRowItem(
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
-                            text = "Suis kelabu? Buka Info Aplikasi > 3 titik (⋮) > Izinkan setelan dibatasi.",
+                            text = "Switch greyed out? Open App Info > 3 dots (⋮) > Allow restricted settings.",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.weight(1f),
@@ -448,7 +446,7 @@ private fun PermissionRowItem(
                             contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 6.dp, vertical = 0.dp)
                         ) {
                             Text(
-                                text = "Buka (⋮)",
+                                text = "Open (⋮)",
                                 style = MaterialTheme.typography.labelSmall,
                                 fontWeight = FontWeight.Bold
                             )

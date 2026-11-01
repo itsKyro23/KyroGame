@@ -67,10 +67,19 @@ class GameSpaceRepository(
         )
     )
 
-    val themeMode = MutableStateFlow(prefs.getString("theme_mode", "DARK") ?: "DARK")
-    val dynamicColor = MutableStateFlow(prefs.getBoolean("dynamic_color", false))
     val refreshIntervalMs = MutableStateFlow(prefs.getLong("refresh_interval_ms", 2000L))
     val floatingHudEnabled = MutableStateFlow(prefs.getBoolean("floating_hud_enabled", false))
+
+    val adbScanner = com.kyro.game.space.data.executor.AdbWirelessScanner(
+        context = context,
+        onEndpointDiscovered = { ip, connectPort, _ ->
+            updateConnectionOverview()
+            if (connectPort > 0 && !executorFactory.libAdbExecutor.isDaemonInjected) {
+                executorFactory.libAdbExecutor.connect(ip, connectPort)
+                updateConnectionOverview()
+            }
+        }
+    )
 
     // Shizuku listeners
     private val binderReceivedListener = Shizuku.OnBinderReceivedListener {
@@ -111,6 +120,11 @@ class GameSpaceRepository(
             } catch (_: Throwable) {
             }
         }
+        scope.launch {
+            adbScanner.state.collect {
+                updateConnectionOverview()
+            }
+        }
     }
 
     private fun initShizukuListeners() {
@@ -125,6 +139,7 @@ class GameSpaceRepository(
 
     fun cleanUp() {
         try {
+            adbScanner.stopScanning()
             Shizuku.removeBinderReceivedListener(binderReceivedListener)
             Shizuku.removeBinderDeadListener(binderDeadListener)
             Shizuku.removeRequestPermissionResultListener(permissionResultListener)
@@ -505,8 +520,24 @@ class GameSpaceRepository(
         }
     }
 
+    fun startWirelessAdbScan(showInteractiveNotification: Boolean = false) {
+        adbScanner.startScanning(showInteractiveNotification)
+        updateConnectionOverview()
+    }
+
+    fun stopWirelessAdbScan() {
+        adbScanner.stopScanning()
+        updateConnectionOverview()
+    }
+
     suspend fun pairManualAdb(host: String, pairingPort: Int, code: String): Result<String> {
         val res = executorFactory.libAdbExecutor.pair(host, pairingPort, code)
+        if (res.isSuccess) {
+            val scanState = adbScanner.state.value
+            if (scanState.connectPort > 0 && !executorFactory.libAdbExecutor.isDaemonInjected) {
+                executorFactory.libAdbExecutor.connect(host, scanState.connectPort)
+            }
+        }
         updateConnectionOverview()
         return res
     }
@@ -527,6 +558,7 @@ class GameSpaceRepository(
 
     fun disconnectManualAdb() {
         executorFactory.libAdbExecutor.disconnect()
+        adbScanner.resetLastAutoConnect()
         updateConnectionOverview()
     }
 
@@ -546,6 +578,18 @@ class GameSpaceRepository(
         val currentMethod = executionMethod.value
         val currentShizuku = shizuku ?: _connectionState.value.shizuku
         val libAdb = executorFactory.libAdbExecutor
+        val scan = adbScanner.state.value
+
+        val effectiveHost = if (libAdb.isConnectedSession) {
+            libAdb.currentHost
+        } else {
+            scan.detectedIp
+        }
+        val effectivePort = if (scan.connectPort > 0) {
+            scan.connectPort
+        } else {
+            libAdb.currentPort
+        }
 
         val manualAdb = ManualAdbInfo(
             isConnected = libAdb.isConnectedSession,
@@ -554,8 +598,12 @@ class GameSpaceRepository(
             daemonStatus = libAdb.daemonStatusText,
             isLibAdbLoaded = com.kyro.game.space.data.executor.AdbNativeBridge.isNativeLoaded,
             libAdbDetails = com.kyro.game.space.data.executor.AdbNativeBridge.statusMessage,
-            host = libAdb.currentHost,
-            port = libAdb.currentPort,
+            host = effectiveHost,
+            port = effectivePort,
+            pairingPort = scan.pairingPort,
+            isScanning = scan.isScanning,
+            scanStatus = scan.statusText,
+            autoConnectEnabled = scan.autoConnectEnabled,
             error = libAdb.lastError
         )
 
@@ -580,7 +628,7 @@ class GameSpaceRepository(
                 when {
                     manualAdb.isDaemonInjected -> Pair(
                         ConnectionStatus.CONNECTED,
-                        "Persistent Daemon Active (127.0.0.1:${manualAdb.daemonPort}) • Sambungan kekal aktif walaupun Wireless Debugging OFF!"
+                        "Persistent Daemon Active (127.0.0.1:${manualAdb.daemonPort}) • Connection stays alive even when Wireless Debugging is OFF!"
                     )
                     manualAdb.isConnected -> Pair(
                         ConnectionStatus.CONNECTED,
@@ -588,7 +636,7 @@ class GameSpaceRepository(
                     )
                     else -> Pair(
                         ConnectionStatus.DISCONNECTED,
-                        manualAdb.error ?: "Disconnected. Pair & Connect Wireless ADB di Settings untuk inject Daemon."
+                        manualAdb.error ?: "Disconnected. Open Setup to Auto-Scan & Connect Wireless ADB and inject the Persistent Daemon."
                     )
                 }
             }
@@ -609,16 +657,6 @@ class GameSpaceRepository(
         executionMethod.value = method
         prefs.edit().putString("execution_method", method.name).apply()
         updateConnectionOverview()
-    }
-
-    fun setThemeMode(mode: String) {
-        themeMode.value = mode
-        prefs.edit().putString("theme_mode", mode).apply()
-    }
-
-    fun setDynamicColor(enabled: Boolean) {
-        dynamicColor.value = enabled
-        prefs.edit().putBoolean("dynamic_color", enabled).apply()
     }
 
     fun setRefreshInterval(ms: Long) {

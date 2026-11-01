@@ -1,6 +1,5 @@
 package com.kyro.game.space.ui.screens
 
-import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
@@ -20,9 +19,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Cable
-import androidx.compose.material.icons.filled.ColorLens
 import androidx.compose.material.icons.filled.DarkMode
-import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.Refresh
@@ -70,8 +67,6 @@ import kotlinx.coroutines.launch
 fun SettingsScreen(
     repository: GameSpaceRepository,
     overview: ConnectionOverview,
-    themeMode: String,
-    dynamicColor: Boolean,
     refreshIntervalMs: Long,
     floatingHudEnabled: Boolean,
     isOverlayGranted: Boolean,
@@ -162,10 +157,10 @@ fun SettingsScreen(
                                 onClick = {
                                     val status = repository.requestShizukuPermission()
                                     when (status) {
-                                        "ALREADY_GRANTED" -> Toast.makeText(context, "Kebenaran Shizuku telah aktif dan disahkan!", Toast.LENGTH_SHORT).show()
-                                        "REQUESTED" -> Toast.makeText(context, "Meminta kebenaran Shizuku...", Toast.LENGTH_SHORT).show()
-                                        "OPENED_SHIZUKU" -> Toast.makeText(context, "Membuka aplikasi Shizuku. Sila pastikan servis Shizuku 'Running'.", Toast.LENGTH_LONG).show()
-                                        "NOT_INSTALLED" -> Toast.makeText(context, "Aplikasi Shizuku belum dipasang di peranti.", Toast.LENGTH_LONG).show()
+                                        "ALREADY_GRANTED" -> Toast.makeText(context, "Shizuku permission is active and verified!", Toast.LENGTH_SHORT).show()
+                                        "REQUESTED" -> Toast.makeText(context, "Requesting Shizuku permission...", Toast.LENGTH_SHORT).show()
+                                        "OPENED_SHIZUKU" -> Toast.makeText(context, "Opening Shizuku app. Please ensure Shizuku service is Running.", Toast.LENGTH_LONG).show()
+                                        "NOT_INSTALLED" -> Toast.makeText(context, "Shizuku app is not installed on this device.", Toast.LENGTH_LONG).show()
                                         else -> Toast.makeText(context, status, Toast.LENGTH_SHORT).show()
                                     }
                                 },
@@ -187,7 +182,7 @@ fun SettingsScreen(
                                     containerColor = MaterialTheme.colorScheme.primary
                                 )
                             ) {
-                                Text(if (overview.manualAdb.isDaemonInjected) "Daemon Active (Setup)" else "Pair, Connect & Inject")
+                                Text(if (overview.manualAdb.isDaemonInjected) "Daemon Active (Setup)" else "Auto-Scan, Pair & Inject")
                             }
                         }
 
@@ -446,6 +441,7 @@ fun SettingsScreen(
             onPair = { h, p, c -> repository.pairManualAdb(h, p, c) },
             onConnect = { h, p -> repository.connectManualAdb(h, p) },
             onInjectDaemon = { repository.injectManualAdbDaemon() },
+            onStartAutoScan = { notif -> repository.startWirelessAdbScan(notif) },
             onDisconnect = { repository.disconnectManualAdb() },
             onDismiss = { showPairingDialog = false }
         )
@@ -468,12 +464,7 @@ private fun ExecutionOptionRow(
     selected: Boolean,
     onClick: () -> Unit
 ) {
-    val isDark = MaterialTheme.colorScheme.background == com.kyro.game.space.ui.theme.KyroBackground
-    val containerBg = if (selected) {
-        if (isDark) Color(0xFF2A1517) else Color(0xFFFFEBEE)
-    } else {
-        if (isDark) Color(0xFF1E1E26) else Color(0xFFF3F5F8)
-    }
+    val containerBg = if (selected) Color(0xFF2A1517) else Color(0xFF1E1E26)
     val borderColor = if (selected) {
         MaterialTheme.colorScheme.primary
     } else {
@@ -521,6 +512,3 @@ private fun ExecutionOptionRow(
         }
     }
 }
-
-private fun String.capitalize(): String =
-    replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() }
