@@ -5,6 +5,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.io.BufferedReader
 import java.io.InputStreamReader
@@ -22,44 +24,51 @@ class LibAdbCommandExecutor : CommandExecutor {
         const val DAEMON_PID_PATH = "/data/local/tmp/kyro_daemon.pid"
 
         /**
-         * Shell script payload written to `/data/local/tmp/kyro_daemon.sh` and started with `setsid nohup`.
+         * Shell script payload written to `/data/local/tmp/kyro_daemon.sh` and started detached.
          * Keeps a persistent localhost shell listener on 127.0.0.1:38555 running as UID 2000 (shell)
-         * so communication stays alive even when Wireless Debugging is turned OFF.
+         * and sets `service.adb.tcp.port 5555` so communication stays alive even when
+         * Wireless Debugging is turned OFF or the app is closed and reopened.
          */
         val DAEMON_INSTALL_COMMAND: String = """
+            setprop service.adb.tcp.port $LOCAL_TCP_ADB_PORT 2>/dev/null
             cat << 'KYRO_EOF' > $DAEMON_SCRIPT_PATH
             #!/system/bin/sh
             export PATH=/system/bin:/system/xbin:/vendor/bin:${'$'}PATH
             PORT=$DAEMON_PORT
             if [ -f $DAEMON_PID_PATH ]; then
                 OLD_PID=${'$'}(cat $DAEMON_PID_PATH 2>/dev/null)
-                if [ -n "${'$'}OLD_PID" ] && [ "${'$'}OLD_PID" != "${'$'}${'$'}" ]; then
-                    kill -9 "${'$'}OLD_PID" 2>/dev/null
+                if [ -n "${'$'}OLD_PID" ] && [ "${'$'}OLD_PID" != "${'$'}${'$'}" ] && [ -d "/proc/${'$'}OLD_PID" ]; then
+                    exit 0
                 fi
             fi
             echo ${'$'}${'$'} > $DAEMON_PID_PATH
             chmod 666 $DAEMON_PID_PATH 2>/dev/null
+            trap "" HUP INT TERM
             while true; do
                 if command -v toybox >/dev/null 2>&1; then
-                    toybox nc -s 127.0.0.1 -p ${'$'}PORT -L /system/bin/sh 2>/dev/null || \
-                    toybox nc -s 127.0.0.1 -p ${'$'}PORT -l /system/bin/sh 2>/dev/null
+                    toybox nc -s 127.0.0.1 -p ${'$'}PORT -L /system/bin/sh </dev/null >/dev/null 2>&1 || \
+                    toybox nc -s 127.0.0.1 -p ${'$'}PORT -l /system/bin/sh </dev/null >/dev/null 2>&1
                 elif command -v nc >/dev/null 2>&1; then
-                    nc -s 127.0.0.1 -p ${'$'}PORT -L /system/bin/sh 2>/dev/null || \
-                    nc -s 127.0.0.1 -p ${'$'}PORT -l /system/bin/sh 2>/dev/null
+                    nc -s 127.0.0.1 -p ${'$'}PORT -L /system/bin/sh </dev/null >/dev/null 2>&1 || \
+                    nc -s 127.0.0.1 -p ${'$'}PORT -l /system/bin/sh </dev/null >/dev/null 2>&1
                 fi
                 sleep 1
             done
             KYRO_EOF
             chmod 755 $DAEMON_SCRIPT_PATH
             if command -v setsid >/dev/null 2>&1; then
-                setsid nohup /system/bin/sh $DAEMON_SCRIPT_PATH </dev/null >/dev/null 2>&1 &
-            else
+                setsid /system/bin/sh $DAEMON_SCRIPT_PATH </dev/null >/dev/null 2>&1 &
+            elif command -v nohup >/dev/null 2>&1; then
                 nohup /system/bin/sh $DAEMON_SCRIPT_PATH </dev/null >/dev/null 2>&1 &
+            else
+                (/system/bin/sh $DAEMON_SCRIPT_PATH </dev/null >/dev/null 2>&1 &)
             fi
             sleep 1
             echo "DAEMON_INJECTED_OK"
         """.trimIndent()
     }
+
+    private val connectionMutex = Mutex()
 
     @Volatile
     var currentHost: String = "127.0.0.1"
@@ -78,75 +87,130 @@ class LibAdbCommandExecutor : CommandExecutor {
         private set
 
     @Volatile
-    var daemonStatusText: String = "Daemon Not Injected (Connect Wireless ADB first)"
+    var daemonStatusText: String = "Checking Daemon Status..."
         private set
 
     @Volatile
     var lastError: String? = null
         private set
 
+    fun restoreSavedEndpoint(host: String, port: Int, wasDaemonInjected: Boolean) {
+        if (host.isNotBlank()) currentHost = host
+        if (port > 0) currentPort = port
+        if (wasDaemonInjected) {
+            daemonStatusText = "Verifying active Daemon (127.0.0.1:$DAEMON_PORT)..."
+        }
+    }
+
     /**
-     * Probes whether the injected persistent daemon on 127.0.0.1:38555 or local TCP ADB on 127.0.0.1:5555 is alive.
-     * This allows the app to stay connected even after Wireless Debugging is turned OFF.
+     * Probes whether the injected persistent daemon on 127.0.0.1:38555 or local TCP ADB on 127.0.0.1:5555
+     * (or the active ADB server device list) is alive.
+     * Automatically reconnects local loopback ADB and respawns the socket daemon if needed so exiting
+     * and re-entering the app seamlessly restores the CONNECTED state without re-pairing.
      */
     suspend fun probeDaemonStatus(): Boolean = withContext(Dispatchers.IO) {
-        // 1. Check injected persistent daemon on 127.0.0.1:38555
+        connectionMutex.withLock {
+            probeDaemonStatusUnlocked()
+        }
+    }
+
+    private suspend fun probeDaemonStatusUnlocked(): Boolean {
+        // 1. Fast socket check against our injected persistent daemon on 127.0.0.1:38555
         val daemonRes = executeViaInjectedDaemon("id", 2000L)
         if (daemonRes != null && daemonRes.isSuccess && daemonRes.stdout.contains("uid=")) {
             isDaemonInjected = true
             isConnectedSession = true
             lastError = null
             daemonStatusText = "Daemon Active (127.0.0.1:$DAEMON_PORT • Wireless ADB Off Safe)"
-            return@withContext true
+            return true
         }
 
-        // 2. Check if local loopback ADB 127.0.0.1:5555 is responsive via libadb.so
         if (AdbNativeBridge.isNativeLoaded) {
-            val adbCheck = AdbNativeBridge.runAdbBinary(
+            AdbNativeBridge.runAdbBinary("start-server", timeoutMs = 4000L)
+
+            // 2. Reconnect & check local loopback TCP ADB (127.0.0.1:5555) which survives Wireless Debugging OFF
+            AdbNativeBridge.runAdbBinary("connect", "127.0.0.1:$LOCAL_TCP_ADB_PORT", timeoutMs = 3500L)
+            val localAdbCheck = AdbNativeBridge.runAdbBinary(
                 "-s", "127.0.0.1:$LOCAL_TCP_ADB_PORT", "shell", "id",
-                timeoutMs = 3000L
+                timeoutMs = 3500L
             )
-            if (adbCheck.isSuccess && adbCheck.stdout.contains("uid=")) {
+            if (localAdbCheck.isSuccess && localAdbCheck.stdout.contains("uid=")) {
+                // Ensure the fast socket daemon on 38555 is also running
+                AdbNativeBridge.runAdbBinary(
+                    "-s", "127.0.0.1:$LOCAL_TCP_ADB_PORT", "shell", DAEMON_INSTALL_COMMAND,
+                    timeoutMs = 5000L
+                )
+                isDaemonInjected = true
                 isConnectedSession = true
                 lastError = null
-                daemonStatusText = "Local Loopback ADB Active (127.0.0.1:$LOCAL_TCP_ADB_PORT)"
-                return@withContext true
+                daemonStatusText = "Daemon Active (Loopback 127.0.0.1:$LOCAL_TCP_ADB_PORT + :$DAEMON_PORT)"
+                return true
+            }
+
+            // 3. Check if any ADB device is already online in `adb devices` or reconnect to last known host:port
+            if (currentPort > 0 && currentPort != LOCAL_TCP_ADB_PORT) {
+                AdbNativeBridge.runAdbBinary("connect", "$currentHost:$currentPort", timeoutMs = 3500L)
+            }
+
+            val devicesRes = AdbNativeBridge.runAdbBinary("devices", timeoutMs = 3000L)
+            val activeSerial = devicesRes.stdout.lines()
+                .map { it.trim() }
+                .firstOrNull { line ->
+                    line.isNotEmpty() &&
+                            !line.startsWith("List of") &&
+                            line.endsWith("\tdevice")
+                }
+                ?.substringBefore("\t")
+                ?.trim()
+
+            if (!activeSerial.isNullOrBlank()) {
+                val verifyShell = AdbNativeBridge.runAdbBinary(
+                    "-s", activeSerial, "shell", "id",
+                    timeoutMs = 3500L
+                )
+                if (verifyShell.isSuccess && verifyShell.stdout.contains("uid=")) {
+                    if (activeSerial.contains(":")) {
+                        currentHost = activeSerial.substringBeforeLast(":")
+                        currentPort = activeSerial.substringAfterLast(":").toIntOrNull() ?: currentPort
+                    }
+                    // Re-ensure persistent daemon + tcpip 5555 are active
+                    AdbNativeBridge.runAdbBinary(
+                        "-s", activeSerial, "shell", DAEMON_INSTALL_COMMAND,
+                        timeoutMs = 6000L
+                    )
+                    val recheckSocket = executeViaInjectedDaemon("id", 1500L)
+                    isDaemonInjected = true
+                    isConnectedSession = true
+                    lastError = null
+                    daemonStatusText = if (recheckSocket?.isSuccess == true) {
+                        "Daemon Active (127.0.0.1:$DAEMON_PORT • Wireless ADB Off Safe)"
+                    } else {
+                        "Daemon Active ($activeSerial)"
+                    }
+                    return true
+                }
+            }
+        }
+
+        // 4. Fallback socket check for non-ARM64 test environments
+        if (isConnectedSession) {
+            try {
+                Socket().use { socket ->
+                    socket.connect(InetSocketAddress(currentHost, currentPort), 1500)
+                    return true
+                }
+            } catch (_: Throwable) {
             }
         }
 
         isDaemonInjected = false
-        if (!isConnectedSession) {
-            daemonStatusText = "Daemon Not Injected (Pair & Connect Wireless ADB)"
-        }
-        false
+        isConnectedSession = false
+        daemonStatusText = "Daemon Not Injected (Pair & Connect Wireless ADB)"
+        return false
     }
 
     override suspend fun isConnected(): Boolean = withContext(Dispatchers.IO) {
-        if (probeDaemonStatus()) {
-            return@withContext true
-        }
-        if (!isConnectedSession) return@withContext false
-
-        if (AdbNativeBridge.isNativeLoaded) {
-            val check = AdbNativeBridge.runAdbBinary(
-                "-s", "$currentHost:$currentPort", "shell", "echo ok",
-                timeoutMs = 3500L
-            )
-            if (check.isSuccess && check.stdout.contains("ok")) {
-                return@withContext true
-            }
-        }
-
-        try {
-            Socket().use { socket ->
-                socket.connect(InetSocketAddress(currentHost, currentPort), 2000)
-                true
-            }
-        } catch (e: Throwable) {
-            isConnectedSession = false
-            lastError = "Connection lost: ${e.message}"
-            false
-        }
+        probeDaemonStatus()
     }
 
     override fun getVersion(): String {
@@ -201,7 +265,6 @@ class LibAdbCommandExecutor : CommandExecutor {
         }
 
         if (AdbNativeBridge.isNativeLoaded) {
-            // Start adb server first
             AdbNativeBridge.runAdbBinary("start-server", timeoutMs = 5000L)
             val res = AdbNativeBridge.runAdbBinary(
                 "pair", "$cleanHost:$pairingPort", cleanCode,
@@ -252,8 +315,8 @@ class LibAdbCommandExecutor : CommandExecutor {
 
     /**
      * Connects to Wireless ADB (`libadb.so connect <host>:<port>`) and IMMEDIATELY injects the
-     * persistent background daemon (`kyro_daemon.sh` + `adb tcpip 5555`) so communication continues
-     * working even after the user turns OFF Wireless Debugging!
+     * persistent background daemon (`adb tcpip 5555` + `kyro_daemon.sh`) so communication continues
+     * working even after the user turns OFF Wireless Debugging or closes and reopens the app!
      */
     suspend fun connect(
         host: String,
@@ -266,108 +329,129 @@ class LibAdbCommandExecutor : CommandExecutor {
             return@withContext Result.failure(IllegalArgumentException(err))
         }
 
-        // First check if daemon is already alive and user is reconnecting
-        if (probeDaemonStatus()) {
-            currentHost = cleanHost
-            currentPort = connectPort
-            return@withContext Result.success(
-                "Persistent Daemon is already active on port $DAEMON_PORT! You can safely turn off Wireless Debugging."
-            )
-        }
+        connectionMutex.withLock {
+            // First check if daemon is already alive
+            if (probeDaemonStatusUnlocked() && isDaemonInjected) {
+                currentHost = cleanHost
+                currentPort = connectPort
+                return@withLock Result.success(
+                    "Persistent Daemon is already active on port $DAEMON_PORT! Safe to turn off Wireless Debugging."
+                )
+            }
 
-        val target = "$cleanHost:$connectPort"
-        if (AdbNativeBridge.isNativeLoaded) {
-            AdbNativeBridge.runAdbBinary("start-server", timeoutMs = 5000L)
-            val connectRes = AdbNativeBridge.runAdbBinary("connect", target, timeoutMs = 10_000L)
-            val combined = "${connectRes.stdout}\n${connectRes.stderr}".trim()
+            val target = "$cleanHost:$connectPort"
+            if (AdbNativeBridge.isNativeLoaded) {
+                AdbNativeBridge.runAdbBinary("start-server", timeoutMs = 5000L)
+                val connectRes = AdbNativeBridge.runAdbBinary("connect", target, timeoutMs = 10_000L)
+                val combined = "${connectRes.stdout}\n${connectRes.stderr}".trim()
 
-            val connectedOk = combined.contains("connected to", ignoreCase = true) ||
-                    combined.contains("already connected", ignoreCase = true)
+                val connectedOk = combined.contains("connected to", ignoreCase = true) ||
+                        combined.contains("already connected", ignoreCase = true)
 
-            if (connectedOk) {
+                if (connectedOk) {
+                    currentHost = cleanHost
+                    currentPort = connectPort
+                    isConnectedSession = true
+                    lastError = null
+
+                    val daemonResult = injectPersistentDaemonUnlocked(target)
+                    val msg = buildString {
+                        appendLine("Connected to Wireless ADB ($target).")
+                        appendLine(daemonResult)
+                    }.trim()
+                    return@withLock Result.success(msg)
+                } else if (combined.isNotBlank() && !combined.contains("Exec format error", ignoreCase = true)) {
+                    isConnectedSession = false
+                    val err = "Failed to connect to $target:\n$combined"
+                    lastError = err
+                    return@withLock Result.failure(Exception(err))
+                }
+            }
+
+            // Fallback socket check (for non-ARM64 test environments)
+            try {
+                Socket().use { socket ->
+                    socket.soTimeout = 3000
+                    socket.connect(InetSocketAddress(cleanHost, connectPort), 3000)
+                }
                 currentHost = cleanHost
                 currentPort = connectPort
                 isConnectedSession = true
                 lastError = null
-
-                // Automatically inject the Persistent Daemon so turning off Wireless Debugging won't disconnect!
-                val daemonResult = injectPersistentDaemonViaAdb(target)
-                val msg = buildString {
-                    appendLine("Connected to Wireless ADB ($target).")
-                    appendLine(daemonResult)
-                }.trim()
-                return@withContext Result.success(msg)
-            } else if (combined.isNotBlank() && !combined.contains("Exec format error", ignoreCase = true)) {
+                Result.success("Connected to ADB daemon at $cleanHost:$connectPort")
+            } catch (e: Throwable) {
                 isConnectedSession = false
-                val err = "Failed to connect to $target:\n$combined"
-                lastError = err
-                return@withContext Result.failure(Exception(err))
+                val msg = "Failed to connect to $cleanHost:$connectPort (${e.localizedMessage ?: e.javaClass.simpleName})"
+                lastError = msg
+                Result.failure(Exception(msg, e))
             }
-        }
-
-        // Fallback socket check (for non-ARM64 test environments)
-        try {
-            Socket().use { socket ->
-                socket.soTimeout = 3000
-                socket.connect(InetSocketAddress(cleanHost, connectPort), 3000)
-            }
-            currentHost = cleanHost
-            currentPort = connectPort
-            isConnectedSession = true
-            lastError = null
-            Result.success("Connected to ADB daemon at $cleanHost:$connectPort")
-        } catch (e: Throwable) {
-            isConnectedSession = false
-            val msg = "Failed to connect to $cleanHost:$connectPort (${e.localizedMessage ?: e.javaClass.simpleName})"
-            lastError = msg
-            Result.failure(Exception(msg, e))
         }
     }
 
     /**
-     * Injects the persistent daemon over an active `libadb.so` target connection AND enables `tcpip 5555`.
+     * Injects the persistent daemon over an active `libadb.so` target connection.
+     * IMPORTANT ORDER:
+     * 1. Enable `tcpip 5555` FIRST (because `adb tcpip 5555` restarts `adbd`).
+     * 2. Connect to `127.0.0.1:5555` (and original endpoint).
+     * 3. Spawn `/data/local/tmp/kyro_daemon.sh` AFTER `adbd` has restarted so `kyro_daemon.sh` is never killed!
      */
     suspend fun injectPersistentDaemonViaAdb(targetEndpoint: String = "$currentHost:$currentPort"): String =
         withContext(Dispatchers.IO) {
-            try {
-                daemonStatusText = "Injecting Persistent Daemon..."
-
-                // 1. Deploy and start /data/local/tmp/kyro_daemon.sh via setsid nohup
-                val injectRes = AdbNativeBridge.runAdbBinary(
-                    "-s", targetEndpoint, "shell", DAEMON_INSTALL_COMMAND,
-                    timeoutMs = 10_000L
-                )
-
-                // 2. Also enable local loopback TCP 5555 so adbd listens on 127.0.0.1:5555 independent of Wi-Fi
-                AdbNativeBridge.runAdbBinary(
-                    "-s", targetEndpoint, "tcpip", LOCAL_TCP_ADB_PORT.toString(),
-                    timeoutMs = 6_000L
-                )
-                delay(600)
-                AdbNativeBridge.runAdbBinary(
-                    "connect", "127.0.0.1:$LOCAL_TCP_ADB_PORT",
-                    timeoutMs = 5_000L
-                )
-
-                // 3. Verify that our standalone daemon on 127.0.0.1:38555 responds
-                val verified = probeDaemonStatus()
-                if (verified && isDaemonInjected) {
-                    "✓ Persistent Daemon injected (127.0.0.1:$DAEMON_PORT + TCP 5555)!\n" +
-                            "Connection WILL NOT DROP even when Wireless Debugging is turned OFF."
-                } else if (injectRes.isSuccess || injectRes.stdout.contains("DAEMON_INJECTED_OK")) {
-                    isDaemonInjected = true
-                    isConnectedSession = true
-                    daemonStatusText = "Daemon Injected (Loopback Active • Wireless ADB Off Safe)"
-                    "✓ Daemon injected & TCP 5555 enabled. Connection stays alive even when Wireless Debugging is OFF."
-                } else {
-                    daemonStatusText = "Connected (Direct ADB Mode)"
-                    "Connected, but daemon injection reported: ${injectRes.stderr.ifBlank { injectRes.stdout }}"
-                }
-            } catch (e: Throwable) {
-                daemonStatusText = "Daemon Injection Error: ${e.message}"
-                "Daemon injection error: ${e.localizedMessage ?: e.message}"
+            connectionMutex.withLock {
+                injectPersistentDaemonUnlocked(targetEndpoint)
             }
         }
+
+    private suspend fun injectPersistentDaemonUnlocked(targetEndpoint: String): String {
+        return try {
+            daemonStatusText = "Injecting Persistent Daemon..."
+
+            // Step 1: Switch adbd to listen on TCP 5555 FIRST so restarting adbd doesn't kill our script
+            AdbNativeBridge.runAdbBinary(
+                "-s", targetEndpoint, "tcpip", LOCAL_TCP_ADB_PORT.toString(),
+                timeoutMs = 6_000L
+            )
+            delay(900)
+
+            // Step 2: Connect to loopback 127.0.0.1:5555 (and reconnect to targetEndpoint just in case)
+            val loopConnect = AdbNativeBridge.runAdbBinary(
+                "connect", "127.0.0.1:$LOCAL_TCP_ADB_PORT",
+                timeoutMs = 5_000L
+            )
+            val loopOk = "${loopConnect.stdout}\n${loopConnect.stderr}".let {
+                it.contains("connected to", ignoreCase = true) || it.contains("already connected", ignoreCase = true)
+            }
+            if (!loopOk) {
+                AdbNativeBridge.runAdbBinary("connect", targetEndpoint, timeoutMs = 5_000L)
+            }
+
+            val activeTarget = if (loopOk) "127.0.0.1:$LOCAL_TCP_ADB_PORT" else targetEndpoint
+
+            // Step 3: Deploy and start /data/local/tmp/kyro_daemon.sh AFTER tcpip 5555 is up
+            val injectRes = AdbNativeBridge.runAdbBinary(
+                "-s", activeTarget, "shell", DAEMON_INSTALL_COMMAND,
+                timeoutMs = 10_000L
+            )
+
+            // Step 4: Verify that our standalone daemon on 127.0.0.1:38555 or loopback 5555 responds
+            val verified = probeDaemonStatusUnlocked()
+            if (verified && isDaemonInjected) {
+                "✓ Persistent Daemon injected (127.0.0.1:$DAEMON_PORT + TCP $LOCAL_TCP_ADB_PORT)!\n" +
+                        "Connection WILL NOT DROP when Wireless Debugging is turned OFF or when exiting the app."
+            } else if (injectRes.isSuccess || injectRes.stdout.contains("DAEMON_INJECTED_OK") || loopOk) {
+                isDaemonInjected = true
+                isConnectedSession = true
+                daemonStatusText = "Daemon Active (Loopback 127.0.0.1:$LOCAL_TCP_ADB_PORT • Wireless ADB Off Safe)"
+                "✓ Daemon injected & TCP $LOCAL_TCP_ADB_PORT enabled. Connection stays alive even when Wireless Debugging is OFF."
+            } else {
+                daemonStatusText = "Connected (Direct ADB Mode)"
+                "Connected, but daemon injection reported: ${injectRes.stderr.ifBlank { injectRes.stdout }}"
+            }
+        } catch (e: Throwable) {
+            daemonStatusText = "Daemon Injection Error: ${e.message}"
+            "Daemon injection error: ${e.localizedMessage ?: e.message}"
+        }
+    }
 
     /**
      * Allows injecting the `libadb` persistent daemon using an already-authorized executor (such as Shizuku)
@@ -375,14 +459,12 @@ class LibAdbCommandExecutor : CommandExecutor {
      */
     suspend fun injectPersistentDaemonWithExecutor(fallbackExecutor: CommandExecutor? = null): Result<String> =
         withContext(Dispatchers.IO) {
-            // Check if already running
             if (probeDaemonStatus() && isDaemonInjected) {
                 return@withContext Result.success(
                     "Persistent Daemon is already active at 127.0.0.1:$DAEMON_PORT (UID 2000)! Safe to turn off Wireless Debugging."
                 )
             }
 
-            // Try via active libadb.so session first
             if (AdbNativeBridge.isNativeLoaded && isConnectedSession) {
                 val msg = injectPersistentDaemonViaAdb("$currentHost:$currentPort")
                 if (isDaemonInjected) {
@@ -390,7 +472,6 @@ class LibAdbCommandExecutor : CommandExecutor {
                 }
             }
 
-            // Try via fallback executor (e.g. Shizuku if running and granted)
             if (fallbackExecutor != null && fallbackExecutor.isConnected()) {
                 val res = fallbackExecutor.execute(DAEMON_INSTALL_COMMAND, timeoutMs = 10_000L)
                 delay(500)
@@ -471,22 +552,25 @@ class LibAdbCommandExecutor : CommandExecutor {
 
             // Stage 2: Execute via local loopback TCP ADB (127.0.0.1:5555) using libadb.so
             if (AdbNativeBridge.isNativeLoaded) {
+                AdbNativeBridge.runAdbBinary("connect", "127.0.0.1:$LOCAL_TCP_ADB_PORT", timeoutMs = 3000L)
                 val localTcpRes = AdbNativeBridge.runAdbBinary(
                     "-s", "127.0.0.1:$LOCAL_TCP_ADB_PORT", "shell", command,
                     timeoutMs = timeoutMs
                 )
                 if (localTcpRes.isSuccess) {
+                    isDaemonInjected = true
                     isConnectedSession = true
                     return@withContext localTcpRes.copy(command = command)
                 }
 
                 // Stage 3: Execute via Wireless ADB endpoint ($currentHost:$currentPort) using libadb.so
-                if (isConnectedSession) {
+                if (isConnectedSession || currentPort > 0) {
                     val remoteRes = AdbNativeBridge.runAdbBinary(
                         "-s", "$currentHost:$currentPort", "shell", command,
                         timeoutMs = timeoutMs
                     )
                     if (remoteRes.isSuccess) {
+                        isConnectedSession = true
                         return@withContext remoteRes.copy(command = command)
                     }
                 }

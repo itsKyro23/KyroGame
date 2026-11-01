@@ -221,6 +221,10 @@ class AdbWirelessScanner(
         val newPairingPort = if (isPairing) port else current.pairingPort
         val newConnectPort = if (!isPairing) port else current.connectPort
 
+        val changed = resolvedIp != current.detectedIp ||
+                newPairingPort != current.pairingPort ||
+                newConnectPort != current.connectPort
+
         val summary = buildSummaryStatus(resolvedIp, newPairingPort, newConnectPort)
         _state.value = current.copy(
             detectedIp = resolvedIp,
@@ -229,20 +233,18 @@ class AdbWirelessScanner(
             statusText = summary
         )
 
-        if (isPairing && updateNotif) {
+        if (isPairing && updateNotif && changed) {
             updatePairingNotification(
                 title = "Pairing Port Found: $resolvedIp:$newPairingPort",
                 body = "Tap 'Enter Pairing Code' below and type the 6-digit code shown on screen."
             )
         }
 
-        scope.launch {
-            onEndpointDiscovered(resolvedIp, newConnectPort, newPairingPort)
-            // Trigger auto-connect if connectPort is found and autoConnectEnabled is true
-            if (!isPairing && newConnectPort > 0 && _state.value.autoConnectEnabled) {
-                val endpointKey = "$resolvedIp:$newConnectPort"
-                if (endpointKey != lastAutoConnectedEndpoint) {
-                    lastAutoConnectedEndpoint = endpointKey
+        if (!isPairing && newConnectPort > 0 && _state.value.autoConnectEnabled) {
+            val endpointKey = "$resolvedIp:$newConnectPort"
+            if (endpointKey != lastAutoConnectedEndpoint) {
+                lastAutoConnectedEndpoint = endpointKey
+                scope.launch {
                     onEndpointDiscovered(resolvedIp, newConnectPort, newPairingPort)
                 }
             }

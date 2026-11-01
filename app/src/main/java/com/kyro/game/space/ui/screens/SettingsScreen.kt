@@ -78,6 +78,10 @@ fun SettingsScreen(
     var showPairingDialog by remember { mutableStateOf(false) }
     var showTerminalDialog by remember { mutableStateOf(false) }
 
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        repository.checkDaemonAndSyncState()
+    }
+
     LazyColumn(
         modifier = modifier
             .fillMaxSize()

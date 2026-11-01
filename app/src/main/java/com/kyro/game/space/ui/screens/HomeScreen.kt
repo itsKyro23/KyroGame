@@ -73,6 +73,10 @@ fun HomeScreen(
     var showTerminalDialog by remember { mutableStateOf(false) }
     var showPairingDialog by remember { mutableStateOf(false) }
 
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        repository.checkDaemonAndSyncState()
+    }
+
     LazyColumn(
         modifier = modifier
             .fillMaxSize()
@@ -86,7 +90,15 @@ fun HomeScreen(
                 overview = overview,
                 onReconnect = {
                     repository.updateShizukuStatus()
-                    Toast.makeText(context, "Refreshed connection & daemon status", Toast.LENGTH_SHORT).show()
+                    scope.launch {
+                        val alive = repository.checkDaemonAndSyncState()
+                        val msg = if (alive) {
+                            "Persistent Daemon is Active & Connected!"
+                        } else {
+                            "Refreshed connection & daemon status"
+                        }
+                        Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                    }
                 },
                 onRequestPermission = {
                     if (overview.method == ExecutionMethod.MANUAL_ADB) {

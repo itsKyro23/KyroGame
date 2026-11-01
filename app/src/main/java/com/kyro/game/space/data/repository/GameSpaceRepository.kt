@@ -70,12 +70,18 @@ class GameSpaceRepository(
     val refreshIntervalMs = MutableStateFlow(prefs.getLong("refresh_interval_ms", 2000L))
     val floatingHudEnabled = MutableStateFlow(prefs.getBoolean("floating_hud_enabled", false))
 
+    @Volatile
+    private var isProbingDaemon: Boolean = true
+
     val adbScanner = com.kyro.game.space.data.executor.AdbWirelessScanner(
         context = context,
         onEndpointDiscovered = { ip, connectPort, _ ->
             updateConnectionOverview()
             if (connectPort > 0 && !executorFactory.libAdbExecutor.isDaemonInjected) {
-                executorFactory.libAdbExecutor.connect(ip, connectPort)
+                val res = executorFactory.libAdbExecutor.connect(ip, connectPort)
+                if (res.isSuccess) {
+                    saveDaemonPrefs(ip, connectPort, executorFactory.libAdbExecutor.isDaemonInjected)
+                }
                 updateConnectionOverview()
             }
         }
@@ -95,6 +101,10 @@ class GameSpaceRepository(
     init {
         try {
             com.kyro.game.space.data.executor.AdbNativeBridge.initialize(context)
+            val savedHost = prefs.getString("last_adb_host", "127.0.0.1") ?: "127.0.0.1"
+            val savedPort = prefs.getInt("last_adb_port", 5555)
+            val wasInjected = prefs.getBoolean("daemon_was_injected", false)
+            executorFactory.libAdbExecutor.restoreSavedEndpoint(savedHost, savedPort, wasInjected)
         } catch (_: Throwable) {
         }
         try {
@@ -111,8 +121,7 @@ class GameSpaceRepository(
         }
         scope.launch {
             try {
-                executorFactory.libAdbExecutor.probeDaemonStatus()
-                updateConnectionOverview()
+                checkDaemonAndSyncState()
             } catch (_: Throwable) {
             }
             try {
@@ -315,11 +324,19 @@ class GameSpaceRepository(
         }
     }
 
-    // Device telemetry monitoring
+    // Device telemetry & daemon status monitoring
     private fun startPeriodicMonitoring() {
         scope.launch {
+            var tick = 0
             while (isActive) {
                 sampleDeviceStats()
+                tick++
+                if (tick % 2 == 0 && (!executorFactory.libAdbExecutor.isDaemonInjected || tick % 6 == 0)) {
+                    try {
+                        checkDaemonAndSyncState()
+                    } catch (_: Throwable) {
+                    }
+                }
                 delay(refreshIntervalMs.value)
             }
         }
@@ -473,13 +490,40 @@ class GameSpaceRepository(
             updateConnectionOverview(shizuku = shizuku)
             scope.launch {
                 try {
-                    executorFactory.libAdbExecutor.probeDaemonStatus()
-                    updateConnectionOverview()
+                    checkDaemonAndSyncState()
                 } catch (_: Throwable) {
                 }
             }
         } catch (_: Throwable) {
         }
+    }
+
+    suspend fun checkDaemonAndSyncState(): Boolean {
+        isProbingDaemon = true
+        updateConnectionOverview()
+        val alive = try {
+            executorFactory.libAdbExecutor.probeDaemonStatus()
+        } catch (_: Throwable) {
+            false
+        }
+        isProbingDaemon = false
+        if (alive) {
+            saveDaemonPrefs(
+                executorFactory.libAdbExecutor.currentHost,
+                executorFactory.libAdbExecutor.currentPort,
+                executorFactory.libAdbExecutor.isDaemonInjected
+            )
+        }
+        updateConnectionOverview()
+        return alive
+    }
+
+    private fun saveDaemonPrefs(host: String, port: Int, daemonInjected: Boolean) {
+        prefs.edit()
+            .putString("last_adb_host", host)
+            .putInt("last_adb_port", port)
+            .putBoolean("daemon_was_injected", daemonInjected)
+            .apply()
     }
 
     fun requestShizukuPermission(requestCode: Int = 1001): String {
@@ -537,6 +581,13 @@ class GameSpaceRepository(
             if (scanState.connectPort > 0 && !executorFactory.libAdbExecutor.isDaemonInjected) {
                 executorFactory.libAdbExecutor.connect(host, scanState.connectPort)
             }
+            if (executorFactory.libAdbExecutor.isConnectedSession) {
+                saveDaemonPrefs(
+                    executorFactory.libAdbExecutor.currentHost,
+                    executorFactory.libAdbExecutor.currentPort,
+                    executorFactory.libAdbExecutor.isDaemonInjected
+                )
+            }
         }
         updateConnectionOverview()
         return res
@@ -544,6 +595,9 @@ class GameSpaceRepository(
 
     suspend fun connectManualAdb(host: String, connectPort: Int): Result<String> {
         val res = executorFactory.libAdbExecutor.connect(host, connectPort)
+        if (res.isSuccess) {
+            saveDaemonPrefs(host, connectPort, executorFactory.libAdbExecutor.isDaemonInjected)
+        }
         updateConnectionOverview()
         return res
     }
@@ -552,6 +606,13 @@ class GameSpaceRepository(
         val res = executorFactory.libAdbExecutor.injectPersistentDaemonWithExecutor(
             fallbackExecutor = executorFactory.shizukuExecutor
         )
+        if (res.isSuccess) {
+            saveDaemonPrefs(
+                executorFactory.libAdbExecutor.currentHost,
+                executorFactory.libAdbExecutor.currentPort,
+                true
+            )
+        }
         updateConnectionOverview()
         return res
     }
@@ -559,6 +620,7 @@ class GameSpaceRepository(
     fun disconnectManualAdb() {
         executorFactory.libAdbExecutor.disconnect()
         adbScanner.resetLastAutoConnect()
+        prefs.edit().putBoolean("daemon_was_injected", false).apply()
         updateConnectionOverview()
     }
 
@@ -633,6 +695,10 @@ class GameSpaceRepository(
                     manualAdb.isConnected -> Pair(
                         ConnectionStatus.CONNECTED,
                         "Connected to Wireless ADB at ${manualAdb.host}:${manualAdb.port}"
+                    )
+                    isProbingDaemon && prefs.getBoolean("daemon_was_injected", false) -> Pair(
+                        ConnectionStatus.CONNECTING,
+                        "Verifying active Persistent Daemon on 127.0.0.1:${manualAdb.daemonPort}..."
                     )
                     else -> Pair(
                         ConnectionStatus.DISCONNECTED,

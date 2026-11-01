@@ -83,6 +83,12 @@ class AdbPairingReceiver : BroadcastReceiver() {
                     if (resolvedConnectPort > 0) {
                         val connectRes = executor.connect(host, resolvedConnectPort)
                         if (connectRes.isSuccess) {
+                            context.getSharedPreferences("kyro_game_space_prefs", Context.MODE_PRIVATE)
+                                .edit()
+                                .putString("last_adb_host", host)
+                                .putInt("last_adb_port", resolvedConnectPort)
+                                .putBoolean("daemon_was_injected", true)
+                                .apply()
                             postStatusNotification(
                                 context,
                                 "Wireless ADB Paired & Daemon Injected!",
