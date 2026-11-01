@@ -60,6 +60,20 @@ class ExampleRobolectricTest {
     assertEquals(0.65f, loaded.downscaleFactor, 0.01f)
     assertEquals(maxFps, loaded.fpsLimit)
     assertEquals(com.kyro.game.space.data.model.GameApiTarget.ANDROID_15_BELOW, loaded.apiTarget)
+
+    // Verify Network Optimizer DNS preset selection & Wi-Fi / Mobile Data modes
+    val quad9 = com.kyro.game.space.data.model.NetworkOptimizerState.DEFAULT_DNS_PRESETS.first { it.id == "quad9" }
+    repo.applyDnsPreset(quad9)
+    assertEquals("quad9", repo.networkOptimizerState.value.selectedDnsId)
+    assertEquals("9.9.9.9", repo.networkOptimizerState.value.activePingHost)
+    assertEquals("dns.quad9.net", repo.networkOptimizerState.value.privateDnsHostname)
+
+    repo.setWifiLowLatencyMode(true)
+    assertEquals(true, repo.networkOptimizerState.value.wifiLowLatencyEnabled)
+
+    repo.setMobileDataBoostMode(true)
+    assertEquals(true, repo.networkOptimizerState.value.mobileDataBoostEnabled)
+
     repo.cleanUp()
   }
 }

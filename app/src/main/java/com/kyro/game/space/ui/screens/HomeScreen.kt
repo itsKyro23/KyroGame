@@ -67,6 +67,7 @@ fun HomeScreen(
     isNotificationGranted: Boolean,
     onRequestNotification: () -> Unit,
     onNavigateToApps: () -> Unit,
+    onNavigateToNetworkOptimizer: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -124,7 +125,10 @@ fun HomeScreen(
 
         // Section B: Device Performance Cards (Temperature, RAM, Ping)
         item {
-            PerformanceCards(stats = stats)
+            PerformanceCards(
+                stats = stats,
+                onOpenNetworkOptimizer = onNavigateToNetworkOptimizer
+            )
         }
 
         // Section C: My Games

@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Settings
@@ -16,6 +17,7 @@ import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -39,6 +41,7 @@ import androidx.compose.ui.unit.sp
 import com.kyro.game.space.data.repository.GameSpaceRepository
 import com.kyro.game.space.ui.screens.AppsScreen
 import com.kyro.game.space.ui.screens.HomeScreen
+import com.kyro.game.space.ui.screens.NetworkOptimizerScreen
 import com.kyro.game.space.ui.screens.SettingsScreen
 import com.kyro.game.space.ui.theme.KyroAccent
 import com.kyro.game.space.ui.theme.KyroPrimary
@@ -63,6 +66,7 @@ fun GameSpaceApp(
     onRequestNotification: () -> Unit
 ) {
     var currentTab by rememberSaveable { mutableStateOf(GameSpaceTab.HOME) }
+    var showNetworkOptimizer by rememberSaveable { mutableStateOf(false) }
 
     val overview by repository.connectionState.collectAsState()
     val stats by repository.deviceStats.collectAsState()
@@ -76,12 +80,30 @@ fun GameSpaceApp(
         modifier = Modifier.fillMaxSize(),
         topBar = {
             TopAppBar(
+                navigationIcon = {
+                    if (showNetworkOptimizer) {
+                        IconButton(
+                            onClick = { showNetworkOptimizer = false },
+                            modifier = Modifier.testTag("network_optimizer_back_button")
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = "Back to Home",
+                                tint = MaterialTheme.colorScheme.onBackground
+                            )
+                        }
+                    }
+                },
                 title = {
                     Text(
-                        text = when (currentTab) {
-                            GameSpaceTab.HOME -> "GAME SPACE"
-                            GameSpaceTab.APPS -> "APP MANAGER"
-                            GameSpaceTab.SETTINGS -> "PREFERENCES"
+                        text = if (showNetworkOptimizer) {
+                            "NETWORK OPTIMIZER"
+                        } else {
+                            when (currentTab) {
+                                GameSpaceTab.HOME -> "GAME SPACE"
+                                GameSpaceTab.APPS -> "APP MANAGER"
+                                GameSpaceTab.SETTINGS -> "PREFERENCES"
+                            }
                         },
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Black,
@@ -101,10 +123,13 @@ fun GameSpaceApp(
                 modifier = Modifier.testTag("bottom_nav_bar")
             ) {
                 GameSpaceTab.values().forEach { tab ->
-                    val isSelected = currentTab == tab
+                    val isSelected = currentTab == tab && !showNetworkOptimizer
                     NavigationBarItem(
                         selected = isSelected,
-                        onClick = { currentTab = tab },
+                        onClick = {
+                            showNetworkOptimizer = false
+                            currentTab = tab
+                        },
                         icon = {
                             Icon(
                                 imageVector = if (isSelected) tab.selectedIcon else tab.unselectedIcon,
@@ -133,34 +158,43 @@ fun GameSpaceApp(
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
-            AnimatedContent(
-                targetState = currentTab,
-                transitionSpec = { fadeIn() togetherWith fadeOut() },
-                label = "tab_crossfade"
-            ) { targetTab ->
-                when (targetTab) {
-                    GameSpaceTab.HOME -> HomeScreen(
-                        repository = repository,
-                        overview = overview,
-                        stats = stats,
-                        homeGames = homeGames,
-                        isUsageAccessGranted = isUsageAccessGranted,
-                        isOverlayGranted = isOverlayGranted,
-                        isNotificationGranted = isNotificationGranted,
-                        onRequestNotification = onRequestNotification,
-                        onNavigateToApps = { currentTab = GameSpaceTab.APPS }
-                    )
-                    GameSpaceTab.APPS -> AppsScreen(
-                        repository = repository,
-                        allApps = allApps
-                    )
-                    GameSpaceTab.SETTINGS -> SettingsScreen(
-                        repository = repository,
-                        overview = overview,
-                        refreshIntervalMs = refreshIntervalMs,
-                        floatingHudEnabled = floatingHudEnabled,
-                        isOverlayGranted = isOverlayGranted
-                    )
+            if (showNetworkOptimizer) {
+                NetworkOptimizerScreen(
+                    repository = repository,
+                    stats = stats,
+                    onBack = { showNetworkOptimizer = false }
+                )
+            } else {
+                AnimatedContent(
+                    targetState = currentTab,
+                    transitionSpec = { fadeIn() togetherWith fadeOut() },
+                    label = "tab_crossfade"
+                ) { targetTab ->
+                    when (targetTab) {
+                        GameSpaceTab.HOME -> HomeScreen(
+                            repository = repository,
+                            overview = overview,
+                            stats = stats,
+                            homeGames = homeGames,
+                            isUsageAccessGranted = isUsageAccessGranted,
+                            isOverlayGranted = isOverlayGranted,
+                            isNotificationGranted = isNotificationGranted,
+                            onRequestNotification = onRequestNotification,
+                            onNavigateToApps = { currentTab = GameSpaceTab.APPS },
+                            onNavigateToNetworkOptimizer = { showNetworkOptimizer = true }
+                        )
+                        GameSpaceTab.APPS -> AppsScreen(
+                            repository = repository,
+                            allApps = allApps
+                        )
+                        GameSpaceTab.SETTINGS -> SettingsScreen(
+                            repository = repository,
+                            overview = overview,
+                            refreshIntervalMs = refreshIntervalMs,
+                            floatingHudEnabled = floatingHudEnabled,
+                            isOverlayGranted = isOverlayGranted
+                        )
+                    }
                 }
             }
         }

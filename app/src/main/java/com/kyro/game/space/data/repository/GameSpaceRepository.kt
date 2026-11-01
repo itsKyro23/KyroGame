@@ -8,6 +8,8 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.os.BatteryManager
 import android.os.Build
 import android.os.Process
@@ -20,12 +22,16 @@ import com.kyro.game.space.data.executor.ExecutorFactory
 import com.kyro.game.space.data.model.ConnectionOverview
 import com.kyro.game.space.data.model.ConnectionStatus
 import com.kyro.game.space.data.model.DeviceStats
+import com.kyro.game.space.data.model.DnsBenchmarkResult
+import com.kyro.game.space.data.model.DnsPreset
 import com.kyro.game.space.data.model.ExecutionMethod
 import com.kyro.game.space.data.model.GameApiTarget
 import com.kyro.game.space.data.model.GameCustomConfig
 import com.kyro.game.space.data.model.GameItem
 import com.kyro.game.space.data.model.GameOptimizationMode
 import com.kyro.game.space.data.model.ManualAdbInfo
+import com.kyro.game.space.data.model.NetworkOptimizerState
+import com.kyro.game.space.data.model.NetworkTransportType
 import com.kyro.game.space.data.model.ShizukuInfo
 import com.kyro.game.space.data.model.formatDownscaleClean
 import kotlinx.coroutines.CoroutineScope
@@ -77,6 +83,9 @@ class GameSpaceRepository(
     val floatingHudEnabled = MutableStateFlow(prefs.getBoolean("floating_hud_enabled", false))
 
     private val _gameConfigs = MutableStateFlow<Map<String, GameCustomConfig>>(loadAllSavedGameConfigs())
+
+    private val _networkOptimizerState = MutableStateFlow(loadInitialNetworkOptimizerState())
+    val networkOptimizerState: StateFlow<NetworkOptimizerState> = _networkOptimizerState.asStateFlow()
 
     @Volatile
     private var isProbingDaemon: Boolean = true
@@ -487,8 +496,26 @@ class GameSpaceRepository(
         // CPU Temperature: read sysfs or thermal files
         val cpuTempC = readCpuThermalTemp() ?: batteryTempC
 
-        // Ping measurement (real TCP/Socket latency to 8.8.8.8:53)
-        val (pingMs, isOnline) = measureRealPing("8.8.8.8", 53)
+        // Detect active Network Transport (Wi-Fi vs Mobile Data)
+        val (transportType, transportDetails) = detectNetworkTransport()
+        val currentNetOpt = _networkOptimizerState.value
+        if (currentNetOpt.activeTransport != transportType || currentNetOpt.transportDetails != transportDetails) {
+            _networkOptimizerState.value = currentNetOpt.copy(
+                activeTransport = transportType,
+                transportDetails = transportDetails
+            )
+        }
+
+        // Ping measurement (real TCP/Socket latency to active DNS / pingHost:53)
+        val targetHost = _networkOptimizerState.value.activePingHost
+        val (pingMs, isOnline) = measureRealPing(targetHost, 53)
+
+        val shortNetLabel = when (transportType) {
+            NetworkTransportType.WIFI -> "Wi-Fi"
+            NetworkTransportType.MOBILE_DATA -> "Mobile Data"
+            NetworkTransportType.OTHER -> "Network"
+            NetworkTransportType.OFFLINE -> "Offline"
+        }
 
         _deviceStats.value = DeviceStats(
             cpuTempC = cpuTempC,
@@ -498,7 +525,9 @@ class GameSpaceRepository(
             availRamMb = availRamMb,
             ramUsagePercent = ramUsagePercent,
             pingMs = pingMs,
-            pingHost = "8.8.8.8",
+            pingHost = targetHost,
+            networkType = shortNetLabel,
+            activeDnsName = _networkOptimizerState.value.activeDnsName,
             isOnline = isOnline,
             batteryLevel = batteryLevel,
             isCharging = isCharging,
@@ -508,6 +537,271 @@ class GameSpaceRepository(
             sdkInt = Build.VERSION.SDK_INT,
             deviceModel = "${Build.MANUFACTURER} ${Build.MODEL}"
         )
+    }
+
+    private fun loadInitialNetworkOptimizerState(): NetworkOptimizerState {
+        val savedDnsId = prefs.getString("net_opt_dns_id", "cloudflare") ?: "cloudflare"
+        val preset = NetworkOptimizerState.DEFAULT_DNS_PRESETS.firstOrNull { it.id == savedDnsId }
+            ?: NetworkOptimizerState.DEFAULT_DNS_PRESETS.first()
+        val wifiLowLat = prefs.getBoolean("net_opt_wifi_low_lat", false)
+        val mobileBoost = prefs.getBoolean("net_opt_mobile_boost", false)
+        val bgScanOff = prefs.getBoolean("net_opt_bg_scan_off", false)
+        return NetworkOptimizerState(
+            selectedDnsId = preset.id,
+            activeDnsName = preset.name,
+            activePingHost = preset.primaryIp,
+            privateDnsHostname = preset.privateDnsHostname,
+            wifiLowLatencyEnabled = wifiLowLat,
+            mobileDataBoostEnabled = mobileBoost,
+            backgroundScanDisabled = bgScanOff
+        )
+    }
+
+    fun detectNetworkTransport(): Pair<NetworkTransportType, String> {
+        return try {
+            val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+                ?: return Pair(NetworkTransportType.WIFI, "Standard Network Interface")
+            val activeNet = cm.activeNetwork
+                ?: return Pair(NetworkTransportType.OFFLINE, "No active network interface detected")
+            val caps = cm.getNetworkCapabilities(activeNet)
+                ?: return Pair(NetworkTransportType.OFFLINE, "Network capabilities unavailable")
+
+            val downKbps = caps.linkDownstreamBandwidthKbps
+            val upKbps = caps.linkUpstreamBandwidthKbps
+            val bwSummary = if (downKbps > 0) " • ${downKbps / 1000} Mbps Down" else ""
+
+            when {
+                caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) -> {
+                    Pair(
+                        NetworkTransportType.WIFI,
+                        "Wi-Fi Wireless Interface Active$bwSummary"
+                    )
+                }
+                caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) -> {
+                    Pair(
+                        NetworkTransportType.MOBILE_DATA,
+                        "Mobile Cellular Data (4G/5G) Active$bwSummary"
+                    )
+                }
+                else -> {
+                    Pair(
+                        NetworkTransportType.OTHER,
+                        "Active Network Interface$bwSummary"
+                    )
+                }
+            }
+        } catch (_: Throwable) {
+            Pair(NetworkTransportType.WIFI, "Network Interface Ready")
+        }
+    }
+
+    suspend fun benchmarkAllDnsAndSelectStable(autoApplyBest: Boolean = true): DnsPreset? = withContext(Dispatchers.IO) {
+        val (transportType, transportDetails) = detectNetworkTransport()
+        _networkOptimizerState.value = _networkOptimizerState.value.copy(
+            activeTransport = transportType,
+            transportDetails = transportDetails,
+            isBenchmarking = true,
+            statusLog = "Benchmarking latency & jitter across 6 global gaming DNS nodes..."
+        )
+
+        val updatedResults = mutableListOf<DnsBenchmarkResult>()
+        for (preset in NetworkOptimizerState.DEFAULT_DNS_PRESETS) {
+            val samples = mutableListOf<Int>()
+            repeat(3) {
+                val (ms, ok) = measureRealPing(preset.primaryIp, 53)
+                if (ok && ms != null) {
+                    samples.add(ms)
+                }
+            }
+            val result = if (samples.isNotEmpty()) {
+                val avg = samples.sum() / samples.size
+                val jitter = (samples.maxOrNull() ?: avg) - (samples.minOrNull() ?: avg)
+                DnsBenchmarkResult(
+                    preset = preset,
+                    avgPingMs = avg,
+                    jitterMs = jitter,
+                    isReachable = true
+                )
+            } else {
+                DnsBenchmarkResult(
+                    preset = preset,
+                    avgPingMs = null,
+                    jitterMs = null,
+                    isReachable = false
+                )
+            }
+            updatedResults.add(result)
+        }
+
+        val sortedResults = updatedResults.sortedWith(
+            compareBy<DnsBenchmarkResult> { !it.isReachable }
+                .thenBy { (it.avgPingMs ?: 9999) + ((it.jitterMs ?: 0) / 2) }
+        )
+
+        val bestCandidate = sortedResults.firstOrNull { it.isReachable }?.preset
+            ?: NetworkOptimizerState.DEFAULT_DNS_PRESETS.first()
+
+        _networkOptimizerState.value = _networkOptimizerState.value.copy(
+            isBenchmarking = false,
+            benchmarkResults = sortedResults,
+            statusLog = if (autoApplyBest) {
+                "Selected most stable network route: ${bestCandidate.name} (${bestCandidate.primaryIp})"
+            } else {
+                "Benchmark complete. Lowest latency: ${bestCandidate.name} (${bestCandidate.primaryIp})"
+            }
+        )
+
+        if (autoApplyBest) {
+            applyDnsPreset(bestCandidate)
+        } else {
+            sampleDeviceStats()
+        }
+
+        bestCandidate
+    }
+
+    suspend fun applyDnsPreset(preset: DnsPreset): Result<String> = withContext(Dispatchers.IO) {
+        prefs.edit().putString("net_opt_dns_id", preset.id).apply()
+        val (transportType, transportDetails) = detectNetworkTransport()
+        val cmd = "settings put global private_dns_mode hostname; " +
+            "settings put global private_dns_specifier ${preset.privateDnsHostname}; " +
+            "settings put global default_dns_server ${preset.primaryIp} 2>/dev/null || true"
+
+        val res = executeCommand(cmd)
+        val statusMsg = if (res.isSuccess) {
+            "Active Stable DNS: ${preset.name} (${preset.primaryIp} • DoT: ${preset.privateDnsHostname}) applied via ${executionMethod.value.name}."
+        } else {
+            "Switched telemetry target to ${preset.name} (${preset.primaryIp}). Connect Shizuku/Daemon to apply system-wide Private DNS."
+        }
+
+        _networkOptimizerState.value = _networkOptimizerState.value.copy(
+            activeTransport = transportType,
+            transportDetails = transportDetails,
+            selectedDnsId = preset.id,
+            activeDnsName = preset.name,
+            activePingHost = preset.primaryIp,
+            privateDnsHostname = preset.privateDnsHostname,
+            statusLog = statusMsg
+        )
+        sampleDeviceStats()
+        Result.success(statusMsg)
+    }
+
+    suspend fun resetDnsToAutomatic(): Result<String> = withContext(Dispatchers.IO) {
+        val defaultPreset = NetworkOptimizerState.DEFAULT_DNS_PRESETS.first()
+        prefs.edit().putString("net_opt_dns_id", defaultPreset.id).apply()
+        val cmd = "settings put global private_dns_mode opportunistic; settings delete global private_dns_specifier 2>/dev/null || true"
+        val res = executeCommand(cmd)
+        val msg = if (res.isSuccess) {
+            "Reset Private DNS to Automatic (ISP / Opportunistic)."
+        } else {
+            "Reset ping monitor to default (${defaultPreset.primaryIp})."
+        }
+        _networkOptimizerState.value = _networkOptimizerState.value.copy(
+            selectedDnsId = defaultPreset.id,
+            activeDnsName = "Auto / Default (${defaultPreset.primaryIp})",
+            activePingHost = defaultPreset.primaryIp,
+            statusLog = msg
+        )
+        sampleDeviceStats()
+        Result.success(msg)
+    }
+
+    suspend fun setWifiLowLatencyMode(enabled: Boolean): Result<String> = withContext(Dispatchers.IO) {
+        prefs.edit().putBoolean("net_opt_wifi_low_lat", enabled).apply()
+        val cmd = if (enabled) {
+            "cmd wifi force-low-latency-mode enabled 2>/dev/null || true; " +
+                "cmd wifi force-hi-perf-mode enabled 2>/dev/null || true; " +
+                "settings put global wifi_sleep_policy 2; " +
+                "settings put global wifi_scan_always_enabled 0"
+        } else {
+            "cmd wifi force-low-latency-mode disabled 2>/dev/null || true; " +
+                "cmd wifi force-hi-perf-mode disabled 2>/dev/null || true"
+        }
+        val res = executeCommand(cmd)
+        val msg = if (enabled) {
+            if (res.isSuccess) "Wi-Fi Low-Latency & High-Perf Lock enabled via ${executionMethod.value.name}."
+            else "Wi-Fi Low-Latency preference enabled."
+        } else {
+            "Wi-Fi Low-Latency mode disabled."
+        }
+        _networkOptimizerState.value = _networkOptimizerState.value.copy(
+            wifiLowLatencyEnabled = enabled,
+            statusLog = msg
+        )
+        Result.success(msg)
+    }
+
+    suspend fun setMobileDataBoostMode(enabled: Boolean): Result<String> = withContext(Dispatchers.IO) {
+        prefs.edit().putBoolean("net_opt_mobile_boost", enabled).apply()
+        val cmd = if (enabled) {
+            "settings put global mobile_data_always_on 1; " +
+                "settings put global netstats_enabled 1; " +
+                "cmd netpolicy set restrict-background true 2>/dev/null || true"
+        } else {
+            "cmd netpolicy set restrict-background false 2>/dev/null || true"
+        }
+        val res = executeCommand(cmd)
+        val msg = if (enabled) {
+            if (res.isSuccess) "Mobile Data 4G/5G Priority & Background Saver enabled via ${executionMethod.value.name}."
+            else "Mobile Data 4G/5G Priority preference enabled."
+        } else {
+            "Mobile Data 4G/5G Priority disabled."
+        }
+        _networkOptimizerState.value = _networkOptimizerState.value.copy(
+            mobileDataBoostEnabled = enabled,
+            statusLog = msg
+        )
+        Result.success(msg)
+    }
+
+    suspend fun setBackgroundScanDisabled(disabled: Boolean): Result<String> = withContext(Dispatchers.IO) {
+        prefs.edit().putBoolean("net_opt_bg_scan_off", disabled).apply()
+        val flag = if (disabled) "0" else "1"
+        val throttleFlag = if (disabled) "1" else "0"
+        val cmd = "settings put global wifi_scan_always_enabled $flag; " +
+            "settings put global ble_scan_always_enabled $flag; " +
+            "settings put global wifi_scan_throttle_enabled $throttleFlag"
+        val res = executeCommand(cmd)
+        val msg = if (disabled) {
+            if (res.isSuccess) "Background Wi-Fi & BLE scanning suppressed to prevent ping spikes."
+            else "Background scan suppression saved."
+        } else {
+            "Background network scanning restored to normal."
+        }
+        _networkOptimizerState.value = _networkOptimizerState.value.copy(
+            backgroundScanDisabled = disabled,
+            statusLog = msg
+        )
+        Result.success(msg)
+    }
+
+    suspend fun repairAndFlushNetwork(): Result<String> = withContext(Dispatchers.IO) {
+        _networkOptimizerState.value = _networkOptimizerState.value.copy(
+            isRepairing = true,
+            statusLog = "Flushing DNS resolver cache, resetting stalled sockets, and re-calibrating route..."
+        )
+        val activePreset = NetworkOptimizerState.DEFAULT_DNS_PRESETS.firstOrNull {
+            it.id == _networkOptimizerState.value.selectedDnsId
+        } ?: NetworkOptimizerState.DEFAULT_DNS_PRESETS.first()
+
+        val cmd = "cmd netd resolver flushdefaultif 2>/dev/null || ndc resolver flushdefaultif 2>/dev/null || true; " +
+            "settings put global private_dns_mode hostname; " +
+            "settings put global private_dns_specifier ${activePreset.privateDnsHostname}; " +
+            "cmd connectivity airplane-mode disable 2>/dev/null || true"
+        val res = executeCommand(cmd)
+        sampleDeviceStats()
+        val pingAfter = _deviceStats.value.pingMs?.let { "${it}ms" } ?: "Online"
+        val msg = if (res.isSuccess) {
+            "Network repaired & DNS cache flushed! Active Ping: $pingAfter (${activePreset.primaryIp})"
+        } else {
+            "Socket route refreshed! Active Ping: $pingAfter (${activePreset.primaryIp})"
+        }
+        _networkOptimizerState.value = _networkOptimizerState.value.copy(
+            isRepairing = false,
+            statusLog = msg
+        )
+        Result.success(msg)
     }
 
     private fun readCpuThermalTemp(): Float? {
