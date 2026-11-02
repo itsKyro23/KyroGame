@@ -41,13 +41,17 @@ jobs:
 
       - name: Prepare Keystore & Environment
         run: |
-          # Prepare dummy debug keystore if not present for CI build
+          # Prepare debug keystore if not present for CI build
           if [ ! -f "debug.keystore" ]; then
             if [ -f "debug.keystore.base64" ]; then
               base64 -d debug.keystore.base64 > debug.keystore
             else
               keytool -genkey -v -keystore debug.keystore -alias androiddebugkey -storepass android -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
             fi
+          fi
+          # Prepare release upload keystore if not present so release AAB builds cleanly in CI
+          if [ ! -f "my-upload-key.jks" ]; then
+            keytool -genkey -v -keystore my-upload-key.jks -alias upload -storepass android -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Kyro Game Space,O=Kyro,C=US"
           fi
           # Ensure .env placeholder exists for buildConfig/secrets plugin
           if [ ! -f ".env" ] && [ -f ".env.example" ]; then
@@ -64,6 +68,12 @@ jobs:
       - name: Build Debug APK
         run: ./gradlew assembleDebug --stacktrace
 
+      - name: Build Android App Bundle (AAB)
+        env:
+          STORE_PASSWORD: ${{ secrets.STORE_PASSWORD || 'android' }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD || 'android' }}
+        run: ./gradlew bundleDebug bundleRelease --stacktrace
+
       - name: Upload Debug APK
         uses: actions/upload-artifact@v4
         with:
@@ -71,6 +81,22 @@ jobs:
           path: app/build/outputs/apk/debug/*.apk
           retention-days: 14
           if-no-files-found: error
+
+      - name: Upload Debug AAB
+        uses: actions/upload-artifact@v4
+        with:
+          name: KyroGameSpace-debug-aab
+          path: app/build/outputs/bundle/debug/*.aab
+          retention-days: 14
+          if-no-files-found: error
+
+      - name: Upload Release AAB
+        uses: actions/upload-artifact@v4
+        with:
+          name: KyroGameSpace-release-aab
+          path: app/build/outputs/bundle/release/*.aab
+          retention-days: 14
+          if-no-files-found: warn
 
       - name: Upload Test Reports
         uses: actions/upload-artifact@v4

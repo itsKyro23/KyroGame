@@ -2,9 +2,12 @@ package com.kyro.game.space.ui.screens
 
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import android.provider.Settings
 import android.widget.Toast
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -25,6 +28,7 @@ import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Speed
+import androidx.compose.material.icons.filled.SportsEsports
 import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material3.Button
@@ -32,6 +36,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -41,6 +46,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -51,9 +57,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.kyro.game.space.BuildConfig
 import com.kyro.game.space.data.model.ConnectionOverview
 import com.kyro.game.space.data.model.ExecutionMethod
 import com.kyro.game.space.data.repository.GameSpaceRepository
@@ -61,6 +69,8 @@ import com.kyro.game.space.service.FloatingHudService
 import com.kyro.game.space.ui.components.AdbCommandDialog
 import com.kyro.game.space.ui.components.ManualAdbPairingDialog
 import com.kyro.game.space.ui.theme.KyroAccent
+import com.kyro.game.space.ui.theme.KyroCyan
+import com.kyro.game.space.ui.theme.KyroGreen
 import com.kyro.game.space.ui.theme.KyroPrimary
 import kotlinx.coroutines.launch
 
@@ -79,8 +89,14 @@ fun SettingsScreen(
     var showPairingDialog by remember { mutableStateOf(false) }
     var showTerminalDialog by remember { mutableStateOf(false) }
 
-    androidx.compose.runtime.LaunchedEffect(overview.method) {
+    LaunchedEffect(overview.method) {
         repository.refreshActiveExecutionMethodStatus()
+    }
+
+    val activeMethodDisplayName = when (overview.method) {
+        ExecutionMethod.SHIZUKU -> "Shizuku IPC"
+        ExecutionMethod.MANUAL_ADB -> "Wireless ADB Daemon"
+        ExecutionMethod.ROOT -> "Root Access (SU)"
     }
 
     LazyColumn(
@@ -100,7 +116,7 @@ fun SettingsScreen(
                 colors = CardDefaults.cardColors(
                     containerColor = MaterialTheme.colorScheme.surfaceVariant
                 ),
-                border = androidx.compose.foundation.BorderStroke(
+                border = BorderStroke(
                     1.dp,
                     MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)
                 ),
@@ -111,17 +127,36 @@ fun SettingsScreen(
                         .fillMaxWidth()
                         .padding(18.dp)
                 ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "EXECUTION PERMISSION ENGINE",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 0.5.sp
+                        )
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = KyroPrimary.copy(alpha = 0.16f)
+                        ) {
+                            Text(
+                                text = activeMethodDisplayName,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = KyroAccent,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(6.dp))
                     Text(
-                        text = "EXECUTION METHOD",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 0.5.sp
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = "Choose how elevated system optimization commands are dispatched (Shizuku, Wireless ADB Daemon, or Root).",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        text = "Select the privileged permission engine used to execute game optimizations, resolution scaling, texture tuning, and live HUD telemetry. Only the selected engine will be used.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        lineHeight = 17.sp
                     )
 
                     Spacer(modifier = Modifier.height(14.dp))
@@ -129,7 +164,11 @@ fun SettingsScreen(
                     // Option 1: Shizuku
                     ExecutionOptionRow(
                         title = "Shizuku Engine (Recommended)",
-                        subtitle = "Fastest IPC via official Shizuku service. API v${overview.shizuku.version}",
+                        subtitle = if (overview.shizuku.version > 0) {
+                            "Low-latency binder IPC via Shizuku service (API v${overview.shizuku.version})"
+                        } else {
+                            "Low-latency binder IPC via official Shizuku service"
+                        },
                         icon = Icons.Default.Cable,
                         selected = overview.method == ExecutionMethod.SHIZUKU,
                         onClick = {
@@ -141,7 +180,7 @@ fun SettingsScreen(
 
                     // Option 2: Manual ADB (libadb.so)
                     ExecutionOptionRow(
-                        title = "Manual ADB + Daemon (libadb.so)",
+                        title = "Wireless ADB Daemon (libadb.so)",
                         subtitle = "${overview.manualAdb.libAdbDetails}\n${overview.manualAdb.daemonStatus}",
                         icon = Icons.Default.Wifi,
                         selected = overview.method == ExecutionMethod.MANUAL_ADB,
@@ -154,7 +193,7 @@ fun SettingsScreen(
 
                     // Option 3: Root Access (su / Magisk / KernelSU)
                     ExecutionOptionRow(
-                        title = "Root Access (su / Magisk / KernelSU)",
+                        title = "Root Access (SU / Magisk / KernelSU)",
                         subtitle = overview.root.statusMessage,
                         icon = Icons.Default.Security,
                         selected = overview.method == ExecutionMethod.ROOT,
@@ -178,7 +217,7 @@ fun SettingsScreen(
                                         when (status) {
                                             "ALREADY_GRANTED" -> Toast.makeText(context, "Shizuku permission is active and verified!", Toast.LENGTH_SHORT).show()
                                             "REQUESTED" -> Toast.makeText(context, "Requesting Shizuku permission...", Toast.LENGTH_SHORT).show()
-                                            "OPENED_SHIZUKU" -> Toast.makeText(context, "Opening Shizuku app. Please ensure Shizuku service is Running.", Toast.LENGTH_LONG).show()
+                                            "OPENED_SHIZUKU" -> Toast.makeText(context, "Opening Shizuku app. Please ensure Shizuku service is running.", Toast.LENGTH_LONG).show()
                                             "NOT_INSTALLED" -> Toast.makeText(context, "Shizuku app is not installed on this device.", Toast.LENGTH_LONG).show()
                                             else -> Toast.makeText(context, status, Toast.LENGTH_SHORT).show()
                                         }
@@ -188,7 +227,7 @@ fun SettingsScreen(
                                         .testTag("request_shizuku_perm_btn"),
                                     shape = RoundedCornerShape(12.dp)
                                 ) {
-                                    Text("Check / Grant Permission")
+                                    Text("Check / Grant Shizuku")
                                 }
                             }
                             ExecutionMethod.MANUAL_ADB -> {
@@ -202,7 +241,7 @@ fun SettingsScreen(
                                         containerColor = MaterialTheme.colorScheme.primary
                                     )
                                 ) {
-                                    Text(if (overview.manualAdb.isDaemonInjected) "Daemon Active (Setup)" else "Auto-Scan, Pair & Inject")
+                                    Text(if (overview.manualAdb.isDaemonInjected) "Daemon Active (Configure)" else "Pair & Connect ADB")
                                 }
                             }
                             ExecutionMethod.ROOT -> {
@@ -225,7 +264,7 @@ fun SettingsScreen(
                                         containerColor = MaterialTheme.colorScheme.primary
                                     )
                                 ) {
-                                    Text(if (overview.root.isRootGranted) "Root Active (Verify)" else "Check / Grant Root Access")
+                                    Text(if (overview.root.isRootGranted) "Root Active (Verify)" else "Check / Grant Root")
                                 }
                             }
                         }
@@ -236,8 +275,8 @@ fun SettingsScreen(
                             shape = RoundedCornerShape(12.dp)
                         ) {
                             Icon(imageVector = Icons.Default.Terminal, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("Test")
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("ADB Shell")
                         }
                     }
                 }
@@ -254,7 +293,7 @@ fun SettingsScreen(
                 colors = CardDefaults.cardColors(
                     containerColor = MaterialTheme.colorScheme.surfaceVariant
                 ),
-                border = androidx.compose.foundation.BorderStroke(
+                border = BorderStroke(
                     1.dp,
                     MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)
                 ),
@@ -267,32 +306,44 @@ fun SettingsScreen(
                 ) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Layers,
-                            contentDescription = null,
-                            tint = KyroAccent,
-                            modifier = Modifier.size(24.dp)
-                        )
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Column(modifier = Modifier.weight(1f)) {
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = KyroPrimary.copy(alpha = 0.16f),
+                            modifier = Modifier.size(42.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = Icons.Default.Layers,
+                                    contentDescription = null,
+                                    tint = KyroAccent,
+                                    modifier = Modifier.size(22.dp)
+                                )
+                            }
+                        }
+                        Column(
+                            modifier = Modifier.weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(3.dp)
+                        ) {
                             Text(
-                                text = "Floating Window (In-Game HUD)",
+                                text = "In-Game Floating HUD",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold
                             )
                             Text(
-                                text = "Lightweight draggable overlay displaying FPS, Ping, and RAM while playing.",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                text = "Translucent black draggable overlay displaying live in-game FPS, real CPU load, and GPU usage while playing.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                lineHeight = 16.sp
                             )
                         }
                         Switch(
                             checked = floatingHudEnabled,
                             onCheckedChange = { isEnabled ->
                                 if (isEnabled && !isOverlayGranted) {
-                                    Toast.makeText(context, "Grant 'Display over other apps' first", Toast.LENGTH_LONG).show()
+                                    Toast.makeText(context, "Please grant 'Display over other apps' permission first", Toast.LENGTH_LONG).show()
                                     val intent = Intent(
                                         Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
                                         Uri.parse("package:${context.packageName}")
@@ -304,10 +355,10 @@ fun SettingsScreen(
                                     repository.setFloatingHudEnabled(isEnabled)
                                     if (isEnabled) {
                                         FloatingHudService.start(context)
-                                        Toast.makeText(context, "Floating HUD activated", Toast.LENGTH_SHORT).show()
+                                        Toast.makeText(context, "In-Game Floating HUD enabled", Toast.LENGTH_SHORT).show()
                                     } else {
                                         FloatingHudService.stop(context)
-                                        Toast.makeText(context, "Floating HUD stopped", Toast.LENGTH_SHORT).show()
+                                        Toast.makeText(context, "In-Game Floating HUD disabled", Toast.LENGTH_SHORT).show()
                                     }
                                 }
                             },
@@ -331,7 +382,7 @@ fun SettingsScreen(
                 colors = CardDefaults.cardColors(
                     containerColor = MaterialTheme.colorScheme.surfaceVariant
                 ),
-                border = androidx.compose.foundation.BorderStroke(
+                border = BorderStroke(
                     1.dp,
                     MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)
                 ),
@@ -357,7 +408,10 @@ fun SettingsScreen(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.weight(1f)
+                        ) {
                             Icon(
                                 imageVector = Icons.Default.DarkMode,
                                 contentDescription = null,
@@ -365,9 +419,13 @@ fun SettingsScreen(
                             )
                             Spacer(modifier = Modifier.width(10.dp))
                             Column {
-                                Text("Theme Style", style = MaterialTheme.typography.bodyLarge)
                                 Text(
-                                    "Permanent OLED Pure Dark",
+                                    text = "Display Theme",
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                                Text(
+                                    text = "OLED Pure Dark Gaming Interface",
                                     style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -379,7 +437,7 @@ fun SettingsScreen(
                             color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
                         ) {
                             Text(
-                                text = "DARK ONLY",
+                                text = "PURE DARK",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.primary,
                                 fontWeight = FontWeight.Bold,
@@ -396,12 +454,27 @@ fun SettingsScreen(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(imageVector = Icons.Default.Speed, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Speed,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary
+                            )
                             Spacer(modifier = Modifier.width(10.dp))
                             Column {
-                                Text("Telemetry Rate", style = MaterialTheme.typography.bodyLarge)
-                                Text("Update sensors and ping", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text(
+                                    text = "Telemetry Polling Rate",
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                                Text(
+                                    text = "Hardware sensors & network ping update interval",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
                             }
                         }
 
@@ -423,7 +496,7 @@ fun SettingsScreen(
                         onClick = {
                             scope.launch {
                                 repository.scanAndSyncInstalledApps()
-                                Toast.makeText(context, "Rescanned installed games and synced usage stats", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, "Rescanned installed games and synced playtime", Toast.LENGTH_SHORT).show()
                             }
                         },
                         modifier = Modifier.fillMaxWidth(),
@@ -431,13 +504,13 @@ fun SettingsScreen(
                     ) {
                         Icon(imageVector = Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("Re-scan Apps & Sync Playtime")
+                        Text("Re-scan Installed Games & Sync Playtime")
                     }
                 }
             }
         }
 
-        // Section D: About Game Space
+        // Section D: About Kyro Game Space (Comprehensive Application Info)
         item {
             Card(
                 modifier = Modifier
@@ -447,7 +520,7 @@ fun SettingsScreen(
                 colors = CardDefaults.cardColors(
                     containerColor = MaterialTheme.colorScheme.surfaceVariant
                 ),
-                border = androidx.compose.foundation.BorderStroke(
+                border = BorderStroke(
                     1.dp,
                     MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)
                 ),
@@ -456,24 +529,96 @@ fun SettingsScreen(
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(18.dp)
+                        .padding(18.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(imageVector = Icons.Default.Info, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = "Kyro Game Space",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold
-                        )
+                    // Header with Icon, App Title, and Version Pill
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Surface(
+                            shape = RoundedCornerShape(14.dp),
+                            color = KyroPrimary.copy(alpha = 0.18f),
+                            border = BorderStroke(1.dp, KyroPrimary.copy(alpha = 0.45f)),
+                            modifier = Modifier.size(46.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = Icons.Default.SportsEsports,
+                                    contentDescription = null,
+                                    tint = KyroAccent,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                            }
+                        }
+
+                        Column(modifier = Modifier.weight(1f)) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Text(
+                                    text = "Kyro Game Space",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Black
+                                )
+                                Surface(
+                                    shape = RoundedCornerShape(6.dp),
+                                    color = KyroGreen.copy(alpha = 0.16f)
+                                ) {
+                                    Text(
+                                        text = "v${BuildConfig.VERSION_NAME}",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = KyroGreen,
+                                        fontSize = 10.sp,
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                    )
+                                }
+                            }
+                            Text(
+                                text = "Tactical Gaming Performance & Hardware Optimization Suite",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                     }
-                    Spacer(modifier = Modifier.height(6.dp))
+
+                    // Description
                     Text(
-                        text = "Version 1.0.0 (Build Native)\nMaterial Design 3 Gaming Hub with Shizuku & Wireless ADB command integration, real hardware monitoring, and in-game floating HUD overlay.",
-                        style = MaterialTheme.typography.bodyMedium,
+                        text = "Kyro Game Space is a dedicated Android gaming performance hub engineered for competitive mobile gamers. It provides per-game hardware boosting, safe display resolution scaling with auto-revert protection, GPU mipmap/LOD lightweight texture tuning, multi-DNS stability benchmarking, and a live translucent in-game FPS, CPU, and GPU telemetry overlay.",
+                        style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         lineHeight = 18.sp
                     )
+
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.25f))
+
+                    // Application Details Rows
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        AppInfoDetailRow(
+                            label = "Application Version",
+                            value = "${BuildConfig.VERSION_NAME} (Build ${BuildConfig.VERSION_CODE})"
+                        )
+                        AppInfoDetailRow(
+                            label = "Package Identifier",
+                            value = BuildConfig.APPLICATION_ID
+                        )
+                        AppInfoDetailRow(
+                            label = "Permission Engines",
+                            value = "Shizuku IPC • Wireless ADB • Root (SU)"
+                        )
+                        AppInfoDetailRow(
+                            label = "Tactical Modules",
+                            value = "Resolution Changer • Lightweight Texture • Network Optimizer • Live HUD"
+                        )
+                        AppInfoDetailRow(
+                            label = "Device Environment",
+                            value = "${Build.MANUFACTURER} ${Build.MODEL} (Android ${Build.VERSION.RELEASE} • API ${Build.VERSION.SDK_INT})"
+                        )
+                    }
                 }
             }
         }
@@ -495,7 +640,34 @@ fun SettingsScreen(
         AdbCommandDialog(
             onDismiss = { showTerminalDialog = false },
             onExecute = { cmd -> repository.executeCommand(cmd) },
-            executorName = overview.method.name
+            executorName = activeMethodDisplayName
+        )
+    }
+}
+
+@Composable
+private fun AppInfoDetailRow(
+    label: String,
+    value: String
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.Top
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.weight(0.42f)
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.SemiBold,
+            fontFamily = FontFamily.Monospace,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.weight(0.58f)
         )
     }
 }
@@ -519,7 +691,7 @@ private fun ExecutionOptionRow(
         onClick = onClick,
         shape = RoundedCornerShape(14.dp),
         color = containerBg,
-        border = androidx.compose.foundation.BorderStroke(1.dp, borderColor),
+        border = BorderStroke(1.dp, borderColor),
         modifier = Modifier.fillMaxWidth()
     ) {
         Row(

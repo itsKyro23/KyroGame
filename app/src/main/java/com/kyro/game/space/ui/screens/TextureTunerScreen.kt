@@ -976,11 +976,9 @@ fun TextureTunerScreen(
 
     if (showTargetPickerDialog) {
         val gameCandidates = remember(allApps) {
-            allApps.sortedWith(
-                compareByDescending<GameItem> { it.isAddedToHome }
-                    .thenByDescending { it.isGame }
-                    .thenBy { it.appName }
-            )
+            allApps
+                .filter { it.isAddedToHome }
+                .sortedBy { it.appName.lowercase() }
         }
 
         AlertDialog(
@@ -1004,7 +1002,7 @@ fun TextureTunerScreen(
                             fontWeight = FontWeight.Bold
                         )
                         Text(
-                            text = "Apply Lightweight Texture globally or per game",
+                            text = "Showing only games added to your Game Space Home",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -1067,6 +1065,43 @@ fun TextureTunerScreen(
                                         tint = TextureSkyBlue,
                                         modifier = Modifier.size(18.dp)
                                     )
+                                }
+                            }
+                        }
+                    }
+
+                    if (gameCandidates.isEmpty()) {
+                        item {
+                            Surface(
+                                shape = RoundedCornerShape(12.dp),
+                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.25f)),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(14.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.SportsEsports,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = "No Games Added Yet",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                        Text(
+                                            text = "Add your games from the Apps tab first so they appear here.",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
                                 }
                             }
                         }
