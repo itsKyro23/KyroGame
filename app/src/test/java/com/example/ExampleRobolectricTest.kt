@@ -126,7 +126,10 @@ class ExampleRobolectricTest {
         hardDistanceCutoff = true
       )
       assertEquals("GL_NEAREST_MIPMAP_NEAREST", blockyConfig.filterModeLabel)
-      assertTrue(blockyConfig.buildShellCommand("com.dts.freefiremax").contains("debug.hwui.texture_lod_bias 2.60"))
+      val shellCmd = blockyConfig.buildShellCommand("com.dts.freefiremax")
+      assertTrue(shellCmd.contains("debug.hwui.texture_lod_bias 3.00"))
+      assertTrue(shellCmd.contains("angle_gl_driver_selection_pkgs"))
+      assertTrue(shellCmd.contains("com.garena.game.codm"))
 
       repo.saveAndApplyTextureConfig("com.dts.freefiremax", blockyConfig)
       assertEquals("com.dts.freefiremax", repo.textureTunerState.value.selectedTargetPackage)
