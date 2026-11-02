@@ -2,6 +2,7 @@ package com.kyro.game.space.data.model
 
 import android.app.ActivityManager
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.provider.Settings
@@ -74,7 +75,7 @@ enum class AngleDriverMode(
         label = "ANGLE (Vulkan GLES)",
         shortLabel = "ANGLE",
         settingValue = "angle",
-        description = "Routes OpenGL ES through Vulkan ANGLE driver (Required for Zayon-style Lightweight Texture & CODM)."
+        description = "Routes OpenGL ES through Android's ANGLE-on-Vulkan driver for the selected game."
     ),
     NATIVE(
         label = "Native Game Driver",
@@ -150,42 +151,12 @@ enum class TextureQuickPreset(
     }
 }
 
-object AngleDriverPackages {
-    val CODM_PACKAGES: List<String> = listOf(
-        "com.garena.game.codm",              // Call of Duty: Mobile (Garena)
-        "com.activision.callofduty.shooter", // Call of Duty: Mobile (Global)
-        "com.vng.codmvn",                    // Call of Duty: Mobile (VNG)
-        "com.tencent.tmgp.kr.codm",          // Call of Duty: Mobile (KR)
-        "com.tencent.tmgp.cod"               // Call of Duty: Mobile (CN)
-    )
-
-    val COMMON_COMPETITIVE_GAMES: List<String> = listOf(
-        "com.garena.game.codm",
-        "com.activision.callofduty.shooter",
-        "com.vng.codmvn",
-        "com.tencent.tmgp.kr.codm",
-        "com.dts.freefireth",
-        "com.dts.freefiremax",
-        "com.mobile.legends",
-        "com.tencent.ig",
-        "com.pubg.imobile",
-        "com.pubg.krmobile",
-        "com.roblox.client"
-    )
-
-    fun isCodmPackage(packageName: String): Boolean {
-        val clean = packageName.trim()
-        return clean in CODM_PACKAGES || clean.contains("callofduty", ignoreCase = true) || clean.endsWith(".codm")
-    }
-}
-
 data class TextureConfig(
     val preset: TextureQuickPreset = TextureQuickPreset.RETRO,
     val detailLevel: TextureDetailLevel = TextureDetailLevel.ORIGINAL,
     val sharpPixels: Boolean = false,
     val hardDistanceCutoff: Boolean = false,
-    val driverMode: AngleDriverMode = AngleDriverMode.ANGLE,
-    val codmAngleSupport: Boolean = true
+    val driverMode: AngleDriverMode = AngleDriverMode.ANGLE
 ) {
     val isActive: Boolean
         get() = detailLevel != TextureDetailLevel.ORIGINAL || sharpPixels || hardDistanceCutoff
@@ -208,8 +179,20 @@ data class TextureConfig(
         }
 
     /**
-     * Builds the full shell command sequence for applying Lightweight Texture + ANGLE Support Driver
-     * (including CODM ANGLE driver registration and GPU LOD bias / filter overrides).
+     * Builds the shell command sequence for applying Lightweight Texture + ANGLE / GPU Driver
+     * strictly for the selected target game (or added Home games when Global is selected).
+     *
+     * Key Android GraphicsEnvironment requirements:
+     * 1. `angle_debug_package` must NEVER be set to the target game package (it specifies an external
+     *    ANGLE APK provider, and setting it to a game package causes `GraphicsEnvironment.setupAngle`
+     *    to fail to locate `libGLESv2_angle.so` and abort loading ANGLE). We always delete it.
+     * 2. Both `angle_whitelist` (Android 10-11) and `angle_allowlist` (Android 12-16) are populated
+     *    alongside 1-to-1 matching `angle_gl_driver_selection_pkgs` and `angle_gl_driver_selection_values`.
+     * 3. When `AngleDriverMode.ANGLE` is active, conflicting vendor `game_driver_opt_in_apps` /
+     *    `updatable_driver_production_opt_in_apps` entries are cleared so the vendor driver does not
+     *    override ANGLE.
+     * 4. Real `libANGLE` feature overrides (`debug.angle.feature_overrides_enabled` / `disabled`)
+     *    and HWUI/EGL/Vulkan texture LOD bias & filter properties are applied.
      */
     fun buildShellCommand(
         packageName: String = "",
@@ -219,23 +202,18 @@ data class TextureConfig(
     ): String {
         val targetPkg = packageName.trim()
 
-        // Build target package list for ANGLE / Game Driver
+        // Target strictly the selected game, or all added Home games if Global is selected
         val targetSet = LinkedHashSet<String>()
         if (targetPkg.isNotEmpty()) {
             targetSet.add(targetPkg)
-        }
-        if (codmAngleSupport) {
-            targetSet.addAll(AngleDriverPackages.CODM_PACKAGES)
-        }
-        for (extra in additionalTargetPackages) {
-            val clean = extra.trim()
-            if (clean.isNotEmpty()) targetSet.add(clean)
-        }
-        if (targetSet.isEmpty()) {
-            targetSet.addAll(AngleDriverPackages.COMMON_COMPETITIVE_GAMES)
+        } else {
+            for (extra in additionalTargetPackages) {
+                val clean = extra.trim()
+                if (clean.isNotEmpty()) targetSet.add(clean)
+            }
         }
 
-        // Merge with existing angle_gl_driver_selection_pkgs so we never corrupt parallel lists
+        // Merge with existing valid angle_gl_driver_selection_pkgs so parallel lists stay 1-to-1
         val mergedAngleMap = LinkedHashMap<String, String>()
         for ((k, v) in existingAngleMap) {
             val cleanK = k.trim()
@@ -246,13 +224,8 @@ data class TextureConfig(
         }
 
         if (!isActive) {
-            val resetDriverVal = if (codmAngleSupport && driverMode == AngleDriverMode.ANGLE) {
-                "default"
-            } else {
-                driverMode.settingValue
-            }
             for (pkg in targetSet) {
-                mergedAngleMap[pkg] = resetDriverVal
+                mergedAngleMap[pkg] = "default"
             }
             val pkgsCsv = mergedAngleMap.keys.joinToString(",")
             val valsCsv = mergedAngleMap.values.joinToString(",")
@@ -262,18 +235,25 @@ data class TextureConfig(
                     "settings put global angle_gl_driver_selection_pkgs $pkgsCsv 2>/dev/null || true; " +
                     "settings put global angle_gl_driver_selection_values $valsCsv 2>/dev/null || true; "
             } else {
-                "settings put global angle_gl_driver_all_angle 0 2>/dev/null || true; "
+                "settings put global angle_gl_driver_all_angle 0 2>/dev/null || true; " +
+                    "settings delete global angle_gl_driver_selection_pkgs 2>/dev/null || true; " +
+                    "settings delete global angle_gl_driver_selection_values 2>/dev/null || true; "
             }
 
-            val forceStopCmd = if (forceStopTargets && targetPkg.isNotEmpty()) {
-                "; am force-stop $targetPkg 2>/dev/null || true"
+            val forceStopCmd = if (forceStopTargets && targetSet.isNotEmpty()) {
+                "; " + targetSet.joinToString("; ") { "am force-stop $it 2>/dev/null || true" }
             } else ""
 
             return resetAngleCmd +
-                "settings delete global gpu_debug_app 2>/dev/null || true; " +
                 "settings delete global angle_debug_package 2>/dev/null || true; " +
+                "settings delete global gpu_debug_app 2>/dev/null || true; " +
+                "settings delete global enable_gpu_debug_layers 2>/dev/null || true; " +
                 "settings delete global gpu_texture_lod_bias 2>/dev/null || true; " +
                 "settings delete global gpu_texture_filter_mode 2>/dev/null || true; " +
+                "settings delete global angle_texture_lod_bias 2>/dev/null || true; " +
+                "settings delete global angle_texture_filter 2>/dev/null || true; " +
+                "setprop debug.angle.feature_overrides_enabled \"\" 2>/dev/null || true; " +
+                "setprop debug.angle.feature_overrides_disabled \"\" 2>/dev/null || true; " +
                 "setprop debug.hwui.texture_lod_bias 0.0 2>/dev/null || true; " +
                 "setprop debug.egl.texture_lod_bias 0.0 2>/dev/null || true; " +
                 "setprop debug.angle.texture_lod_bias 0.0 2>/dev/null || true; " +
@@ -289,16 +269,10 @@ data class TextureConfig(
         for (pkg in targetSet) {
             mergedAngleMap[pkg] = activeDriverValue
         }
-        // Ensure CODM packages explicitly get "angle" when codmAngleSupport is enabled
-        if (codmAngleSupport) {
-            for (codmPkg in AngleDriverPackages.CODM_PACKAGES) {
-                mergedAngleMap[codmPkg] = "angle"
-            }
-        }
 
         val pkgsCsv = mergedAngleMap.keys.joinToString(",")
         val valsCsv = mergedAngleMap.values.joinToString(",")
-        val whitelistCsv = (mergedAngleMap.keys + AngleDriverPackages.CODM_PACKAGES).distinct().joinToString(",")
+        val allowlistCsv = (mergedAngleMap.keys + targetSet).distinct().joinToString(",")
 
         val effectiveDetail = if (detailLevel == TextureDetailLevel.ORIGINAL) {
             TextureDetailLevel.RETRO
@@ -310,34 +284,85 @@ data class TextureConfig(
         val mipmapStr = if (hardDistanceCutoff) "nearest" else "linear"
         val anisoVal = if (sharpPixels || hardDistanceCutoff) "1" else "2"
         val rendererVal = if (driverMode == AngleDriverMode.ANGLE) "skiavk" else "opengl"
-        val primaryDebugPkg = targetPkg.ifEmpty { AngleDriverPackages.CODM_PACKAGES.first() }
 
-        val forceStopList = buildList {
-            if (targetPkg.isNotEmpty()) add(targetPkg)
-            if (codmAngleSupport) addAll(AngleDriverPackages.CODM_PACKAGES)
-        }.distinct()
+        // Real libANGLE feature overrides parsed by GetEnvironmentVarOrUnCachedAndroidProperty
+        val angleEnabledFeatures = buildList {
+            add("disableAnisotropicFiltering")
+            if (sharpPixels) {
+                add("forceNearestFiltering")
+                add("forceNearestMipFiltering")
+            } else {
+                add("preferLinearFilterForYUV")
+            }
+            if (effectiveDetail.stepIndex >= 2) {
+                add("compressVertexData")
+            }
+        }.joinToString(":")
 
-        val forceStopCmd = if (forceStopTargets && forceStopList.isNotEmpty()) {
-            forceStopList.joinToString("; ") { "am force-stop $it 2>/dev/null || true" }
+        val angleDisabledFeatures = buildList {
+            if (sharpPixels || hardDistanceCutoff) {
+                add("supportsEXTFilterCubic")
+                add("supportsSamplerFilterMinmax")
+            }
+        }.joinToString(":")
+
+        val angleSelectionCmd = if (pkgsCsv.isNotEmpty()) {
+            "settings put global angle_gl_driver_all_angle 0 2>/dev/null || true; " +
+                "settings put global angle_gl_driver_selection_pkgs $pkgsCsv 2>/dev/null || true; " +
+                "settings put global angle_gl_driver_selection_values $valsCsv 2>/dev/null || true; " +
+                "settings put global angle_whitelist $allowlistCsv 2>/dev/null || true; " +
+                "settings put global angle_allowlist $allowlistCsv 2>/dev/null || true; "
+        } else {
+            val allAngleFlag = if (driverMode == AngleDriverMode.ANGLE) "1" else "0"
+            "settings put global angle_gl_driver_all_angle $allAngleFlag 2>/dev/null || true; "
+        }
+
+        // Prevent vendor Game Driver from overriding ANGLE when ANGLE mode is selected
+        val vendorDriverCmd = when (driverMode) {
+            AngleDriverMode.ANGLE -> {
+                "settings delete global updatable_driver_production_opt_in_apps 2>/dev/null || true; " +
+                    "settings delete global updatable_driver_prerelease_opt_in_apps 2>/dev/null || true; " +
+                    "settings delete global game_driver_opt_in_apps 2>/dev/null || true; "
+            }
+            AngleDriverMode.NATIVE -> {
+                if (allowlistCsv.isNotEmpty()) {
+                    "settings put global updatable_driver_production_opt_in_apps $allowlistCsv 2>/dev/null || true; " +
+                        "settings put global game_driver_opt_in_apps $allowlistCsv 2>/dev/null || true; "
+                } else ""
+            }
+            AngleDriverMode.DEFAULT -> {
+                "settings delete global updatable_driver_production_opt_in_apps 2>/dev/null || true; " +
+                    "settings delete global game_driver_opt_in_apps 2>/dev/null || true; "
+            }
+        }
+
+        val gpuDebugAppCmd = if (targetPkg.isNotEmpty()) {
+            "settings put global gpu_debug_app $targetPkg 2>/dev/null || true; "
+        } else {
+            "settings delete global gpu_debug_app 2>/dev/null || true; "
+        }
+
+        val forceStopCmd = if (forceStopTargets && targetSet.isNotEmpty()) {
+            targetSet.joinToString("; ") { "am force-stop $it 2>/dev/null || true" }
         } else {
             "true"
         }
 
-        return "settings put global angle_gl_driver_all_angle 0 2>/dev/null || true; " +
+        return "settings delete global angle_debug_package 2>/dev/null || true; " +
             "settings put global show_angle_in_use_dialog_box 0 2>/dev/null || true; " +
-            "settings put global angle_gl_driver_selection_pkgs $pkgsCsv 2>/dev/null || true; " +
-            "settings put global angle_gl_driver_selection_values $valsCsv 2>/dev/null || true; " +
-            "settings put global angle_whitelist $whitelistCsv 2>/dev/null || true; " +
-            "settings put global angle_debug_package $primaryDebugPkg 2>/dev/null || true; " +
-            "settings put global gpu_debug_app $primaryDebugPkg 2>/dev/null || true; " +
-            "settings put global enable_gpu_debug_layers 1 2>/dev/null || true; " +
-            "settings put global updatable_driver_production_opt_in_apps $whitelistCsv 2>/dev/null || true; " +
-            "settings put global updatable_driver_prerelease_opt_in_apps $whitelistCsv 2>/dev/null || true; " +
-            "settings put global game_driver_opt_in_apps $whitelistCsv 2>/dev/null || true; " +
+            angleSelectionCmd +
+            vendorDriverCmd +
+            gpuDebugAppCmd +
             "settings put global gpu_texture_lod_bias $biasStr 2>/dev/null || true; " +
             "settings put global gpu_texture_filter_mode $filterModeLabel 2>/dev/null || true; " +
             "settings put global angle_texture_lod_bias $biasStr 2>/dev/null || true; " +
             "settings put global angle_texture_filter $filterStr 2>/dev/null || true; " +
+            "setprop debug.angle.feature_overrides_enabled $angleEnabledFeatures 2>/dev/null || true; " +
+            (if (angleDisabledFeatures.isNotEmpty()) {
+                "setprop debug.angle.feature_overrides_disabled $angleDisabledFeatures 2>/dev/null || true; "
+            } else {
+                "setprop debug.angle.feature_overrides_disabled \"\" 2>/dev/null || true; "
+            }) +
             "setprop debug.hwui.texture_lod_bias $biasStr 2>/dev/null || true; " +
             "setprop debug.egl.texture_lod_bias $biasStr 2>/dev/null || true; " +
             "setprop debug.angle.texture_lod_bias $biasStr 2>/dev/null || true; " +
@@ -362,15 +387,14 @@ data class DeviceTextureCompatibility(
     val supportsVulkan: Boolean = true,
     val supportsAngleDriver: Boolean = true,
     val angleDriverStatus: String = "ANGLE Vulkan Driver Ready",
-    val codmAngleActive: Boolean = false,
+    val targetGameInAngle: Boolean = false,
     val activeAnglePackagesCount: Int = 0,
-    val detectedCodmPackages: List<String> = emptyList(),
     val supportsLodBiasControl: Boolean = true,
     val supportsNearestNeighborFilter: Boolean = true,
     val supportsAnisotropicExtension: Boolean = true,
     val supportsPerGameGpuDriver: Boolean = true,
     val compatibilityBadge: String = "Compatible • ANGLE & GPU LOD Supported",
-    val compatibilitySummary: String = "Hardware supports ANGLE (OpenGL ES on Vulkan), Mipmap LOD Bias, Sharp Pixel sampling, and CODM driver hooks."
+    val compatibilitySummary: String = "Hardware supports ANGLE (OpenGL ES on Vulkan), Mipmap LOD Bias, and Sharp Pixel sampling for the selected game."
 )
 
 data class TextureTunerState(
@@ -380,14 +404,13 @@ data class TextureTunerState(
         detailLevel = TextureDetailLevel.RETRO,
         sharpPixels = true,
         hardDistanceCutoff = false,
-        driverMode = AngleDriverMode.ANGLE,
-        codmAngleSupport = true
+        driverMode = AngleDriverMode.ANGLE
     ),
     val compatibility: DeviceTextureCompatibility = DeviceTextureCompatibility(),
     val isCheckingCompatibility: Boolean = false,
     val isApplying: Boolean = false,
     val isAppliedLive: Boolean = false,
-    val statusMessage: String = "Select a texture preset, ANGLE driver mode, or CODM support and tap Save & Apply."
+    val statusMessage: String = "Select a target game, choose a texture preset or ANGLE driver mode, and tap Save & Apply."
 )
 
 object GpuTextureCompatibilityProbe {
@@ -412,7 +435,11 @@ object GpuTextureCompatibilityProbe {
      * Thread-safe, zero-EGL-context hardware GPU + ANGLE driver probe.
      * Avoids touching EGL14 default display so Compose RenderThread is never interrupted or crashed.
      */
-    fun inspectDeviceCompatibility(context: Context): DeviceTextureCompatibility {
+    fun inspectDeviceCompatibility(
+        context: Context,
+        selectedTargetPackage: String = "",
+        angleMapOverride: Map<String, String>? = null
+    ): DeviceTextureCompatibility {
         var glVersionText = "OpenGL ES 3.2"
         var majorGl = 3
         try {
@@ -440,39 +467,39 @@ object GpuTextureCompatibilityProbe {
 
         // Detect ANGLE binaries / packages / Android 10+ GraphicsEnv ANGLE support
         val hasAnglePackageOrLib = try {
-            val anglePkgInstalled = try {
-                pm.getPackageInfo("com.android.angle", 0)
-                true
+            val angleIntentResolves = try {
+                pm.queryIntentActivities(Intent("android.app.action.ANGLE_FOR_ANDROID"), 0).isNotEmpty()
             } catch (_: Throwable) {
                 false
             }
+            val anglePkgInstalled = listOf("com.android.angle", "com.google.android.angle", "org.chromium.angle").any { pkg ->
+                try {
+                    pm.getPackageInfo(pkg, 0)
+                    true
+                } catch (_: Throwable) {
+                    false
+                }
+            }
             val angleLibExists = listOf(
                 "/system/lib64/egl/libGLESv2_angle.so",
+                "/system/lib/egl/libGLESv2_angle.so",
                 "/vendor/lib64/egl/libGLESv2_angle.so",
                 "/apex/com.android.angle",
                 "/system/app/ANGLE",
                 "/system/priv-app/ANGLE"
             ).any { File(it).exists() }
-            anglePkgInstalled || angleLibExists || (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && hasVulkan)
+            angleIntentResolves || anglePkgInstalled || angleLibExists || (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && hasVulkan)
         } catch (_: Throwable) {
             true
         }
 
-        // Check installed CODM packages on device
-        val installedCodm = AngleDriverPackages.CODM_PACKAGES.filter { pkg ->
-            try {
-                pm.getPackageInfo(pkg, 0)
-                true
-            } catch (_: Throwable) {
-                false
-            }
-        }
-
-        // Check current Global Settings for ANGLE driver registrations
-        val angleMap = readExistingAngleDriverMap(context)
+        val angleMap = angleMapOverride ?: readExistingAngleDriverMap(context)
         val activeAngleCount = angleMap.count { it.value.equals("angle", ignoreCase = true) }
-        val codmInAngle = AngleDriverPackages.CODM_PACKAGES.any { pkg ->
-            angleMap[pkg]?.equals("angle", ignoreCase = true) == true
+        val cleanTarget = selectedTargetPackage.trim()
+        val targetInAngle = if (cleanTarget.isNotEmpty()) {
+            angleMap[cleanTarget]?.equals("angle", ignoreCase = true) == true
+        } else {
+            activeAngleCount > 0
         }
 
         val socModel = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
@@ -523,8 +550,8 @@ object GpuTextureCompatibilityProbe {
 
         val isSupported = supportsLodBias && supportsNearest
         val angleStatusText = when {
-            codmInAngle -> "ANGLE Active (CODM + $activeAngleCount pkgs)"
-            activeAngleCount > 0 -> "ANGLE Active ($activeAngleCount pkgs)"
+            cleanTarget.isNotEmpty() && targetInAngle -> "ANGLE Active (Target Game)"
+            activeAngleCount > 0 -> "ANGLE Active ($activeAngleCount games)"
             hasAnglePackageOrLib -> "ANGLE Driver Supported"
             else -> "GLES Driver Hook Ready"
         }
@@ -535,12 +562,13 @@ object GpuTextureCompatibilityProbe {
             "Limited Support • $renderer"
         }
         val vulkanTag = if (hasVulkan) "Vulkan + $glVersionText" else glVersionText
-        val codmNote = if (codmInAngle) {
-            "CODM is registered in ANGLE Support Driver."
-        } else {
-            "CODM ready for ANGLE Support Driver injection."
+        val targetNote = when {
+            cleanTarget.isNotEmpty() && targetInAngle -> "Target ($cleanTarget) is active in ANGLE Support Driver."
+            cleanTarget.isNotEmpty() -> "Target ($cleanTarget) ready for ANGLE & Lightweight Texture injection."
+            activeAngleCount > 0 -> "$activeAngleCount game(s) active in ANGLE Support Driver."
+            else -> "Select a game from your Game Space list to apply ANGLE & Lightweight Texture."
         }
-        val summary = "GPU: $vendor $renderer ($vulkanTag) • $angleStatusText • $codmNote"
+        val summary = "GPU: $vendor $renderer ($vulkanTag) • $angleStatusText • $targetNote"
 
         return DeviceTextureCompatibility(
             isSupported = isSupported,
@@ -550,9 +578,8 @@ object GpuTextureCompatibilityProbe {
             supportsVulkan = hasVulkan,
             supportsAngleDriver = hasAnglePackageOrLib,
             angleDriverStatus = angleStatusText,
-            codmAngleActive = codmInAngle,
+            targetGameInAngle = targetInAngle,
             activeAnglePackagesCount = activeAngleCount,
-            detectedCodmPackages = installedCodm,
             supportsLodBiasControl = supportsLodBias,
             supportsNearestNeighborFilter = supportsNearest,
             supportsAnisotropicExtension = supportsAniso,

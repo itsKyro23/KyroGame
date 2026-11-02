@@ -86,7 +86,6 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.kyro.game.space.data.model.AngleDriverMode
-import com.kyro.game.space.data.model.AngleDriverPackages
 import com.kyro.game.space.data.model.GameItem
 import com.kyro.game.space.data.model.TextureDetailLevel
 import com.kyro.game.space.data.model.TextureQuickPreset
@@ -173,18 +172,7 @@ fun TextureTunerScreen(
     } else if (tunerState.selectedTargetPackage.isNotBlank()) {
         "${tunerState.selectedTargetPackage} • ${config.driverMode.label}"
     } else {
-        "Applies to all added Game Space games & CODM via ${config.driverMode.shortLabel}"
-    }
-
-    val installedCodmApps = remember(allApps, compat.detectedCodmPackages) {
-        val fromHome = allApps.filter { AngleDriverPackages.isCodmPackage(it.packageName) }
-        if (fromHome.isNotEmpty()) {
-            fromHome.map { "${it.appName} (${it.packageName})" }
-        } else if (compat.detectedCodmPackages.isNotEmpty()) {
-            compat.detectedCodmPackages
-        } else {
-            emptyList()
-        }
+        "Applies to all added Game Space Home games via ${config.driverMode.shortLabel}"
     }
 
     LazyColumn(
@@ -340,12 +328,12 @@ fun TextureTunerScreen(
                             enabled = compat.supportsAngleDriver
                         )
                         CompatibilityFeatureChip(
-                            label = if (compat.codmAngleActive) "CODM ANGLE: Active" else "CODM ANGLE: Ready",
-                            enabled = compat.codmAngleActive || config.codmAngleSupport
-                        )
-                        CompatibilityFeatureChip(
                             label = "Mipmap LOD Bias",
                             enabled = compat.supportsLodBiasControl
+                        )
+                        CompatibilityFeatureChip(
+                            label = "GL_NEAREST Sharp Pixel",
+                            enabled = compat.supportsNearestNeighborFilter
                         )
                         CompatibilityFeatureChip(
                             label = "Mode: ${connectionOverview.method.name}",
@@ -678,12 +666,12 @@ fun TextureTunerScreen(
             }
         }
 
-        // 3. ANGLE Support Driver & CODM Integration Card (Zayon Method)
+        // 3. Graphics Driver Mode Card (Focused on Selected Game)
         item {
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .testTag("angle_driver_codm_card"),
+                    .testTag("angle_driver_card"),
                 shape = RoundedCornerShape(20.dp),
                 colors = CardDefaults.cardColors(
                     containerColor = MaterialTheme.colorScheme.surfaceVariant
@@ -733,7 +721,7 @@ fun TextureTunerScreen(
                                 horizontalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
                                 Text(
-                                    text = "ANGLE SUPPORT DRIVER",
+                                    text = "GRAPHICS DRIVER MODE",
                                     style = MaterialTheme.typography.labelMedium,
                                     fontWeight = FontWeight.Black,
                                     letterSpacing = 0.6.sp,
@@ -754,7 +742,7 @@ fun TextureTunerScreen(
                                 }
                             }
                             Text(
-                                text = "Required for Lightweight Texture & CODM OpenGL-on-Vulkan driver routing",
+                                text = "Target: $targetTitle • ${config.driverMode.description}",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 fontSize = 11.sp,
@@ -812,64 +800,6 @@ fun TextureTunerScreen(
                                 }
                             }
                         }
-                    }
-
-                    // CODM ANGLE Support Driver Toggle Card
-                    FilterToggleCard(
-                        title = "CODM ANGLE Support Driver",
-                        description = if (installedCodmApps.isNotEmpty()) {
-                            "Detected: ${installedCodmApps.joinToString(", ")}. Injects CODM into angle_gl_driver_selection_pkgs (angle) & angle_whitelist."
-                        } else {
-                            "Adds Call of Duty: Mobile (Garena, Global, VNG, KR, CN) into Android ANGLE driver & whitelist."
-                        },
-                        checked = config.codmAngleSupport,
-                        onCheckedChange = { enabled ->
-                            repository.updateTextureConfigDraft(
-                                config.copy(
-                                    codmAngleSupport = enabled,
-                                    driverMode = if (enabled) AngleDriverMode.ANGLE else config.driverMode
-                                )
-                            )
-                        },
-                        testTag = "toggle_codm_angle_support",
-                        modifier = Modifier.fillMaxWidth()
-                    )
-
-                    // Quick 1-Tap CODM + ANGLE Injection Button
-                    OutlinedButton(
-                        onClick = {
-                            scope.launch {
-                                val res = repository.injectCodmAngleDriverSupport()
-                                val msg = res.getOrElse { "CODM added to ANGLE Support Driver!" }
-                                Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
-                            }
-                        },
-                        shape = RoundedCornerShape(12.dp),
-                        border = BorderStroke(1.dp, TextureSkyBlue.copy(alpha = 0.55f)),
-                        colors = ButtonDefaults.outlinedButtonColors(
-                            contentColor = TextureSkyBlue
-                        ),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(42.dp)
-                            .testTag("inject_codm_angle_btn")
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Bolt,
-                            contentDescription = null,
-                            modifier = Modifier.size(16.dp),
-                            tint = TextureSkyBlue
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = if (compat.codmAngleActive) {
-                                "Re-Inject CODM + Target Game to ANGLE Driver (Active)"
-                            } else {
-                                "Activate CODM in ANGLE Support Driver Now"
-                            },
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Bold
-                        )
                     }
                 }
             }
@@ -1367,12 +1297,12 @@ fun TextureTunerScreen(
                                 )
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text(
-                                        text = "Global GPU Profile (All 3D Games)",
+                                        text = "Global GPU Profile (All Home Games)",
                                         style = MaterialTheme.typography.bodyMedium,
                                         fontWeight = FontWeight.Bold
                                     )
                                     Text(
-                                        text = "System-wide ANGLE Driver, CODM & OpenGL ES LOD bias",
+                                        text = "Applies ANGLE Driver & OpenGL ES LOD bias to all added Home games",
                                         style = MaterialTheme.typography.labelSmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
@@ -1431,7 +1361,6 @@ fun TextureTunerScreen(
                         val gameIconBitmap = remember(game.packageName) {
                             AppIconCache.getIcon(context, game.packageName)?.asImageBitmap()
                         }
-                        val isCodm = AngleDriverPackages.isCodmPackage(game.packageName)
                         Surface(
                             onClick = {
                                 repository.selectTextureTargetPackage(game.packageName)
@@ -1494,21 +1423,7 @@ fun TextureTunerScreen(
                                             overflow = TextOverflow.Ellipsis,
                                             modifier = Modifier.weight(1f, fill = false)
                                         )
-                                        if (isCodm) {
-                                            Surface(
-                                                shape = RoundedCornerShape(5.dp),
-                                                color = KyroGreen.copy(alpha = 0.18f)
-                                            ) {
-                                                Text(
-                                                    text = "ANGLE READY",
-                                                    style = MaterialTheme.typography.labelSmall,
-                                                    fontWeight = FontWeight.Bold,
-                                                    color = KyroGreen,
-                                                    fontSize = 8.sp,
-                                                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
-                                                )
-                                            }
-                                        } else if (game.isGame || game.isAddedToHome) {
+                                        if (game.isGame || game.isAddedToHome) {
                                             Surface(
                                                 shape = RoundedCornerShape(5.dp),
                                                 color = TextureSkyBlue.copy(alpha = 0.16f)
