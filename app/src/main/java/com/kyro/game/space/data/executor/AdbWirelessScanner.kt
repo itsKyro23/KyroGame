@@ -16,6 +16,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -170,11 +171,13 @@ class AdbWirelessScanner(
     private fun createDiscoveryListener(serviceType: String, isPairing: Boolean): NsdManager.DiscoveryListener {
         return object : NsdManager.DiscoveryListener {
             override fun onDiscoveryStarted(regType: String?) {}
+            @Suppress("DEPRECATION")
             override fun onServiceFound(serviceInfo: NsdServiceInfo?) {
                 val info = serviceInfo ?: return
                 try {
                     nsdManager?.resolveService(info, object : NsdManager.ResolveListener {
                         override fun onResolveFailed(serviceInfo: NsdServiceInfo?, errorCode: Int) {}
+                        @Suppress("DEPRECATION")
                         override fun onServiceResolved(resolvedInfo: NsdServiceInfo?) {
                             val r = resolvedInfo ?: return
                             val hostIp = r.host?.hostAddress?.takeIf { !it.contains(":") } ?: detectLocalWifiIp()
@@ -368,5 +371,10 @@ class AdbWirelessScanner(
             nm?.cancel(PAIRING_NOTIFICATION_ID)
         } catch (_: Throwable) {
         }
+    }
+
+    fun close() {
+        stopScanning()
+        scope.cancel()
     }
 }

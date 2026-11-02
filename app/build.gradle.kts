@@ -63,7 +63,16 @@ android {
     compose = true
     buildConfig = true
   }
-  testOptions { unitTests { isIncludeAndroidResources = true } }
+  testOptions {
+    unitTests {
+      isIncludeAndroidResources = true
+      isReturnDefaultValues = true
+      all {
+        it.maxHeapSize = "2048m"
+        it.jvmArgs("-Djava.awt.headless=true", "-XX:+UseG1GC", "-XX:MaxMetaspaceSize=512m")
+      }
+    }
+  }
   packaging {
     jniLibs {
       useLegacyPackaging = true

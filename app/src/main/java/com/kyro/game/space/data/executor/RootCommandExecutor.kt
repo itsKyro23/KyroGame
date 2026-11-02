@@ -27,7 +27,6 @@ class RootCommandExecutor : CommandExecutor {
     private val commonSuPaths = listOf(
         "/system/bin/su",
         "/system/xbin/su",
-        "/sbin/su",
         "/debug_ramdisk/su",
         "/data/adb/ksu/bin/su",
         "/data/adb/ap/bin/su",
@@ -85,6 +84,10 @@ class RootCommandExecutor : CommandExecutor {
         val startMs = System.currentTimeMillis()
         try {
             val process = ProcessBuilder("su", "-c", command).start()
+            try {
+                process.outputStream.close()
+            } catch (_: Throwable) {
+            }
             val finished = process.waitFor(timeoutMs, TimeUnit.MILLISECONDS)
             if (!finished) {
                 process.destroyForcibly()

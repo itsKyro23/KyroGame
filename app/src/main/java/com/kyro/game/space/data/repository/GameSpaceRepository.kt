@@ -44,6 +44,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -127,6 +128,16 @@ class GameSpaceRepository(
         updateShizukuStatus()
     }
 
+    // Capture startup pending confirmation state synchronously in constructor
+    // so asynchronous startup checks never race with newly started resolution tests
+    private val hadUnconfirmedResolutionOnStartup: Boolean = run {
+        val pending = prefs.getBoolean("res_pending_confirmation", false)
+        if (pending) {
+            prefs.edit().putBoolean("res_pending_confirmation", false).commit()
+        }
+        pending
+    }
+
     init {
         try {
             com.kyro.game.space.data.executor.AdbNativeBridge.initialize(context)
@@ -154,12 +165,14 @@ class GameSpaceRepository(
             } catch (_: Throwable) {
             }
             try {
-                checkRootStatus(triggerPrompt = executionMethod.value == ExecutionMethod.ROOT)
+                checkRootStatus(triggerPrompt = false)
             } catch (_: Throwable) {
             }
-            try {
-                recoverUnconfirmedResolutionOnStartup()
-            } catch (_: Throwable) {
+            if (hadUnconfirmedResolutionOnStartup) {
+                try {
+                    recoverUnconfirmedResolutionOnStartup()
+                } catch (_: Throwable) {
+                }
             }
             try {
                 scanAndSyncInstalledApps()
@@ -185,7 +198,9 @@ class GameSpaceRepository(
 
     fun cleanUp() {
         try {
-            adbScanner.stopScanning()
+            resolutionCountdownJob?.cancel()
+            adbScanner.close()
+            scope.cancel()
             Shizuku.removeBinderReceivedListener(binderReceivedListener)
             Shizuku.removeBinderDeadListener(binderDeadListener)
             Shizuku.removeRequestPermissionResultListener(permissionResultListener)
@@ -404,6 +419,7 @@ class GameSpaceRepository(
     fun hasUsageStatsPermission(): Boolean {
         val appOps = context.getSystemService(Context.APP_OPS_SERVICE) as? AppOpsManager ?: return false
         val mode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            @Suppress("DEPRECATION")
             appOps.unsafeCheckOpNoThrow(
                 AppOpsManager.OPSTR_GET_USAGE_STATS,
                 Process.myUid(),
@@ -1232,7 +1248,7 @@ class GameSpaceRepository(
         if (method == ExecutionMethod.ROOT) {
             scope.launch {
                 try {
-                    checkRootStatus(triggerPrompt = true)
+                    checkRootStatus(triggerPrompt = false)
                 } catch (_: Throwable) {
                 }
             }
@@ -1327,21 +1343,19 @@ class GameSpaceRepository(
     }
 
     private suspend fun recoverUnconfirmedResolutionOnStartup() = withContext(Dispatchers.IO) {
-        val wasPending = prefs.getBoolean("res_pending_confirmation", false)
-        if (wasPending) {
-            prefs.edit().putBoolean("res_pending_confirmation", false).commit()
-            val cur = _resolutionState.value
-            val prevW = prefs.getInt("res_confirmed_width", cur.nativeWidth).coerceIn(360, cur.nativeWidth)
-            val prevH = prefs.getInt("res_confirmed_height", cur.nativeHeight)
-            val prevDpi = prefs.getInt("res_confirmed_density", cur.nativeDensityDpi)
+        val cur = _resolutionState.value
+        val prevW = prefs.getInt("res_confirmed_width", cur.nativeWidth).coerceIn(360, cur.nativeWidth)
+        val prevH = prefs.getInt("res_confirmed_height", cur.nativeHeight)
+        val prevDpi = prefs.getInt("res_confirmed_density", cur.nativeDensityDpi)
 
-            val revertCmd = if (prevW == cur.nativeWidth) {
-                "wm size reset; wm density reset"
-            } else {
-                "wm size ${prevW}x${prevH}; wm density $prevDpi"
-            }
-            executeCommand(revertCmd)
-            _resolutionState.value = cur.copy(
+        val revertCmd = if (prevW == cur.nativeWidth) {
+            "wm size reset; wm density reset"
+        } else {
+            "wm size ${prevW}x${prevH}; wm density $prevDpi"
+        }
+        executeCommand(revertCmd)
+        if (!_resolutionState.value.isPendingConfirmation) {
+            _resolutionState.value = _resolutionState.value.copy(
                 currentWidth = prevW,
                 currentHeight = prevH,
                 currentDensityDpi = prevDpi,

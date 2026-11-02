@@ -15,16 +15,25 @@ abstract class GameSpaceDatabase : RoomDatabase() {
         private var INSTANCE: GameSpaceDatabase? = null
 
         fun getDatabase(context: Context): GameSpaceDatabase {
-            return INSTANCE ?: synchronized(this) {
-                val instance = Room.databaseBuilder(
+            return INSTANCE?.takeIf { it.isOpen } ?: synchronized(this) {
+                INSTANCE?.takeIf { it.isOpen } ?: Room.databaseBuilder(
                     context.applicationContext,
                     GameSpaceDatabase::class.java,
                     "game_space_database"
                 )
-                    .fallbackToDestructiveMigration()
+                    .fallbackToDestructiveMigration(dropAllTables = true)
                     .build()
-                INSTANCE = instance
-                instance
+                    .also { INSTANCE = it }
+            }
+        }
+
+        fun closeAndReset() {
+            synchronized(this) {
+                try {
+                    INSTANCE?.close()
+                } catch (_: Throwable) {
+                }
+                INSTANCE = null
             }
         }
     }
