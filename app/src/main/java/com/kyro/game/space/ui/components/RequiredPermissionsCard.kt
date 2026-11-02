@@ -19,7 +19,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.OpenInNew
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.Cable
 import androidx.compose.material.icons.filled.Check
@@ -54,6 +54,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.kyro.game.space.data.model.ExecutionMethod
 import com.kyro.game.space.ui.theme.KyroGreen
 
 data class PermissionRequirement(
@@ -74,6 +75,7 @@ fun RequiredPermissionsCard(
     isNotificationGranted: Boolean,
     onRequestShizuku: () -> Unit,
     onRequestNotification: () -> Unit,
+    executionMethod: ExecutionMethod = ExecutionMethod.SHIZUKU,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -81,11 +83,22 @@ fun RequiredPermissionsCard(
     var restrictedDialogTargetAction by remember { mutableStateOf("") }
     var restrictedDialogTitle by remember { mutableStateOf("") }
 
+    val execPermTitle = when (executionMethod) {
+        ExecutionMethod.SHIZUKU -> "Shizuku Permission"
+        ExecutionMethod.MANUAL_ADB -> "Wireless ADB / Daemon"
+        ExecutionMethod.ROOT -> "Root Access (su)"
+    }
+    val execPermDesc = when (executionMethod) {
+        ExecutionMethod.SHIZUKU -> "Executes elevated commands strictly via Shizuku IPC."
+        ExecutionMethod.MANUAL_ADB -> "Executes elevated commands strictly via Wireless ADB / Daemon."
+        ExecutionMethod.ROOT -> "Executes elevated commands strictly via Root shell (su)."
+    }
+
     val permissions = listOf(
         PermissionRequirement(
             id = "shizuku",
-            name = "Shizuku / Elevated ADB / Root",
-            description = "Allows elevated system command execution, resolution scaling, and game optimizations.",
+            name = execPermTitle,
+            description = execPermDesc,
             icon = Icons.Default.Cable,
             isGranted = isShizukuGranted,
             onGrant = { onRequestShizuku() }
@@ -281,7 +294,7 @@ fun RequiredPermissionsCard(
                     )
                 ) {
                     Icon(
-                        imageVector = Icons.AutoMirrored.Filled.OpenInNew,
+                        imageVector = Icons.AutoMirrored.Filled.ArrowForward,
                         contentDescription = null,
                         modifier = Modifier.size(16.dp)
                     )

@@ -13,7 +13,6 @@ import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.outlined.Apps
 import androidx.compose.material.icons.outlined.Build
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Settings
@@ -58,7 +57,7 @@ enum class GameSpaceTab(
 ) {
     HOME("Home", Icons.Filled.Home, Icons.Outlined.Home),
     TOOLS("Tools", Icons.Filled.Build, Icons.Outlined.Build),
-    APPS("Apps", Icons.Filled.Apps, Icons.Outlined.Apps),
+    APPS("Apps", Icons.Filled.Apps, Icons.Filled.Apps),
     SETTINGS("Settings", Icons.Filled.Settings, Icons.Outlined.Settings)
 }
 
@@ -213,10 +212,6 @@ fun GameSpaceApp(
                                 onNavigateToApps = { currentTab = GameSpaceTab.APPS },
                                 onNavigateToNetworkOptimizer = {
                                     activeSubScreen = ToolSubScreen.NETWORK_OPTIMIZER
-                                },
-                                onNavigateToTextureTuner = { pkg ->
-                                    repository.selectTextureTargetPackage(pkg)
-                                    activeSubScreen = ToolSubScreen.TEXTURE_TUNER
                                 }
                             )
                             GameSpaceTab.TOOLS -> ToolsScreen(

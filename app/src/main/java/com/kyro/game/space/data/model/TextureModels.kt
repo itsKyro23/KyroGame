@@ -3,9 +3,6 @@ package com.kyro.game.space.data.model
 import android.app.ActivityManager
 import android.content.Context
 import android.content.pm.PackageManager
-import android.opengl.EGL14
-import android.opengl.EGLConfig
-import android.opengl.GLES20
 import android.os.Build
 import java.util.Locale
 
@@ -202,7 +199,7 @@ data class DeviceTextureCompatibility(
 )
 
 data class TextureTunerState(
-    val selectedTargetPackage: String = "", // "" = Global System Default, or specific game packageName
+    val selectedTargetPackage: String = "",
     val currentConfig: TextureConfig = TextureConfig(
         preset = TextureQuickPreset.RETRO,
         detailLevel = TextureDetailLevel.RETRO,
@@ -217,15 +214,26 @@ data class TextureTunerState(
 
 object GpuTextureCompatibilityProbe {
 
+    @Volatile
+    private var cachedCompatibility: DeviceTextureCompatibility? = null
+
+    /**
+     * Thread-safe, zero-EGL-context hardware GPU probe.
+     * Avoids touching EGL14 default display so Compose RenderThread is never interrupted or crashed.
+     */
     fun inspectDeviceCompatibility(context: Context): DeviceTextureCompatibility {
-        var glVersionText = "OpenGL ES 3.0+"
+        cachedCompatibility?.let { return it }
+
+        var glVersionText = "OpenGL ES 3.2"
         var majorGl = 3
         try {
             val am = context.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager
-            val reqGl = am?.deviceConfigurationInfo?.reqGlEsVersion ?: 0x00030000
-            majorGl = (reqGl shr 16).coerceAtLeast(2)
-            val minorGl = reqGl and 0xFFFF
-            glVersionText = "OpenGL ES $majorGl.$minorGl"
+            val reqGl = am?.deviceConfigurationInfo?.reqGlEsVersion ?: 0x00030002
+            if (reqGl > 0) {
+                majorGl = (reqGl shr 16).coerceAtLeast(2)
+                val minorGl = reqGl and 0xFFFF
+                glVersionText = "OpenGL ES $majorGl.$minorGl"
+            }
         } catch (_: Throwable) {
         }
 
@@ -241,84 +249,50 @@ object GpuTextureCompatibilityProbe {
             false
         }
 
-        var vendor = ""
-        var renderer = ""
-        var extensions = ""
-
-        // Query offscreen EGL14 context for real hardware GPU Vendor / Renderer / Extensions
-        try {
-            val display = EGL14.eglGetDisplay(EGL14.EGL_DEFAULT_DISPLAY)
-            if (display != null && display != EGL14.EGL_NO_DISPLAY) {
-                val vers = IntArray(2)
-                if (EGL14.eglInitialize(display, vers, 0, vers, 1)) {
-                    val configAttribs = intArrayOf(
-                        EGL14.EGL_RENDERABLE_TYPE, EGL14.EGL_OPENGL_ES2_BIT,
-                        EGL14.EGL_SURFACE_TYPE, EGL14.EGL_PBUFFER_BIT,
-                        EGL14.EGL_NONE
-                    )
-                    val configs = arrayOfNulls<EGLConfig>(1)
-                    val numConfigs = IntArray(1)
-                    if (EGL14.eglChooseConfig(display, configAttribs, 0, configs, 0, 1, numConfigs, 0) &&
-                        numConfigs[0] > 0 && configs[0] != null
-                    ) {
-                        val ctxAttribs = intArrayOf(EGL14.EGL_CONTEXT_CLIENT_VERSION, 2, EGL14.EGL_NONE)
-                        val eglCtx = EGL14.eglCreateContext(display, configs[0], EGL14.EGL_NO_CONTEXT, ctxAttribs, 0)
-                        val surfAttribs = intArrayOf(EGL14.EGL_WIDTH, 1, EGL14.EGL_HEIGHT, 1, EGL14.EGL_NONE)
-                        val eglSurf = EGL14.eglCreatePbufferSurface(display, configs[0], surfAttribs, 0)
-                        if (eglCtx != null && eglSurf != null &&
-                            EGL14.eglMakeCurrent(display, eglSurf, eglSurf, eglCtx)
-                        ) {
-                            vendor = GLES20.glGetString(GLES20.GL_VENDOR).orEmpty().trim()
-                            renderer = GLES20.glGetString(GLES20.GL_RENDERER).orEmpty().trim()
-                            extensions = GLES20.glGetString(GLES20.GL_EXTENSIONS).orEmpty()
-                            EGL14.eglMakeCurrent(
-                                display,
-                                EGL14.EGL_NO_SURFACE,
-                                EGL14.EGL_NO_SURFACE,
-                                EGL14.EGL_NO_CONTEXT
-                            )
-                        }
-                        if (eglSurf != null) EGL14.eglDestroySurface(display, eglSurf)
-                        if (eglCtx != null) EGL14.eglDestroyContext(display, eglCtx)
-                    }
-                    EGL14.eglTerminate(display)
-                }
-            }
-        } catch (_: Throwable) {
-        }
-
-        val socOrHardware = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            Build.SOC_MODEL.takeIf { it.isNotBlank() && it != Build.UNKNOWN } ?: Build.HARDWARE
+        val socModel = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            Build.SOC_MODEL.takeIf { it.isNotBlank() && it != Build.UNKNOWN }.orEmpty()
         } else {
-            Build.HARDWARE
-        }.orEmpty()
+            ""
+        }
+        val socMaker = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            Build.SOC_MANUFACTURER.takeIf { it.isNotBlank() && it != Build.UNKNOWN }.orEmpty()
+        } else {
+            ""
+        }
+        val hwBoard = listOf(socModel, Build.HARDWARE, Build.BOARD)
+            .firstOrNull { it.isNotBlank() && !it.equals("unknown", ignoreCase = true) }
+            .orEmpty()
 
-        if (vendor.isBlank() || vendor.contains("robolectric", ignoreCase = true)) {
-            vendor = when {
-                socOrHardware.contains("qcom", ignoreCase = true) ||
-                    socOrHardware.contains("sm", ignoreCase = true) ||
-                    socOrHardware.contains("sdm", ignoreCase = true) -> "Qualcomm"
-                socOrHardware.contains("mt", ignoreCase = true) ||
-                    socOrHardware.contains("mali", ignoreCase = true) ||
-                    socOrHardware.contains("exynos", ignoreCase = true) -> "ARM"
-                socOrHardware.contains("tensor", ignoreCase = true) -> "ARM / Google"
-                else -> Build.MANUFACTURER.replaceFirstChar { it.uppercase() }.ifBlank { "Mobile GPU" }
-            }
+        val combinedTag = "$socMaker $socModel ${Build.HARDWARE} ${Build.BOARD}".lowercase(Locale.US)
+
+        val vendor = when {
+            combinedTag.contains("qcom") || combinedTag.contains("qualcomm") ||
+                combinedTag.contains("sm") || combinedTag.contains("sdm") ||
+                combinedTag.contains("snapdragon") -> "Qualcomm"
+            combinedTag.contains("mt") || combinedTag.contains("mediatek") ||
+                combinedTag.contains("dimensity") || combinedTag.contains("helio") ||
+                combinedTag.contains("mali") -> "ARM / MediaTek"
+            combinedTag.contains("exynos") || combinedTag.contains("s5e") -> "Samsung / ARM"
+            combinedTag.contains("tensor") || combinedTag.contains("gs") -> "Google Tensor GPU"
+            combinedTag.contains("unisoc") || combinedTag.contains("ums") -> "ARM / Unisoc"
+            else -> socMaker.ifBlank { Build.MANUFACTURER.replaceFirstChar { it.uppercase() } }.ifBlank { "Mobile GPU" }
         }
 
-        if (renderer.isBlank() || renderer.contains("robolectric", ignoreCase = true)) {
-            renderer = when {
-                vendor.contains("Qualcomm", ignoreCase = true) -> "Adreno GPU ($socOrHardware)"
-                vendor.contains("ARM", ignoreCase = true) -> "Mali GPU ($socOrHardware)"
-                else -> "${socOrHardware.ifBlank { "Hardware" }} ($glVersionText)"
+        val renderer = when {
+            vendor.contains("Qualcomm", ignoreCase = true) -> {
+                if (hwBoard.isNotBlank()) "Adreno GPU ($hwBoard)" else "Adreno GPU"
+            }
+            vendor.contains("ARM", ignoreCase = true) || vendor.contains("MediaTek", ignoreCase = true) -> {
+                if (hwBoard.isNotBlank()) "Mali GPU ($hwBoard)" else "Mali GPU"
+            }
+            else -> {
+                if (hwBoard.isNotBlank()) "$hwBoard ($glVersionText)" else glVersionText
             }
         }
 
         val supportsLodBias = majorGl >= 2
         val supportsNearest = majorGl >= 2
-        val supportsAniso = extensions.isBlank() ||
-            extensions.contains("GL_EXT_texture_filter_anisotropic", ignoreCase = true) ||
-            majorGl >= 3
+        val supportsAniso = majorGl >= 3
         val supportsGameDriver = Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q
 
         val isSupported = supportsLodBias && supportsNearest
@@ -328,9 +302,9 @@ object GpuTextureCompatibilityProbe {
             "Limited Support • $renderer"
         }
         val vulkanTag = if (hasVulkan) "Vulkan + $glVersionText" else glVersionText
-        val summary = "GPU: $vendor $renderer ($vulkanTag) • Supports Mipmap LOD Bias, GL_NEAREST sharp pixel filtering, and ${if (supportsGameDriver) "Android Game Driver / ANGLE per-app hooks" else "system GLES properties"}."
+        val summary = "GPU: $vendor $renderer ($vulkanTag) • Supports Mipmap LOD Bias, GL_NEAREST sharp pixel filtering, and ${if (supportsGameDriver) "Android Game Driver per-app hooks" else "system GLES properties"}."
 
-        return DeviceTextureCompatibility(
+        val result = DeviceTextureCompatibility(
             isSupported = isSupported,
             gpuVendor = vendor,
             gpuRenderer = renderer,
@@ -343,5 +317,7 @@ object GpuTextureCompatibilityProbe {
             compatibilityBadge = badge,
             compatibilitySummary = summary
         )
+        cachedCompatibility = result
+        return result
     }
 }

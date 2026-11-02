@@ -1,16 +1,16 @@
 package com.kyro.game.space.ui.screens
 
+import android.graphics.Bitmap
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,7 +19,6 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -28,7 +27,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesomeMosaic
@@ -55,7 +53,6 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -78,11 +75,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.FilterQuality
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
@@ -90,6 +86,8 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.kyro.game.space.data.model.GameItem
@@ -126,14 +124,44 @@ fun TextureTunerScreen(
     val compat = tunerState.compatibility
 
     var splitFraction by remember { mutableFloatStateOf(0.50f) }
+    var isHoldingBefore by remember { mutableStateOf(false) }
     var showTargetPickerDialog by remember { mutableStateOf(false) }
 
-    val holdBeforeInteraction = remember { MutableInteractionSource() }
-    val isHoldingBefore by holdBeforeInteraction.collectIsPressedAsState()
     val effectiveSplit = if (isHoldingBefore) 1.0f else splitFraction
 
+    // Pre-computed lightweight bitmaps (128x80 px) so Canvas drawing is 2 GPU texture blits per frame (zero lag!)
+    val beforePreviewBitmap = remember {
+        buildScenePreviewBitmap(
+            detailLevel = TextureDetailLevel.ORIGINAL,
+            sharpPixels = true,
+            hardDistanceCutoff = false
+        )
+    }
+
+    val afterPreviewBitmap = remember(
+        config.detailLevel,
+        config.sharpPixels,
+        config.hardDistanceCutoff
+    ) {
+        buildScenePreviewBitmap(
+            detailLevel = config.detailLevel,
+            sharpPixels = config.sharpPixels,
+            hardDistanceCutoff = config.hardDistanceCutoff
+        )
+    }
+
+    val afterFilterQuality = if (config.sharpPixels || config.detailLevel == TextureDetailLevel.ORIGINAL) {
+        FilterQuality.None
+    } else {
+        FilterQuality.Low
+    }
+
     val selectedGameItem = remember(tunerState.selectedTargetPackage, allApps) {
-        allApps.firstOrNull { it.packageName == tunerState.selectedTargetPackage }
+        if (tunerState.selectedTargetPackage.isBlank()) {
+            null
+        } else {
+            allApps.firstOrNull { it.packageName == tunerState.selectedTargetPackage }
+        }
     }
 
     val targetTitle = selectedGameItem?.appName
@@ -305,7 +333,7 @@ fun TextureTunerScreen(
                             enabled = compat.supportsNearestNeighborFilter
                         )
                         CompatibilityFeatureChip(
-                            label = "Engine: ${connectionOverview.method.name}",
+                            label = "Mode: ${connectionOverview.method.name}",
                             enabled = true
                         )
                     }
@@ -340,13 +368,12 @@ fun TextureTunerScreen(
                         .padding(14.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    // Split-Screen Interactive Canvas
+                    // Split-Screen Interactive Canvas (Hardware-Accelerated Pre-Cached Bitmap Blit)
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(225.dp)
+                            .height(220.dp)
                             .clip(RoundedCornerShape(16.dp))
-                            .borderWithRadius()
                             .pointerInput(Unit) {
                                 detectTapGestures { offset ->
                                     if (size.width > 0) {
@@ -365,52 +392,58 @@ fun TextureTunerScreen(
                             .testTag("texture_before_after_canvas")
                     ) {
                         Canvas(modifier = Modifier.fillMaxSize()) {
+                            val canvasW = size.width.roundToInt().coerceAtLeast(1)
+                            val canvasH = size.height.roundToInt().coerceAtLeast(1)
+                            val dstSize = IntSize(canvasW, canvasH)
                             val splitX = size.width * effectiveSplit
 
                             // Left Side: BEFORE (Original High-Detail Texture)
                             clipRect(left = 0f, top = 0f, right = splitX, bottom = size.height) {
-                                drawBrickAndGroundScene(
-                                    detailLevel = TextureDetailLevel.ORIGINAL,
-                                    sharpPixels = false,
-                                    hardDistanceCutoff = false
+                                drawImage(
+                                    image = beforePreviewBitmap,
+                                    dstOffset = IntOffset.Zero,
+                                    dstSize = dstSize,
+                                    filterQuality = FilterQuality.None
                                 )
                             }
 
                             // Right Side: AFTER (Live Filtered / Blocky / Smooth / Pixelated Texture)
-                            clipRect(left = splitX, top = 0f, right = size.width, bottom = size.height) {
-                                drawBrickAndGroundScene(
-                                    detailLevel = config.detailLevel,
-                                    sharpPixels = config.sharpPixels,
-                                    hardDistanceCutoff = config.hardDistanceCutoff
-                                )
+                            if (splitX < size.width) {
+                                clipRect(left = splitX, top = 0f, right = size.width, bottom = size.height) {
+                                    drawImage(
+                                        image = afterPreviewBitmap,
+                                        dstOffset = IntOffset.Zero,
+                                        dstSize = dstSize,
+                                        filterQuality = afterFilterQuality
+                                    )
+                                }
                             }
 
-                            // Vertical Split Line
-                            drawLine(
-                                color = Color.White.copy(alpha = 0.92f),
-                                start = Offset(splitX, 0f),
-                                end = Offset(splitX, size.height),
-                                strokeWidth = 2.5.dp.toPx()
-                            )
+                            // Vertical Split Line & Handle
+                            if (!isHoldingBefore) {
+                                drawLine(
+                                    color = Color.White.copy(alpha = 0.92f),
+                                    start = Offset(splitX, 0f),
+                                    end = Offset(splitX, size.height),
+                                    strokeWidth = 2.5.dp.toPx()
+                                )
 
-                            // Center Split Handle Circle
-                            val centerY = size.height * 0.52f
-                            drawCircle(
-                                color = Color.Black.copy(alpha = 0.45f),
-                                radius = 18.dp.toPx(),
-                                center = Offset(splitX, centerY)
-                            )
-                            drawCircle(
-                                color = Color.White,
-                                radius = 15.dp.toPx(),
-                                center = Offset(splitX, centerY)
-                            )
+                                val centerY = size.height * 0.52f
+                                drawCircle(
+                                    color = Color.Black.copy(alpha = 0.45f),
+                                    radius = 17.dp.toPx(),
+                                    center = Offset(splitX, centerY)
+                                )
+                                drawCircle(
+                                    color = Color.White,
+                                    radius = 14.dp.toPx(),
+                                    center = Offset(splitX, centerY)
+                                )
+                            }
                         }
 
-                        // Center Handle Icon overlay
-                        Box(
-                            modifier = Modifier.fillMaxSize()
-                        ) {
+                        // Overlay Badges & Hold: Before Button
+                        Box(modifier = Modifier.fillMaxSize()) {
                             // Top-left "BEFORE" label
                             Surface(
                                 shape = RoundedCornerShape(8.dp),
@@ -467,7 +500,7 @@ fun TextureTunerScreen(
                                 )
                             }
 
-                            // Bottom-right "Hold: Before" button (matching "Tahan: Sebelum" in screenshot)
+                            // Bottom-right "Hold: Before" button
                             Surface(
                                 shape = RoundedCornerShape(20.dp),
                                 color = if (isHoldingBefore) {
@@ -479,11 +512,14 @@ fun TextureTunerScreen(
                                 modifier = Modifier
                                     .align(Alignment.BottomEnd)
                                     .padding(10.dp)
-                                    .clickable(
-                                        interactionSource = holdBeforeInteraction,
-                                        indication = null,
-                                        onClick = {}
-                                    )
+                                    .pointerInput(Unit) {
+                                        awaitEachGesture {
+                                            awaitFirstDown(requireUnconsumed = false)
+                                            isHoldingBefore = true
+                                            waitForUpOrCancellation()
+                                            isHoldingBefore = false
+                                        }
+                                    }
                                     .testTag("hold_before_preview_btn")
                             ) {
                                 Row(
@@ -509,7 +545,7 @@ fun TextureTunerScreen(
                         }
                     }
 
-                    // Target Game Selector Row (matches the "Free Fire MAX — Activate for Free Fire MAX" bar)
+                    // Target Game Selector Row
                     Surface(
                         onClick = { showTargetPickerDialog = true },
                         shape = RoundedCornerShape(14.dp),
@@ -727,17 +763,19 @@ fun TextureTunerScreen(
                             value = config.detailLevel.stepIndex.toFloat(),
                             onValueChange = { raw ->
                                 val newLevel = TextureDetailLevel.fromStep(raw.roundToInt())
-                                val matchedPreset = TextureQuickPreset.resolveMatchingPreset(
-                                    detailLevel = newLevel,
-                                    sharpPixels = config.sharpPixels,
-                                    hardCutoff = config.hardDistanceCutoff
-                                )
-                                repository.updateTextureConfigDraft(
-                                    config.copy(
-                                        preset = matchedPreset,
-                                        detailLevel = newLevel
+                                if (newLevel != config.detailLevel) {
+                                    val matchedPreset = TextureQuickPreset.resolveMatchingPreset(
+                                        detailLevel = newLevel,
+                                        sharpPixels = config.sharpPixels,
+                                        hardCutoff = config.hardDistanceCutoff
                                     )
-                                )
+                                    repository.updateTextureConfigDraft(
+                                        config.copy(
+                                            preset = matchedPreset,
+                                            detailLevel = newLevel
+                                        )
+                                    )
+                                }
                             },
                             valueRange = 0f..4f,
                             steps = 3,
@@ -816,7 +854,6 @@ fun TextureTunerScreen(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        // Card 1: Sharp Pixels (Piksel Tajam)
                         FilterToggleCard(
                             title = "Sharp Pixels",
                             description = "Crisp blocky pixel texture edges. Turn off for smooth bilinear blur.",
@@ -838,7 +875,6 @@ fun TextureTunerScreen(
                             modifier = Modifier.weight(1f)
                         )
 
-                        // Card 2: Hard Distance Cutoff (Batas Jarak Tegas)
                         FilterToggleCard(
                             title = "Hard Distance Cutoff",
                             description = "Near-to-far mipmap detail transitions become sharply stepped.",
@@ -861,7 +897,7 @@ fun TextureTunerScreen(
                         )
                     }
 
-                    // Helpful In-Game Tips (matching the 2 tips in the screenshot)
+                    // Helpful In-Game Tips
                     Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
@@ -918,7 +954,7 @@ fun TextureTunerScreen(
                                 modifier = Modifier.size(14.dp)
                             )
                             Text(
-                                text = config.buildShellCommand(tunerState.selectedTargetPackage),
+                                text = "[${connectionOverview.method.name}] ${config.buildShellCommand(tunerState.selectedTargetPackage)}",
                                 style = MaterialTheme.typography.labelSmall,
                                 fontFamily = FontFamily.Monospace,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -999,7 +1035,11 @@ fun TextureTunerScreen(
 
     if (showTargetPickerDialog) {
         val gameCandidates = remember(allApps) {
-            allApps.sortedWith(compareByDescending<GameItem> { it.isAddedToHome }.thenByDescending { it.isGame }.thenBy { it.appName })
+            allApps.sortedWith(
+                compareByDescending<GameItem> { it.isAddedToHome }
+                    .thenByDescending { it.isGame }
+                    .thenBy { it.appName }
+            )
         }
 
         AlertDialog(
@@ -1093,9 +1133,6 @@ fun TextureTunerScreen(
 
                     items(items = gameCandidates, key = { it.packageName }) { game ->
                         val isSelected = tunerState.selectedTargetPackage == game.packageName
-                        val bmp = remember(game.packageName) {
-                            AppIconCache.getIcon(context, game.packageName)
-                        }
                         Surface(
                             onClick = {
                                 repository.selectTextureTargetPackage(game.packageName)
@@ -1120,24 +1157,16 @@ fun TextureTunerScreen(
                             ) {
                                 Surface(
                                     shape = RoundedCornerShape(8.dp),
-                                    color = Color.DarkGray,
+                                    color = TextureSkyBlue.copy(alpha = 0.14f),
                                     modifier = Modifier.size(34.dp)
                                 ) {
-                                    if (bmp != null) {
-                                        Image(
-                                            bitmap = bmp.asImageBitmap(),
-                                            contentDescription = game.appName,
-                                            modifier = Modifier.fillMaxSize()
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(
+                                            imageVector = Icons.Default.SportsEsports,
+                                            contentDescription = null,
+                                            tint = TextureSkyBlue,
+                                            modifier = Modifier.size(18.dp)
                                         )
-                                    } else {
-                                        Box(contentAlignment = Alignment.Center) {
-                                            Icon(
-                                                imageVector = Icons.Default.SportsEsports,
-                                                contentDescription = null,
-                                                tint = Color.White,
-                                                modifier = Modifier.size(18.dp)
-                                            )
-                                        }
                                     }
                                 }
                                 Column(modifier = Modifier.weight(1f)) {
@@ -1278,213 +1307,146 @@ private fun FilterToggleCard(
     }
 }
 
-private fun Modifier.borderWithRadius(): Modifier = this
-
 /**
- * Procedurally renders the 3D Brick Wall + Receding Grassy Ground scene
- * matching the reference screenshot, with live Mipmap LOD Bias (`detailLevel`),
- * Nearest-Neighbor vs Bilinear (`sharpPixels`), and Hard Mipmap Distance Cutoff (`hardDistanceCutoff`).
+ * Generates a compact, pre-cached 120x76 ImageBitmap of the 3D Brick Wall + Grassy Ground scene.
+ * Running this once in `remember` and drawing it with hardware-accelerated `drawImage` eliminates
+ * thousands of per-frame Canvas `drawRect` calls so opening and dragging the preview has zero lag.
  */
-private fun DrawScope.drawBrickAndGroundScene(
+private fun buildScenePreviewBitmap(
     detailLevel: TextureDetailLevel,
     sharpPixels: Boolean,
     hardDistanceCutoff: Boolean
-) {
-    val w = size.width
-    val h = size.height
-    val horizonY = h * 0.44f
+): ImageBitmap {
+    val width = 120
+    val height = 76
+    val horizonY = 34
+    val pixels = IntArray(width * height)
 
-    // Pixel block size driven by TextureDetailLevel (1x, 2x, 4x, 8x, 16x)
-    val baseCellPx = when (detailLevel) {
-        TextureDetailLevel.ORIGINAL -> 3.5f
-        TextureDetailLevel.LIGHT -> 7f
-        TextureDetailLevel.RETRO -> 13f
-        TextureDetailLevel.BLOCKY -> 24f
-        TextureDetailLevel.EXTREME -> 42f
-    }.coerceAtLeast(2f)
-
-    // 1. Top Half: Brick Wall Texture
-    val brickW = 44f
-    val brickH = 20f
-    val mortarThickness = if (detailLevel == TextureDetailLevel.EXTREME) 0f else 2.5f
-
-    val cols = (w / baseCellPx).toInt().coerceAtLeast(1)
-    val wallRows = (horizonY / baseCellPx).toInt().coerceAtLeast(1)
-
-    for (ry in 0..wallRows) {
-        val y = ry * baseCellPx
-        if (y >= horizonY) break
-        val cellH = (baseCellPx + 0.8f).coerceAtMost(horizonY - y)
-
-        for (cx in 0..cols) {
-            val x = cx * baseCellPx
-            if (x >= w) break
-            val cellW = (baseCellPx + 0.8f).coerceAtMost(w - x)
-
-            val sampleX = x + baseCellPx * 0.5f
-            val sampleY = y + baseCellPx * 0.5f
-
-            val brickRow = floor(sampleY / brickH).toInt()
-            val rowOffset = if (brickRow % 2 == 0) 0f else brickW * 0.5f
-            val localX = (sampleX + rowOffset) % brickW
-            val localY = sampleY % brickH
-            val brickCol = floor((sampleX + rowOffset) / brickW).toInt()
-
-            val isMortar = localX < mortarThickness || localY < mortarThickness
-            val hash = ((brickRow * 37 + brickCol * 17) and 0xFF) / 255f
-
-            // Fine surface grain for Original/Light
-            val fineNoise = if (detailLevel == TextureDetailLevel.ORIGINAL) {
-                (((cx * 13 + ry * 29) % 11) - 5) * 0.008f
-            } else {
-                0f
-            }
-
-            val rawColor = if (isMortar && detailLevel.stepIndex <= 2) {
-                Color(0xFF3E352D)
-            } else {
-                val r = (0.56f + hash * 0.14f + fineNoise).coerceIn(0.25f, 0.82f)
-                val g = (0.45f + hash * 0.11f + fineNoise).coerceIn(0.20f, 0.70f)
-                val b = (0.35f + hash * 0.09f + fineNoise).coerceIn(0.15f, 0.60f)
-                Color(r, g, b)
-            }
-
-            val finalWallColor = if (!sharpPixels && detailLevel != TextureDetailLevel.ORIGINAL) {
-                // Smooth bilinear-filtered blend toward warm average stone color
-                val avgStone = Color(0xFF8A725B)
-                val blendFactor = (detailLevel.stepIndex * 0.16f).coerceIn(0.15f, 0.65f)
-                lerpColor(rawColor, avgStone, blendFactor)
-            } else {
-                rawColor
-            }
-
-            drawRect(
-                color = finalWallColor,
-                topLeft = Offset(x, y),
-                size = Size(cellW, cellH)
-            )
-        }
+    val stepBlock = when (detailLevel) {
+        TextureDetailLevel.ORIGINAL -> 1
+        TextureDetailLevel.LIGHT -> 2
+        TextureDetailLevel.RETRO -> 4
+        TextureDetailLevel.BLOCKY -> 8
+        TextureDetailLevel.EXTREME -> 15
     }
 
-    // Shadow line at wall base
-    drawRect(
-        color = Color(0xFF221D18).copy(alpha = 0.65f),
-        topLeft = Offset(0f, (horizonY - 4f).coerceAtLeast(0f)),
-        size = Size(w, 6f)
-    )
+    val brickW = 16
+    val brickH = 8
 
-    // 2. Bottom Half: Receding Grassy & Dirt Ground Plane
-    val groundHeight = (h - horizonY).coerceAtLeast(1f)
-    val groundRows = (groundHeight / baseCellPx).toInt().coerceAtLeast(1)
+    for (y in 0 until height) {
+        val qy = (y / stepBlock) * stepBlock
+        if (y < horizonY) {
+            val brickRow = qy / brickH
+            val rowOffset = if (brickRow % 2 == 0) 0 else brickW / 2
+            val localY = qy % brickH
 
-    for (ry in 0..groundRows) {
-        val y = horizonY + ry * baseCellPx
-        if (y >= h) break
-        val cellH = (baseCellPx + 0.8f).coerceAtMost(h - y)
+            for (x in 0 until width) {
+                val qx = (x / stepBlock) * stepBlock
+                val shiftedX = qx + rowOffset
+                val localX = shiftedX % brickW
+                val brickCol = shiftedX / brickW
 
-        // Normalized depth from 0.0 (far wall base) to 1.0 (near camera bottom)
-        val rawDepth = ((y - horizonY) / groundHeight).coerceIn(0.01f, 1f)
-        val depth = if (hardDistanceCutoff) {
-            // Hard stepped distance bands (Mipmap LOD cutoff)
-            (floor(rawDepth * 3.0f) / 3.0f).coerceIn(0.05f, 1f)
+                val isMortar = (detailLevel.stepIndex <= 2) && (localX == 0 || localY == 0)
+                val hash = ((brickRow * 37 + brickCol * 17) and 0xFF) / 255f
+                val grain = if (detailLevel == TextureDetailLevel.ORIGINAL) {
+                    (((x * 13 + y * 29) % 9) - 4) * 0.008f
+                } else 0f
+
+                var r: Float
+                var g: Float
+                var b: Float
+
+                if (isMortar) {
+                    r = 0.24f
+                    g = 0.21f
+                    b = 0.18f
+                } else {
+                    r = (0.56f + hash * 0.15f + grain).coerceIn(0.25f, 0.82f)
+                    g = (0.45f + hash * 0.12f + grain).coerceIn(0.20f, 0.70f)
+                    b = (0.35f + hash * 0.09f + grain).coerceIn(0.15f, 0.60f)
+                }
+
+                if (!sharpPixels && detailLevel != TextureDetailLevel.ORIGINAL) {
+                    val blend = (detailLevel.stepIndex * 0.16f).coerceIn(0.15f, 0.65f)
+                    r += (0.54f - r) * blend
+                    g += (0.45f - g) * blend
+                    b += (0.36f - b) * blend
+                }
+
+                pixels[y * width + x] = packRgb(r, g, b)
+            }
+        } else if (y == horizonY) {
+            val wallShadow = packRgb(0.14f, 0.12f, 0.10f)
+            for (x in 0 until width) {
+                pixels[y * width + x] = wallShadow
+            }
         } else {
-            rawDepth
-        }
-
-        // Row cell width scales with distance cutoff or perspective
-        val rowStepPx = if (hardDistanceCutoff && detailLevel.stepIndex >= 2) {
-            baseCellPx * (if (rawDepth < 0.45f) 1.8f else 1.0f)
-        } else {
-            baseCellPx
-        }
-        val rowCols = (w / rowStepPx).toInt().coerceAtLeast(1)
-
-        for (cx in 0..rowCols) {
-            val x = cx * rowStepPx
-            if (x >= w) break
-            val cellW = (rowStepPx + 0.8f).coerceAtMost(w - x)
-
-            // Perspective projection coordinates for dirt streaks & grass blades
-            val centerOffset = (x + rowStepPx * 0.5f - w * 0.5f) / (depth * 0.85f + 0.35f)
-            val worldX = (centerOffset / 18f).roundToInt()
-            val worldZ = ((1f / (depth + 0.18f)) * 12f).roundToInt()
-
-            val pattern = ((worldX * 19 + worldZ * 31) and 0x7F) / 127f
-            val isGrassPatch = ((worldX + worldZ) % 3 == 0) || pattern > 0.56f
-
-            val baseGround = if (isGrassPatch) {
-                // Olive / Mossy Grass tone
-                Color(
-                    red = (0.32f + pattern * 0.10f).coerceIn(0.2f, 0.55f),
-                    green = (0.48f + pattern * 0.16f).coerceIn(0.3f, 0.72f),
-                    blue = (0.20f + pattern * 0.08f).coerceIn(0.1f, 0.38f)
-                )
+            val groundSpan = (height - horizonY).coerceAtLeast(1).toFloat()
+            val rawDepth = ((qy - horizonY).coerceAtLeast(1)) / groundSpan
+            val depth = if (hardDistanceCutoff) {
+                (floor(rawDepth * 3.0f) / 3.0f).coerceIn(0.08f, 1f)
             } else {
-                // Warm Earth / Dirt tone
-                Color(
-                    red = (0.46f + pattern * 0.12f).coerceIn(0.3f, 0.65f),
-                    green = (0.37f + pattern * 0.09f).coerceIn(0.22f, 0.52f),
-                    blue = (0.24f + pattern * 0.07f).coerceIn(0.14f, 0.38f)
-                )
+                rawDepth.coerceIn(0.05f, 1f)
             }
 
-            val shadedGround = lerpColor(
-                baseGround,
-                Color(0xFF2B261E),
-                (1f - depth) * 0.35f
-            )
-
-            val finalGroundColor = if (!sharpPixels && detailLevel != TextureDetailLevel.ORIGINAL) {
-                val smoothBlend = Color(0xFF615938)
-                val factor = (detailLevel.stepIndex * 0.17f).coerceIn(0.18f, 0.68f)
-                lerpColor(shadedGround, smoothBlend, factor)
+            val rowStep = if (hardDistanceCutoff && detailLevel.stepIndex >= 2 && rawDepth < 0.48f) {
+                (stepBlock * 2).coerceAtMost(24)
             } else {
-                shadedGround
+                stepBlock
             }
 
-            drawRect(
-                color = finalGroundColor,
-                topLeft = Offset(x, y),
-                size = Size(cellW, cellH)
-            )
-        }
+            val isCutoffLine = hardDistanceCutoff &&
+                (y == horizonY + (groundSpan * 0.34f).toInt() || y == horizonY + (groundSpan * 0.67f).toInt())
 
-        // Draw visible mipmap distance transition line when Hard Distance Cutoff is ON
-        if (hardDistanceCutoff) {
-            val cutoff1Y = horizonY + groundHeight * 0.34f
-            val cutoff2Y = horizonY + groundHeight * 0.67f
-            if (kotlin.math.abs(y - cutoff1Y) < baseCellPx * 0.5f ||
-                kotlin.math.abs(y - cutoff2Y) < baseCellPx * 0.5f
-            ) {
-                drawLine(
-                    color = Color.Black.copy(alpha = 0.28f),
-                    start = Offset(0f, y),
-                    end = Offset(w, y),
-                    strokeWidth = 1.5f
-                )
+            for (x in 0 until width) {
+                if (isCutoffLine) {
+                    pixels[y * width + x] = packRgb(0.16f, 0.15f, 0.12f)
+                    continue
+                }
+                val qx = (x / rowStep) * rowStep
+                val centerOffset = (qx - width * 0.5f) / (depth * 0.85f + 0.35f)
+                val worldX = (centerOffset / 6f).roundToInt()
+                val worldZ = ((1f / (depth + 0.18f)) * 9f).roundToInt()
+                val pattern = ((worldX * 19 + worldZ * 31) and 0x7F) / 127f
+                val isGrass = ((worldX + worldZ) % 3 == 0) || pattern > 0.55f
+
+                var r: Float
+                var g: Float
+                var b: Float
+                if (isGrass) {
+                    r = (0.31f + pattern * 0.10f).coerceIn(0.20f, 0.54f)
+                    g = (0.48f + pattern * 0.16f).coerceIn(0.30f, 0.72f)
+                    b = (0.20f + pattern * 0.08f).coerceIn(0.10f, 0.38f)
+                } else {
+                    r = (0.46f + pattern * 0.12f).coerceIn(0.30f, 0.64f)
+                    g = (0.37f + pattern * 0.09f).coerceIn(0.22f, 0.52f)
+                    b = (0.24f + pattern * 0.07f).coerceIn(0.14f, 0.38f)
+                }
+
+                val shade = (1f - depth) * 0.32f
+                r += (0.17f - r) * shade
+                g += (0.15f - g) * shade
+                b += (0.12f - b) * shade
+
+                if (!sharpPixels && detailLevel != TextureDetailLevel.ORIGINAL) {
+                    val blend = (detailLevel.stepIndex * 0.17f).coerceIn(0.18f, 0.68f)
+                    r += (0.38f - r) * blend
+                    g += (0.35f - g) * blend
+                    b += (0.22f - b) * blend
+                }
+
+                pixels[y * width + x] = packRgb(r, g, b)
             }
         }
     }
 
-    // Subtle vignette gradient at top & bottom for depth
-    drawRect(
-        brush = Brush.verticalGradient(
-            colors = listOf(
-                Color.Black.copy(alpha = 0.25f),
-                Color.Transparent,
-                Color.Black.copy(alpha = 0.30f)
-            )
-        ),
-        size = size
-    )
+    val bmp = Bitmap.createBitmap(pixels, width, height, Bitmap.Config.ARGB_8888)
+    return bmp.asImageBitmap()
 }
 
-private fun lerpColor(start: Color, stop: Color, fraction: Float): Color {
-    val t = fraction.coerceIn(0f, 1f)
-    return Color(
-        red = start.red + (stop.red - start.red) * t,
-        green = start.green + (stop.green - start.green) * t,
-        blue = start.blue + (stop.blue - start.blue) * t,
-        alpha = 1f
-    )
+private fun packRgb(r: Float, g: Float, b: Float): Int {
+    val ri = (r.coerceIn(0f, 1f) * 255f).toInt() and 0xFF
+    val gi = (g.coerceIn(0f, 1f) * 255f).toInt() and 0xFF
+    val bi = (b.coerceIn(0f, 1f) * 255f).toInt() and 0xFF
+    return (0xFF shl 24) or (ri shl 16) or (gi shl 8) or bi
 }

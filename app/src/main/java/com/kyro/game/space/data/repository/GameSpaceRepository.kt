@@ -149,11 +149,13 @@ class GameSpaceRepository(
 
     init {
         try {
-            com.kyro.game.space.data.executor.AdbNativeBridge.initialize(context)
             val savedHost = prefs.getString("last_adb_host", "127.0.0.1") ?: "127.0.0.1"
             val savedPort = prefs.getInt("last_adb_port", 5555)
             val wasInjected = prefs.getBoolean("daemon_was_injected", false)
             executorFactory.libAdbExecutor.restoreSavedEndpoint(savedHost, savedPort, wasInjected)
+            if (executionMethod.value == ExecutionMethod.MANUAL_ADB) {
+                com.kyro.game.space.data.executor.AdbNativeBridge.initialize(context)
+            }
         } catch (_: Throwable) {
         }
         try {
@@ -161,7 +163,11 @@ class GameSpaceRepository(
         } catch (_: Throwable) {
         }
         try {
-            updateShizukuStatus()
+            if (executionMethod.value == ExecutionMethod.SHIZUKU) {
+                updateShizukuStatus()
+            } else {
+                updateConnectionOverview()
+            }
         } catch (_: Throwable) {
         }
         try {
@@ -170,11 +176,7 @@ class GameSpaceRepository(
         }
         scope.launch {
             try {
-                checkDaemonAndSyncState()
-            } catch (_: Throwable) {
-            }
-            try {
-                checkRootStatus(triggerPrompt = false)
+                refreshActiveExecutionMethodStatus()
             } catch (_: Throwable) {
             }
             if (hadUnconfirmedResolutionOnStartup) {
@@ -190,7 +192,9 @@ class GameSpaceRepository(
         }
         scope.launch {
             adbScanner.state.collect {
-                updateConnectionOverview()
+                if (executionMethod.value == ExecutionMethod.MANUAL_ADB) {
+                    updateConnectionOverview()
+                }
             }
         }
     }
@@ -327,18 +331,17 @@ class GameSpaceRepository(
 
         val scaleStr = formatDownscaleClean(sanitizedConfig.downscaleFactor)
         val fpsStr = sanitizedConfig.fpsLimit.toString()
-        val texSummary = if (tex.isActive) " • Tex: ${tex.detailLevel.label}" else ""
         val shellCmd = sanitizedConfig.buildShellCommand(packageName)
 
         return try {
             val cmdRes = executeCommand(shellCmd)
             if (cmdRes.isSuccess) {
-                Result.success("Applied ${sanitizedConfig.mode.label} (${scaleStr}x • ${fpsStr} FPS • ${sanitizedConfig.apiTarget.shortTag}$texSummary)")
+                Result.success("Applied ${sanitizedConfig.mode.label} (${scaleStr}x • ${fpsStr} FPS • ${sanitizedConfig.apiTarget.shortTag}) via ${executionMethod.value.name}")
             } else {
-                Result.success("Saved ${sanitizedConfig.mode.label} (${scaleStr}x • ${fpsStr} FPS • ${sanitizedConfig.apiTarget.shortTag}$texSummary). Connect Shizuku/Daemon/Root to apply.")
+                Result.success("Saved ${sanitizedConfig.mode.label} (${scaleStr}x • ${fpsStr} FPS • ${sanitizedConfig.apiTarget.shortTag}). Grant ${executionMethod.value.name} permission to apply.")
             }
         } catch (_: Throwable) {
-            Result.success("Saved ${sanitizedConfig.mode.label} (${scaleStr}x • ${fpsStr} FPS • ${sanitizedConfig.apiTarget.shortTag}$texSummary)")
+            Result.success("Saved ${sanitizedConfig.mode.label} (${scaleStr}x • ${fpsStr} FPS • ${sanitizedConfig.apiTarget.shortTag})")
         }
     }
 
@@ -361,11 +364,11 @@ class GameSpaceRepository(
             if (launchIntent != null) {
                 scope.launch {
                     val cfg = getGameConfig(packageName)
-                    if (cfg.mode != GameOptimizationMode.STANDARD ||
-                        cfg.downscaleFactor < 0.99f ||
-                        cfg.textureConfig.isActive
-                    ) {
-                        saveAndApplyGameConfig(packageName, cfg)
+                    if (cfg.mode != GameOptimizationMode.STANDARD || cfg.downscaleFactor < 0.99f) {
+                        executeCommand(cfg.buildShellCommand(packageName))
+                    }
+                    if (cfg.textureConfig.isActive) {
+                        executeCommand(cfg.textureConfig.buildShellCommand(packageName))
                     }
                     recordGameLaunch(packageName)
                 }
@@ -512,17 +515,29 @@ class GameSpaceRepository(
         }
     }
 
-    // Device telemetry & daemon status monitoring
+    // Device telemetry & active execution method monitoring
     private fun startPeriodicMonitoring() {
         scope.launch {
             var tick = 0
             while (isActive) {
                 sampleDeviceStats()
                 tick++
-                if (tick % 2 == 0 && (!executorFactory.libAdbExecutor.isDaemonInjected || tick % 6 == 0)) {
-                    try {
-                        checkDaemonAndSyncState()
-                    } catch (_: Throwable) {
+                when (executionMethod.value) {
+                    ExecutionMethod.MANUAL_ADB -> {
+                        if (tick % 2 == 0 && (!executorFactory.libAdbExecutor.isDaemonInjected || tick % 6 == 0)) {
+                            try {
+                                checkDaemonAndSyncState()
+                            } catch (_: Throwable) {
+                            }
+                        }
+                    }
+                    ExecutionMethod.SHIZUKU -> {
+                        if (tick % 4 == 0) {
+                            updateShizukuStatus()
+                        }
+                    }
+                    ExecutionMethod.ROOT -> {
+                        // Root status is verified on selection or explicit check
                     }
                 }
                 delay(refreshIntervalMs.value)
@@ -813,7 +828,7 @@ class GameSpaceRepository(
         val statusMsg = if (res.isSuccess) {
             "Active Stable DNS: ${preset.name} (${preset.primaryIp} • DoT: ${preset.privateDnsHostname}) applied via ${executionMethod.value.name}."
         } else {
-            "Switched telemetry target to ${preset.name} (${preset.primaryIp}). Connect Shizuku/Daemon to apply system-wide Private DNS."
+            "Switched telemetry target to ${preset.name} (${preset.primaryIp}). Grant ${executionMethod.value.name} permission to apply system-wide Private DNS."
         }
 
         _networkOptimizerState.value = _networkOptimizerState.value.copy(
@@ -1021,13 +1036,25 @@ class GameSpaceRepository(
             )
 
             updateConnectionOverview(shizuku = shizuku)
-            scope.launch {
+        } catch (_: Throwable) {
+        }
+    }
+
+    suspend fun refreshActiveExecutionMethodStatus() {
+        when (executionMethod.value) {
+            ExecutionMethod.SHIZUKU -> {
+                updateShizukuStatus()
+            }
+            ExecutionMethod.MANUAL_ADB -> {
                 try {
-                    checkDaemonAndSyncState()
+                    com.kyro.game.space.data.executor.AdbNativeBridge.initialize(context)
                 } catch (_: Throwable) {
                 }
+                checkDaemonAndSyncState()
             }
-        } catch (_: Throwable) {
+            ExecutionMethod.ROOT -> {
+                checkRootStatus(triggerPrompt = false)
+            }
         }
     }
 
@@ -1137,7 +1164,7 @@ class GameSpaceRepository(
 
     suspend fun injectManualAdbDaemon(): Result<String> {
         val res = executorFactory.libAdbExecutor.injectPersistentDaemonWithExecutor(
-            fallbackExecutor = executorFactory.shizukuExecutor
+            fallbackExecutor = null
         )
         if (res.isSuccess) {
             saveDaemonPrefs(
@@ -1291,12 +1318,10 @@ class GameSpaceRepository(
         executionMethod.value = method
         prefs.edit().putString("execution_method", method.name).apply()
         updateConnectionOverview()
-        if (method == ExecutionMethod.ROOT) {
-            scope.launch {
-                try {
-                    checkRootStatus(triggerPrompt = false)
-                } catch (_: Throwable) {
-                }
+        scope.launch {
+            try {
+                refreshActiveExecutionMethodStatus()
+            } catch (_: Throwable) {
             }
         }
     }
@@ -1747,7 +1772,22 @@ class GameSpaceRepository(
         if (cleanPkg.isNotEmpty()) {
             val existingGameCfg = getGameConfig(cleanPkg)
             val updatedGameCfg = existingGameCfg.copy(textureConfig = config)
-            saveAndApplyGameConfig(cleanPkg, updatedGameCfg)
+            val gameSerialized = String.format(
+                Locale.US,
+                "%s|%.2f|%d|%s|%s|%s|%b|%b",
+                updatedGameCfg.mode.name,
+                updatedGameCfg.downscaleFactor,
+                updatedGameCfg.fpsLimit,
+                updatedGameCfg.apiTarget.name,
+                config.preset.name,
+                config.detailLevel.name,
+                config.sharpPixels,
+                config.hardDistanceCutoff
+            )
+            prefs.edit().putString("game_cfg_$cleanPkg", gameSerialized).apply()
+            _gameConfigs.value = _gameConfigs.value.toMutableMap().apply {
+                put(cleanPkg, updatedGameCfg)
+            }
         }
 
         val cmd = config.buildShellCommand(cleanPkg)
@@ -1761,7 +1801,7 @@ class GameSpaceRepository(
         val msg = if (cmdRes?.isSuccess == true) {
             "Applied ${config.summaryBadge} to $targetDesc via ${executionMethod.value.name}."
         } else {
-            "Saved ${config.summaryBadge} for $targetDesc. Connect Shizuku/Daemon/Root to apply live."
+            "Saved ${config.summaryBadge} for $targetDesc. Grant ${executionMethod.value.name} permission to apply live."
         }
 
         _textureTunerState.value = _textureTunerState.value.copy(

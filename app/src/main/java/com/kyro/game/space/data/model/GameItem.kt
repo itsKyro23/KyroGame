@@ -60,7 +60,7 @@ data class GameCustomConfig(
         val fpsStr = fpsLimit.toString()
         val modeId = mode.systemModeId
 
-        val baseCmd = when (apiTarget) {
+        return when (apiTarget) {
             GameApiTarget.ANDROID_16_PLUS -> {
                 "cmd game set --mode $modeId --downscale $scaleStr --fps $fpsStr $packageName"
             }
@@ -72,11 +72,6 @@ data class GameCustomConfig(
                     "device_config put game_overlay $packageName $overlaySpec; cmd game mode $modeId $packageName 2>/dev/null || true"
                 }
             }
-        }
-        return if (textureConfig.isActive) {
-            "$baseCmd; ${textureConfig.buildShellCommand(packageName)}"
-        } else {
-            baseCmd
         }
     }
 }
@@ -102,12 +97,7 @@ data class GameItem(
     val formattedConfigSummary: String
         get() {
             val scaleStr = "${formatDownscaleClean(customConfig.downscaleFactor)}x"
-            val texTag = if (customConfig.textureConfig.isActive) {
-                " • Tex: ${customConfig.textureConfig.detailLevel.label}"
-            } else {
-                ""
-            }
-            return "${customConfig.mode.label} • $scaleStr • ${customConfig.fpsLimit} FPS • ${customConfig.apiTarget.shortTag}$texTag"
+            return "${customConfig.mode.label} • $scaleStr • ${customConfig.fpsLimit} FPS • ${customConfig.apiTarget.shortTag}"
         }
 
     companion object {

@@ -68,7 +68,6 @@ fun HomeScreen(
     onRequestNotification: () -> Unit,
     onNavigateToApps: () -> Unit,
     onNavigateToNetworkOptimizer: () -> Unit = {},
-    onNavigateToTextureTuner: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -77,8 +76,8 @@ fun HomeScreen(
     var showPairingDialog by remember { mutableStateOf(false) }
     var customizingGame by remember { mutableStateOf<GameItem?>(null) }
 
-    androidx.compose.runtime.LaunchedEffect(Unit) {
-        repository.checkDaemonAndSyncState()
+    androidx.compose.runtime.LaunchedEffect(overview.method) {
+        repository.refreshActiveExecutionMethodStatus()
     }
 
     LazyColumn(
@@ -93,19 +92,31 @@ fun HomeScreen(
             ConnectionStatusCard(
                 overview = overview,
                 onReconnect = {
-                    repository.updateShizukuStatus()
                     scope.launch {
-                        if (overview.method == ExecutionMethod.ROOT) {
-                            val rootInfo = repository.checkRootStatus(triggerPrompt = true)
-                            Toast.makeText(context, rootInfo.statusMessage, Toast.LENGTH_SHORT).show()
-                        } else {
-                            val alive = repository.checkDaemonAndSyncState()
-                            val msg = if (alive) {
-                                "Persistent Daemon is Active & Connected!"
-                            } else {
-                                "Refreshed connection & daemon status"
+                        when (overview.method) {
+                            ExecutionMethod.SHIZUKU -> {
+                                repository.updateShizukuStatus()
+                                val shizuku = repository.connectionState.value.shizuku
+                                val msg = when {
+                                    shizuku.isPermissionGranted -> "Shizuku connected & permission verified!"
+                                    shizuku.isRunning -> "Shizuku is running. Grant permission to execute commands."
+                                    else -> "Shizuku service is not running."
+                                }
+                                Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
                             }
-                            Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                            ExecutionMethod.MANUAL_ADB -> {
+                                val alive = repository.checkDaemonAndSyncState()
+                                val msg = if (alive) {
+                                    "Persistent Daemon is Active & Connected!"
+                                } else {
+                                    "Refreshed Wireless ADB / Daemon status"
+                                }
+                                Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                            }
+                            ExecutionMethod.ROOT -> {
+                                val rootInfo = repository.checkRootStatus(triggerPrompt = true)
+                                Toast.makeText(context, rootInfo.statusMessage, Toast.LENGTH_SHORT).show()
+                            }
                         }
                     }
                 },
@@ -275,14 +286,17 @@ fun HomeScreen(
 
         // Section D: Required Permissions
         item {
+            val isSelectedExecMethodGranted = when (overview.method) {
+                ExecutionMethod.SHIZUKU -> overview.shizuku.isPermissionGranted
+                ExecutionMethod.MANUAL_ADB -> overview.manualAdb.isDaemonInjected || overview.manualAdb.isConnected
+                ExecutionMethod.ROOT -> overview.root.isRootGranted
+            }
             RequiredPermissionsCard(
-                isShizukuGranted = overview.shizuku.isPermissionGranted ||
-                    overview.manualAdb.isDaemonInjected ||
-                    overview.manualAdb.isConnected ||
-                    overview.root.isRootGranted,
+                isShizukuGranted = isSelectedExecMethodGranted,
                 isUsageAccessGranted = isUsageAccessGranted,
                 isOverlayGranted = isOverlayGranted,
                 isNotificationGranted = isNotificationGranted,
+                executionMethod = overview.method,
                 onRequestShizuku = {
                     when (overview.method) {
                         ExecutionMethod.MANUAL_ADB -> {
@@ -344,10 +358,6 @@ fun HomeScreen(
                     val msg = res.getOrElse { "Saved profile for ${liveGame.appName}" }
                     Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
                 }
-            },
-            onOpenTextureTuner = { pkg ->
-                customizingGame = null
-                onNavigateToTextureTuner(pkg)
             }
         )
     }
