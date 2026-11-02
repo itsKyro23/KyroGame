@@ -171,11 +171,11 @@ data class TextureConfig(
 
     val summaryBadge: String
         get() = if (!isActive) {
-            "Original (Native • ${driverMode.shortLabel})"
+            "Original (Native)"
         } else {
             val edgeTag = if (sharpPixels) "Sharp Pixel" else "Smooth Clay"
             val distTag = if (hardDistanceCutoff) " • Hard Cutoff" else ""
-            "${preset.shortLabel} (${detailLevel.label} • $edgeTag$distTag • ${driverMode.shortLabel})"
+            "${preset.shortLabel} (${detailLevel.label} • $edgeTag$distTag • ANGLE)"
         }
 
     /**
@@ -514,7 +514,7 @@ data class TextureTunerState(
     val isCheckingCompatibility: Boolean = false,
     val isApplying: Boolean = false,
     val isAppliedLive: Boolean = false,
-    val statusMessage: String = "Select a target game, choose a texture preset or ANGLE driver mode, and tap Save & Apply."
+    val statusMessage: String = "Select a target game, choose a texture preset or customize detail, and tap Save & Apply (ANGLE Driver auto-enabled)."
 )
 
 object GpuTextureCompatibilityProbe {

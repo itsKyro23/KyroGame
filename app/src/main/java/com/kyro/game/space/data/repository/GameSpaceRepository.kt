@@ -1955,17 +1955,23 @@ class GameSpaceRepository(
         config: TextureConfig = _textureTunerState.value.currentConfig
     ): Result<String> = withContext(Dispatchers.IO) {
         val cleanPkg = packageName.trim()
+        val effectiveConfig = if (config.isActive) {
+            config.copy(driverMode = AngleDriverMode.ANGLE)
+        } else {
+            config.copy(driverMode = AngleDriverMode.DEFAULT)
+        }
+
         _textureTunerState.value = _textureTunerState.value.copy(
             selectedTargetPackage = cleanPkg,
-            currentConfig = config,
+            currentConfig = effectiveConfig,
             isApplying = true
         )
 
-        persistTextureConfigLocally(cleanPkg, config)
+        persistTextureConfigLocally(cleanPkg, effectiveConfig)
 
         // Start or release the dedicated offscreen EGL14 + SurfaceTexture + GLES20 session
-        if (config.isActive) {
-            eglTextureSession.activateSession(config)
+        if (effectiveConfig.isActive) {
+            eglTextureSession.activateSession(effectiveConfig)
         } else {
             eglTextureSession.releaseSession()
         }
@@ -1987,7 +1993,7 @@ class GameSpaceRepository(
             keepPackages = homePkgs
         )
 
-        val cmd = config.buildShellCommand(
+        val cmd = effectiveConfig.buildShellCommand(
             packageName = cleanPkg,
             additionalTargetPackages = homePkgs,
             existingAngleMap = existingAngleMap,
@@ -2001,10 +2007,10 @@ class GameSpaceRepository(
 
         val appliedOk = cmdRes?.isSuccess == true
         prefs.edit()
-            .putBoolean("tex_session_live", appliedOk && config.isActive)
+            .putBoolean("tex_session_live", appliedOk && effectiveConfig.isActive)
             .putString(
                 "tex_active_keeper_cmd",
-                if (appliedOk && config.isActive) config.buildRuntimeKeeperCommand(cleanPkg) else ""
+                if (appliedOk && effectiveConfig.isActive) effectiveConfig.buildRuntimeKeeperCommand(cleanPkg) else ""
             )
             .apply()
 
@@ -2013,7 +2019,7 @@ class GameSpaceRepository(
                 keepPackage = cleanPkg,
                 keepPackages = homePkgs
             ).toMutableMap()
-            val expectedVal = if (config.isActive) config.driverMode.settingValue else "default"
+            val expectedVal = if (effectiveConfig.isActive) effectiveConfig.driverMode.settingValue else "default"
             if (cleanPkg.isNotEmpty()) {
                 verified.putIfAbsent(cleanPkg, expectedVal)
             } else {
@@ -2037,13 +2043,13 @@ class GameSpaceRepository(
         }
 
         val msg = if (appliedOk) {
-            "Applied ${config.summaryBadge} to $targetDesc via ${executionMethod.value.name}."
+            "Applied ${effectiveConfig.summaryBadge} to $targetDesc via ${executionMethod.value.name}."
         } else {
-            "Saved ${config.summaryBadge} for $targetDesc. Connect ${executionMethod.value.name} to apply live."
+            "Saved ${effectiveConfig.summaryBadge} for $targetDesc. Connect ${executionMethod.value.name} to apply live."
         }
 
         _textureTunerState.value = _textureTunerState.value.copy(
-            currentConfig = config,
+            currentConfig = effectiveConfig,
             compatibility = updatedCompat,
             isApplying = false,
             isAppliedLive = appliedOk,

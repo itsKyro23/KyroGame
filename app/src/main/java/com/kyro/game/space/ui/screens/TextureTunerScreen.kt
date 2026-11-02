@@ -168,11 +168,11 @@ fun TextureTunerScreen(
         }
 
     val targetSubtitle = if (selectedGameItem != null) {
-        "${selectedGameItem.packageName} • ${config.driverMode.label}"
+        "${selectedGameItem.packageName} • ANGLE Driver"
     } else if (tunerState.selectedTargetPackage.isNotBlank()) {
-        "${tunerState.selectedTargetPackage} • ${config.driverMode.label}"
+        "${tunerState.selectedTargetPackage} • ANGLE Driver"
     } else {
-        "Applies to all added Game Space Home games via ${config.driverMode.shortLabel}"
+        "Applies to all added Game Space Home games via ANGLE Driver"
     }
 
     LazyColumn(
@@ -502,7 +502,7 @@ fun TextureTunerScreen(
                                     .padding(10.dp)
                             ) {
                                 Text(
-                                    text = "${config.filterModeLabel} • LOD $lodFormatted • ${config.driverMode.shortLabel}",
+                                    text = "${config.filterModeLabel} • LOD $lodFormatted • ANGLE",
                                     style = MaterialTheme.typography.labelSmall,
                                     fontFamily = FontFamily.Monospace,
                                     fontWeight = FontWeight.Bold,
@@ -666,144 +666,6 @@ fun TextureTunerScreen(
             }
         }
 
-        // 3. Graphics Driver Mode Card (Focused on Selected Game)
-        item {
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .testTag("angle_driver_card"),
-                shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant
-                ),
-                border = BorderStroke(
-                    1.dp,
-                    if (config.driverMode == AngleDriverMode.ANGLE) {
-                        TextureSkyBlue.copy(alpha = 0.55f)
-                    } else {
-                        MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)
-                    }
-                ),
-                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        Surface(
-                            shape = RoundedCornerShape(12.dp),
-                            color = TextureSkyBlue.copy(alpha = 0.16f),
-                            modifier = Modifier.size(40.dp)
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Icon(
-                                    imageVector = Icons.Default.Memory,
-                                    contentDescription = null,
-                                    tint = TextureSkyBlue,
-                                    modifier = Modifier.size(22.dp)
-                                )
-                            }
-                        }
-
-                        Column(
-                            modifier = Modifier.weight(1f),
-                            verticalArrangement = Arrangement.spacedBy(2.dp)
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
-                            ) {
-                                Text(
-                                    text = "GRAPHICS DRIVER MODE",
-                                    style = MaterialTheme.typography.labelMedium,
-                                    fontWeight = FontWeight.Black,
-                                    letterSpacing = 0.6.sp,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                                Surface(
-                                    shape = RoundedCornerShape(6.dp),
-                                    color = TextureSkyBlue.copy(alpha = 0.2f)
-                                ) {
-                                    Text(
-                                        text = config.driverMode.shortLabel.uppercase(),
-                                        style = MaterialTheme.typography.labelSmall,
-                                        fontWeight = FontWeight.Bold,
-                                        color = TextureSkyBlue,
-                                        fontSize = 9.sp,
-                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                    )
-                                }
-                            }
-                            Text(
-                                text = "Target: $targetTitle • ${config.driverMode.description}",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                fontSize = 11.sp,
-                                lineHeight = 14.sp
-                            )
-                        }
-                    }
-
-                    // Driver Mode Segmented Selector (ANGLE / Native / Default)
-                    Surface(
-                        shape = RoundedCornerShape(14.dp),
-                        color = Color(0xFF0C0E14),
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(4.dp),
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            AngleDriverMode.entries.forEach { mode ->
-                                val isSelected = config.driverMode == mode
-                                Surface(
-                                    onClick = {
-                                        repository.updateTextureConfigDraft(
-                                            config.copy(driverMode = mode)
-                                        )
-                                    },
-                                    shape = RoundedCornerShape(10.dp),
-                                    color = if (isSelected) TextureSkyBlue else Color.Transparent,
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .height(38.dp)
-                                        .testTag("angle_driver_mode_${mode.name.lowercase()}")
-                                ) {
-                                    Box(
-                                        contentAlignment = Alignment.Center,
-                                        modifier = Modifier.padding(horizontal = 4.dp)
-                                    ) {
-                                        Text(
-                                            text = mode.shortLabel,
-                                            style = MaterialTheme.typography.labelSmall,
-                                            fontWeight = FontWeight.Bold,
-                                            color = if (isSelected) {
-                                                Color(0xFF061320)
-                                            } else {
-                                                MaterialTheme.colorScheme.onSurfaceVariant
-                                            },
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis,
-                                            fontSize = 11.sp
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
 
         // 4. Quick Presets + Texture Detail Slider + Sharp Pixels & Hard Distance Cutoff Toggles
         item {
