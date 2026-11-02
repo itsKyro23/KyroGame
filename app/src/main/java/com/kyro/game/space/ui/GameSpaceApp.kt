@@ -309,6 +309,7 @@ fun GameSpaceApp(
                 Button(
                     onClick = {
                         showExitDialog = false
+                        repository.deactivateTextureSessionOnExit()
                         (context as? Activity)?.finish()
                     },
                     shape = RoundedCornerShape(12.dp),

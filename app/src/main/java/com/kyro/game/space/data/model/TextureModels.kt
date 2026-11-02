@@ -179,20 +179,110 @@ data class TextureConfig(
         }
 
     /**
-     * Builds the shell command sequence for applying Lightweight Texture + ANGLE / GPU Driver
-     * strictly for the selected target game (or added Home games when Global is selected).
+     * Returns the exact Google ANGLE Vulkan (`vk_features.json`) feature flag name
+     * for the active texture mipmap LOD offset level (1..4).
+     */
+    val angleLodOffsetFeature: String
+        get() {
+            val effective = if (detailLevel == TextureDetailLevel.ORIGINAL && isActive) {
+                TextureDetailLevel.RETRO
+            } else {
+                detailLevel
+            }
+            return when (effective) {
+                TextureDetailLevel.ORIGINAL -> ""
+                TextureDetailLevel.LIGHT -> "forceTextureLodOffset1"
+                TextureDetailLevel.RETRO -> "forceTextureLodOffset2"
+                TextureDetailLevel.BLOCKY -> "forceTextureLodOffset3"
+                TextureDetailLevel.EXTREME -> "forceTextureLodOffset4"
+            }
+        }
+
+    /**
+     * Colon-separated `debug.angle.feature_overrides_enabled` value (always <= 69 chars,
+     * safely below Android `setprop` PROP_VALUE_MAX = 91 bytes).
+     */
+    val angleEnabledFeaturesString: String
+        get() = if (!isActive) {
+            ""
+        } else {
+            buildList {
+                val lodFeature = angleLodOffsetFeature
+                if (lodFeature.isNotEmpty()) {
+                    add(lodFeature)
+                }
+                if (sharpPixels) {
+                    add("forceNearestFiltering")
+                }
+                if (hardDistanceCutoff) {
+                    add("forceNearestMipFiltering")
+                }
+            }.joinToString(":")
+        }
+
+    /**
+     * Colon-separated `debug.angle.feature_overrides_disabled` value (always <= 46 chars,
+     * safely below Android `setprop` PROP_VALUE_MAX = 91 bytes).
+     */
+    val angleDisabledFeaturesString: String
+        get() = if (!isActive) {
+            ""
+        } else {
+            buildList {
+                if (!sharpPixels) {
+                    add("forceNearestFiltering")
+                }
+                if (!hardDistanceCutoff) {
+                    add("forceNearestMipFiltering")
+                }
+            }.joinToString(":")
+        }
+
+    /**
+     * Lightweight runtime keeper command executed periodically while Kyro Game Space is running
+     * and right before launching a game so OEM game boosters (e.g. HyperOS Joyose / MediaTek GED)
+     * do not clear the active ANGLE Vulkan texture overrides.
+     */
+    fun buildRuntimeKeeperCommand(packageName: String = ""): String {
+        if (!isActive) return "true"
+        val cleanPkg = packageName.trim()
+        val enabledStr = angleEnabledFeaturesString
+        val disabledStr = angleDisabledFeaturesString
+        val allAngleFlag = if (driverMode == AngleDriverMode.ANGLE) "1" else "0"
+        val gameOverlayCmd = if (cleanPkg.isNotEmpty() && driverMode == AngleDriverMode.ANGLE) {
+            "device_config put game_overlay $cleanPkg mode=2,useAngle=true:mode=3,useAngle=true 2>/dev/null || true; " +
+                "cmd game mode 2 $cleanPkg 2>/dev/null || true; "
+        } else ""
+
+        return "settings delete global angle_debug_package 2>/dev/null || true; " +
+            "settings put global show_angle_in_use_dialog_box 0 2>/dev/null || true; " +
+            "settings put global angle_gl_driver_all_angle $allAngleFlag 2>/dev/null || true; " +
+            gameOverlayCmd +
+            (if (enabledStr.isNotEmpty()) {
+                "setprop debug.angle.feature_overrides_enabled $enabledStr 2>/dev/null || true; "
+            } else {
+                "setprop debug.angle.feature_overrides_enabled \"\" 2>/dev/null || true; "
+            }) +
+            (if (disabledStr.isNotEmpty()) {
+                "setprop debug.angle.feature_overrides_disabled $disabledStr 2>/dev/null || true"
+            } else {
+                "setprop debug.angle.feature_overrides_disabled \"\" 2>/dev/null || true"
+            })
+    }
+
+    /**
+     * Builds the full shell command sequence for applying Lightweight Texture + ANGLE / GPU Driver
+     * for the selected target game (or added Home games when Global is selected).
      *
-     * Key Android GraphicsEnvironment requirements:
-     * 1. `angle_debug_package` must NEVER be set to the target game package (it specifies an external
-     *    ANGLE APK provider, and setting it to a game package causes `GraphicsEnvironment.setupAngle`
-     *    to fail to locate `libGLESv2_angle.so` and abort loading ANGLE). We always delete it.
-     * 2. Both `angle_whitelist` (Android 10-11) and `angle_allowlist` (Android 12-16) are populated
-     *    alongside 1-to-1 matching `angle_gl_driver_selection_pkgs` and `angle_gl_driver_selection_values`.
-     * 3. When `AngleDriverMode.ANGLE` is active, conflicting vendor `game_driver_opt_in_apps` /
-     *    `updatable_driver_production_opt_in_apps` entries are cleared so the vendor driver does not
-     *    override ANGLE.
-     * 4. Real `libANGLE` feature overrides (`debug.angle.feature_overrides_enabled` / `disabled`)
-     *    and HWUI/EGL/Vulkan texture LOD bias & filter properties are applied.
+     * Key Android GraphicsEnvironment & libANGLE mechanisms:
+     * 1. `angle_debug_package` is deleted so Android never looks for an external debug ANGLE APK.
+     * 2. `angle_gl_driver_all_angle 1` (while Kyro Game Space is active in ANGLE mode) +
+     *    `angle_gl_driver_selection_pkgs` / `angle_gl_driver_selection_values` +
+     *    `angle_whitelist` / `angle_allowlist` + `device_config put game_overlay <pkg> mode=2,useAngle=true:mode=3,useAngle=true`
+     *    ensure ANGLE (`libGLESv2_angle.so`) is loaded for the game across AOSP and OEM ROMs.
+     * 3. Real `libANGLE` Vulkan feature overrides (`forceTextureLodOffset1..4`,
+     *    `forceNearestFiltering`, `forceNearestMipFiltering`) are applied via `debug.angle.feature_overrides_enabled`
+     *    and `debug.angle.feature_overrides_disabled` (kept strictly under the 91-byte `setprop` limit).
      */
     fun buildShellCommand(
         packageName: String = "",
@@ -240,11 +330,18 @@ data class TextureConfig(
                     "settings delete global angle_gl_driver_selection_values 2>/dev/null || true; "
             }
 
+            val resetOverlayCmd = if (targetSet.isNotEmpty()) {
+                targetSet.joinToString("; ") {
+                    "device_config delete game_overlay $it 2>/dev/null || true; cmd game mode 1 $it 2>/dev/null || true"
+                } + "; "
+            } else ""
+
             val forceStopCmd = if (forceStopTargets && targetSet.isNotEmpty()) {
                 "; " + targetSet.joinToString("; ") { "am force-stop $it 2>/dev/null || true" }
             } else ""
 
             return resetAngleCmd +
+                resetOverlayCmd +
                 "settings delete global angle_debug_package 2>/dev/null || true; " +
                 "settings delete global gpu_debug_app 2>/dev/null || true; " +
                 "settings delete global enable_gpu_debug_layers 2>/dev/null || true; " +
@@ -285,37 +382,28 @@ data class TextureConfig(
         val anisoVal = if (sharpPixels || hardDistanceCutoff) "1" else "2"
         val rendererVal = if (driverMode == AngleDriverMode.ANGLE) "skiavk" else "opengl"
 
-        // Real libANGLE feature overrides parsed by GetEnvironmentVarOrUnCachedAndroidProperty
-        val angleEnabledFeatures = buildList {
-            add("disableAnisotropicFiltering")
-            if (sharpPixels) {
-                add("forceNearestFiltering")
-                add("forceNearestMipFiltering")
-            } else {
-                add("preferLinearFilterForYUV")
-            }
-            if (effectiveDetail.stepIndex >= 2) {
-                add("compressVertexData")
-            }
-        }.joinToString(":")
+        // Real libANGLE Vulkan feature overrides (strictly <= 69 chars so setprop never fails)
+        val angleEnabledFeatures = angleEnabledFeaturesString
+        val angleDisabledFeatures = angleDisabledFeaturesString
 
-        val angleDisabledFeatures = buildList {
-            if (sharpPixels || hardDistanceCutoff) {
-                add("supportsEXTFilterCubic")
-                add("supportsSamplerFilterMinmax")
-            }
-        }.joinToString(":")
-
+        val allAngleFlag = if (driverMode == AngleDriverMode.ANGLE) "1" else "0"
         val angleSelectionCmd = if (pkgsCsv.isNotEmpty()) {
-            "settings put global angle_gl_driver_all_angle 0 2>/dev/null || true; " +
+            "settings put global angle_gl_driver_all_angle $allAngleFlag 2>/dev/null || true; " +
                 "settings put global angle_gl_driver_selection_pkgs $pkgsCsv 2>/dev/null || true; " +
                 "settings put global angle_gl_driver_selection_values $valsCsv 2>/dev/null || true; " +
                 "settings put global angle_whitelist $allowlistCsv 2>/dev/null || true; " +
                 "settings put global angle_allowlist $allowlistCsv 2>/dev/null || true; "
         } else {
-            val allAngleFlag = if (driverMode == AngleDriverMode.ANGLE) "1" else "0"
             "settings put global angle_gl_driver_all_angle $allAngleFlag 2>/dev/null || true; "
         }
+
+        // Configure Android GameManagerService game_overlay with useAngle=true for target packages
+        val gameOverlayAngleCmd = if (driverMode == AngleDriverMode.ANGLE && targetSet.isNotEmpty()) {
+            targetSet.joinToString("; ") { pkg ->
+                "device_config put game_overlay $pkg mode=2,useAngle=true:mode=3,useAngle=true 2>/dev/null || true; " +
+                    "cmd game mode 2 $pkg 2>/dev/null || true"
+            } + "; "
+        } else ""
 
         // Prevent vendor Game Driver from overriding ANGLE when ANGLE mode is selected
         val vendorDriverCmd = when (driverMode) {
@@ -351,18 +439,21 @@ data class TextureConfig(
         return "settings delete global angle_debug_package 2>/dev/null || true; " +
             "settings put global show_angle_in_use_dialog_box 0 2>/dev/null || true; " +
             angleSelectionCmd +
+            gameOverlayAngleCmd +
             vendorDriverCmd +
             gpuDebugAppCmd +
             "settings put global gpu_texture_lod_bias $biasStr 2>/dev/null || true; " +
             "settings put global gpu_texture_filter_mode $filterModeLabel 2>/dev/null || true; " +
             "settings put global angle_texture_lod_bias $biasStr 2>/dev/null || true; " +
             "settings put global angle_texture_filter $filterStr 2>/dev/null || true; " +
-            "setprop debug.angle.feature_overrides_enabled $angleEnabledFeatures 2>/dev/null || true; " +
+            "setprop debug.angle.feature_overrides_enabled \"\" 2>/dev/null || true; " +
+            "setprop debug.angle.feature_overrides_disabled \"\" 2>/dev/null || true; " +
+            (if (angleEnabledFeatures.isNotEmpty()) {
+                "setprop debug.angle.feature_overrides_enabled $angleEnabledFeatures 2>/dev/null || true; "
+            } else "") +
             (if (angleDisabledFeatures.isNotEmpty()) {
                 "setprop debug.angle.feature_overrides_disabled $angleDisabledFeatures 2>/dev/null || true; "
-            } else {
-                "setprop debug.angle.feature_overrides_disabled \"\" 2>/dev/null || true; "
-            }) +
+            } else "") +
             "setprop debug.hwui.texture_lod_bias $biasStr 2>/dev/null || true; " +
             "setprop debug.egl.texture_lod_bias $biasStr 2>/dev/null || true; " +
             "setprop debug.angle.texture_lod_bias $biasStr 2>/dev/null || true; " +
@@ -376,6 +467,19 @@ data class TextureConfig(
             "setprop debug.egl.force_msaa 0 2>/dev/null || true; " +
             "setprop debug.hwui.renderer $rendererVal 2>/dev/null || true; " +
             forceStopCmd
+    }
+
+    companion object {
+        /**
+         * Cleans up the global ANGLE / feature override session when Kyro Game Space is closed,
+         * so reopening a game after closing Kyro Game Space returns graphics to normal.
+         */
+        fun buildSessionExitCleanupCommand(): String {
+            return "settings put global angle_gl_driver_all_angle 0 2>/dev/null || true; " +
+                "settings delete global angle_debug_package 2>/dev/null || true; " +
+                "setprop debug.angle.feature_overrides_enabled \"\" 2>/dev/null || true; " +
+                "setprop debug.angle.feature_overrides_disabled \"\" 2>/dev/null || true"
+        }
     }
 }
 
@@ -432,13 +536,13 @@ object GpuTextureCompatibilityProbe {
     }
 
     /**
-     * Thread-safe, zero-EGL-context hardware GPU + ANGLE driver probe.
-     * Avoids touching EGL14 default display so Compose RenderThread is never interrupted or crashed.
+     * Thread-safe hardware GPU + ANGLE driver probe.
      */
     fun inspectDeviceCompatibility(
         context: Context,
         selectedTargetPackage: String = "",
-        angleMapOverride: Map<String, String>? = null
+        angleMapOverride: Map<String, String>? = null,
+        eglRendererOverride: String = ""
     ): DeviceTextureCompatibility {
         var glVersionText = "OpenGL ES 3.2"
         var majorGl = 3
@@ -532,6 +636,7 @@ object GpuTextureCompatibilityProbe {
         }
 
         val renderer = when {
+            eglRendererOverride.isNotBlank() -> eglRendererOverride
             vendor.contains("Qualcomm", ignoreCase = true) -> {
                 if (hwBoard.isNotBlank()) "Adreno GPU ($hwBoard)" else "Adreno GPU"
             }

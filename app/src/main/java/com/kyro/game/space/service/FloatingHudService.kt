@@ -673,6 +673,30 @@ class FloatingHudService : Service() {
         return combined.coerceIn(8, 98)
     }
 
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        try {
+            val prefs = getSharedPreferences("kyro_game_space_prefs", Context.MODE_PRIVATE)
+            if (prefs.getBoolean("tex_session_live", false)) {
+                prefs.edit().putBoolean("tex_session_live", false).putString("tex_active_keeper_cmd", "").apply()
+                val method = getActiveExecutionMethod()
+                val executor = executorFactory.getExecutor(method)
+                Thread {
+                    try {
+                        kotlinx.coroutines.runBlocking {
+                            executor.execute(
+                                com.kyro.game.space.data.model.TextureConfig.buildSessionExitCleanupCommand(),
+                                timeoutMs = 1500L
+                            )
+                        }
+                    } catch (_: Throwable) {
+                    }
+                }.start()
+            }
+        } catch (_: Throwable) {
+        }
+        super.onTaskRemoved(rootIntent)
+    }
+
     override fun onDestroy() {
         stopChoreographerMonitor()
         telemetryJob?.cancel()

@@ -127,12 +127,32 @@ class ExampleRobolectricTest {
         driverMode = com.kyro.game.space.data.model.AngleDriverMode.ANGLE
       )
       assertEquals("GL_NEAREST_MIPMAP_NEAREST", blockyConfig.filterModeLabel)
+      assertEquals("forceTextureLodOffset3", blockyConfig.angleLodOffsetFeature)
+      assertEquals(
+        "forceTextureLodOffset3:forceNearestFiltering:forceNearestMipFiltering",
+        blockyConfig.angleEnabledFeaturesString
+      )
+      assertTrue(blockyConfig.angleEnabledFeaturesString.length < 91)
+      assertTrue(blockyConfig.angleDisabledFeaturesString.length < 91)
+
+      val smoothConfig = com.kyro.game.space.data.model.TextureConfig(
+        preset = com.kyro.game.space.data.model.TextureQuickPreset.SMOOTH,
+        detailLevel = com.kyro.game.space.data.model.TextureDetailLevel.BLOCKY,
+        sharpPixels = false,
+        hardDistanceCutoff = false,
+        driverMode = com.kyro.game.space.data.model.AngleDriverMode.ANGLE
+      )
+      assertEquals("forceTextureLodOffset3", smoothConfig.angleEnabledFeaturesString)
+      assertEquals("forceNearestFiltering:forceNearestMipFiltering", smoothConfig.angleDisabledFeaturesString)
+
       val shellCmd = blockyConfig.buildShellCommand("com.dts.freefiremax")
       assertTrue(shellCmd.contains("settings delete global angle_debug_package"))
+      assertTrue(shellCmd.contains("angle_gl_driver_all_angle 1"))
       assertTrue(shellCmd.contains("angle_gl_driver_selection_pkgs com.dts.freefiremax"))
       assertTrue(shellCmd.contains("angle_gl_driver_selection_values angle"))
       assertTrue(shellCmd.contains("angle_allowlist com.dts.freefiremax"))
-      assertTrue(shellCmd.contains("debug.angle.feature_overrides_enabled"))
+      assertTrue(shellCmd.contains("device_config put game_overlay com.dts.freefiremax mode=2,useAngle=true:mode=3,useAngle=true"))
+      assertTrue(shellCmd.contains("setprop debug.angle.feature_overrides_enabled forceTextureLodOffset3:forceNearestFiltering:forceNearestMipFiltering"))
       assertTrue(shellCmd.contains("debug.hwui.texture_lod_bias 3.00"))
       assertTrue(!shellCmd.contains("com.garena.game.codm"))
 
@@ -145,6 +165,10 @@ class ExampleRobolectricTest {
       repo.resetTextureConfigToOriginal("com.dts.freefiremax")
       assertEquals(com.kyro.game.space.data.model.TextureDetailLevel.ORIGINAL, repo.textureTunerState.value.currentConfig.detailLevel)
       assertEquals(false, repo.textureTunerState.value.currentConfig.isActive)
+
+      val exitCleanupCmd = com.kyro.game.space.data.model.TextureConfig.buildSessionExitCleanupCommand()
+      assertTrue(exitCleanupCmd.contains("angle_gl_driver_all_angle 0"))
+      assertTrue(exitCleanupCmd.contains("debug.angle.feature_overrides_enabled \"\""))
     } finally {
       repo.cleanUp()
     }

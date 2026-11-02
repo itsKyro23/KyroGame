@@ -110,6 +110,7 @@ class GameSpaceRepository(
 
     private val _textureTunerState = MutableStateFlow(loadInitialTextureTunerState())
     val textureTunerState: StateFlow<TextureTunerState> = _textureTunerState.asStateFlow()
+    val eglTextureSession = com.kyro.game.space.data.model.EglTextureSessionController()
 
     @Volatile
     private var isProbingDaemon: Boolean = true
@@ -173,6 +174,12 @@ class GameSpaceRepository(
         } catch (_: Throwable) {
         }
         try {
+            if (_textureTunerState.value.isAppliedLive && _textureTunerState.value.currentConfig.isActive) {
+                eglTextureSession.activateSession(_textureTunerState.value.currentConfig)
+            }
+        } catch (_: Throwable) {
+        }
+        try {
             startPeriodicMonitoring()
         } catch (_: Throwable) {
         }
@@ -211,8 +218,29 @@ class GameSpaceRepository(
         }
     }
 
+    fun deactivateTextureSessionOnExit() {
+        try {
+            eglTextureSession.destroy()
+            val wasLive = prefs.getBoolean("tex_session_live", false)
+            if (wasLive || _textureTunerState.value.isAppliedLive) {
+                prefs.edit().putBoolean("tex_session_live", false).apply()
+                Thread {
+                    try {
+                        kotlinx.coroutines.runBlocking {
+                            executorFactory.getExecutor(executionMethod.value)
+                                .execute(TextureConfig.buildSessionExitCleanupCommand(), timeoutMs = 1500L)
+                        }
+                    } catch (_: Throwable) {
+                    }
+                }.start()
+            }
+        } catch (_: Throwable) {
+        }
+    }
+
     fun cleanUp() {
         try {
+            eglTextureSession.destroy()
             resolutionCountdownJob?.cancel()
             adbScanner.close()
             scope.cancel()
@@ -550,6 +578,23 @@ class GameSpaceRepository(
             while (isActive) {
                 sampleDeviceStats()
                 tick++
+                // Keep Lightweight Texture ANGLE & GLES session active while Kyro Game Space is running
+                if (tick % 3 == 0) {
+                    val texState = _textureTunerState.value
+                    if (texState.isAppliedLive && texState.currentConfig.isActive) {
+                        try {
+                            if (!eglTextureSession.isSessionActive) {
+                                eglTextureSession.activateSession(texState.currentConfig)
+                            }
+                            val keeperCmd = texState.currentConfig.buildRuntimeKeeperCommand(
+                                texState.selectedTargetPackage
+                            )
+                            executorFactory.getExecutor(executionMethod.value)
+                                .execute(keeperCmd, timeoutMs = 1800L)
+                        } catch (_: Throwable) {
+                        }
+                    }
+                }
                 when (executionMethod.value) {
                     ExecutionMethod.MANUAL_ADB -> {
                         if (tick % 2 == 0 && (!executorFactory.libAdbExecutor.isDaemonInjected || tick % 6 == 0)) {
@@ -1854,7 +1899,8 @@ class GameSpaceRepository(
         val baseCompat = GpuTextureCompatibilityProbe.inspectDeviceCompatibility(
             context = context,
             selectedTargetPackage = selectedPkg,
-            angleMapOverride = liveAngleMap
+            angleMapOverride = liveAngleMap,
+            eglRendererOverride = eglTextureSession.activeGlRenderer
         )
         _textureTunerState.value = _textureTunerState.value.copy(
             compatibility = baseCompat,
@@ -1917,6 +1963,13 @@ class GameSpaceRepository(
 
         persistTextureConfigLocally(cleanPkg, config)
 
+        // Start or release the dedicated offscreen EGL14 + SurfaceTexture + GLES20 session
+        if (config.isActive) {
+            eglTextureSession.activateSession(config)
+        } else {
+            eglTextureSession.releaseSession()
+        }
+
         // When Global is selected, gather all games added to the user's Game Space Home
         val homePkgs = if (cleanPkg.isEmpty()) {
             try {
@@ -1947,6 +2000,14 @@ class GameSpaceRepository(
         }
 
         val appliedOk = cmdRes?.isSuccess == true
+        prefs.edit()
+            .putBoolean("tex_session_live", appliedOk && config.isActive)
+            .putString(
+                "tex_active_keeper_cmd",
+                if (appliedOk && config.isActive) config.buildRuntimeKeeperCommand(cleanPkg) else ""
+            )
+            .apply()
+
         val postApplyMap = if (appliedOk) {
             val verified = collectExistingAngleMapWithShellFallback(
                 keepPackage = cleanPkg,
@@ -1966,7 +2027,8 @@ class GameSpaceRepository(
         val updatedCompat = GpuTextureCompatibilityProbe.inspectDeviceCompatibility(
             context = context,
             selectedTargetPackage = cleanPkg,
-            angleMapOverride = postApplyMap
+            angleMapOverride = postApplyMap,
+            eglRendererOverride = eglTextureSession.activeGlRenderer
         )
         val targetDesc = if (cleanPkg.isEmpty()) {
             if (homePkgs.isNotEmpty()) "Global GPU (${homePkgs.size} Home games)" else "Global GPU Profile"

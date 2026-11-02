@@ -59,16 +59,28 @@ data class GameCustomConfig(
         val scaleStr = formatDownscaleClean(downscaleFactor)
         val fpsStr = fpsLimit.toString()
         val modeId = mode.systemModeId
+        val useAngleActive = textureConfig.isActive && textureConfig.driverMode == AngleDriverMode.ANGLE
 
         return when (apiTarget) {
             GameApiTarget.ANDROID_16_PLUS -> {
-                "cmd game set --mode $modeId --downscale $scaleStr --fps $fpsStr $packageName"
+                val baseCmd = "cmd game set --mode $modeId --downscale $scaleStr --fps $fpsStr $packageName"
+                if (useAngleActive) {
+                    val overlaySpec = "mode=2,downscaleFactor=$scaleStr,fps=$fpsStr,useAngle=true:mode=3,downscaleFactor=$scaleStr,fps=$fpsStr,useAngle=true"
+                    "$baseCmd; device_config put game_overlay $packageName $overlaySpec 2>/dev/null || true"
+                } else {
+                    baseCmd
+                }
             }
             GameApiTarget.ANDROID_15_BELOW -> {
                 if (mode == GameOptimizationMode.STANDARD && downscaleFactor >= 0.99f) {
-                    "device_config delete game_overlay $packageName; cmd game mode 1 $packageName 2>/dev/null || true"
+                    if (useAngleActive) {
+                        "device_config put game_overlay $packageName mode=2,useAngle=true:mode=3,useAngle=true; cmd game mode 2 $packageName 2>/dev/null || true"
+                    } else {
+                        "device_config delete game_overlay $packageName; cmd game mode 1 $packageName 2>/dev/null || true"
+                    }
                 } else {
-                    val overlaySpec = "mode=2,downscaleFactor=$scaleStr,fps=$fpsStr:mode=3,downscaleFactor=$scaleStr,fps=$fpsStr"
+                    val angleSuffix = if (useAngleActive) ",useAngle=true" else ""
+                    val overlaySpec = "mode=2,downscaleFactor=$scaleStr,fps=$fpsStr$angleSuffix:mode=3,downscaleFactor=$scaleStr,fps=$fpsStr$angleSuffix"
                     "device_config put game_overlay $packageName $overlaySpec; cmd game mode $modeId $packageName 2>/dev/null || true"
                 }
             }

@@ -70,6 +70,9 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
+        if (isFinishing) {
+            repository.deactivateTextureSessionOnExit()
+        }
         repository.cleanUp()
         super.onDestroy()
     }
