@@ -29,6 +29,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Info
@@ -84,8 +85,9 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.kyro.game.space.data.model.AngleDriverMode
+import com.kyro.game.space.data.model.AngleDriverPackages
 import com.kyro.game.space.data.model.GameItem
-import com.kyro.game.space.data.model.TextureConfig
 import com.kyro.game.space.data.model.TextureDetailLevel
 import com.kyro.game.space.data.model.TextureQuickPreset
 import com.kyro.game.space.data.repository.GameSpaceRepository
@@ -94,6 +96,7 @@ import com.kyro.game.space.ui.theme.KyroGreen
 import com.kyro.game.space.ui.theme.KyroOrange
 import com.kyro.game.space.util.AppIconCache
 import kotlinx.coroutines.launch
+import java.util.Locale
 import kotlin.math.floor
 import kotlin.math.roundToInt
 
@@ -123,7 +126,7 @@ fun TextureTunerScreen(
 
     val effectiveSplit = if (isHoldingBefore) 1.0f else splitFraction
 
-    // Pre-computed lightweight bitmaps (128x80 px) so Canvas drawing is 2 GPU texture blits per frame (zero lag!)
+    // Pre-computed lightweight bitmaps so Canvas drawing is 2 GPU texture blits per frame (zero lag)
     val beforePreviewBitmap = remember {
         buildScenePreviewBitmap(
             detailLevel = TextureDetailLevel.ORIGINAL,
@@ -147,7 +150,7 @@ fun TextureTunerScreen(
     val afterFilterQuality = if (config.sharpPixels || config.detailLevel == TextureDetailLevel.ORIGINAL) {
         FilterQuality.None
     } else {
-        FilterQuality.Low
+        FilterQuality.Medium
     }
 
     val selectedGameItem = remember(tunerState.selectedTargetPackage, allApps) {
@@ -166,11 +169,22 @@ fun TextureTunerScreen(
         }
 
     val targetSubtitle = if (selectedGameItem != null) {
-        "Active target for ${selectedGameItem.appName}"
+        "${selectedGameItem.packageName} • ${config.driverMode.label}"
     } else if (tunerState.selectedTargetPackage.isNotBlank()) {
-        "Target package: ${tunerState.selectedTargetPackage}"
+        "${tunerState.selectedTargetPackage} • ${config.driverMode.label}"
     } else {
-        "Applies to all OpenGL ES & Vulkan games on device"
+        "Applies to all added Game Space games & CODM via ${config.driverMode.shortLabel}"
+    }
+
+    val installedCodmApps = remember(allApps, compat.detectedCodmPackages) {
+        val fromHome = allApps.filter { AngleDriverPackages.isCodmPackage(it.packageName) }
+        if (fromHome.isNotEmpty()) {
+            fromHome.map { "${it.appName} (${it.packageName})" }
+        } else if (compat.detectedCodmPackages.isNotEmpty()) {
+            compat.detectedCodmPackages
+        } else {
+            emptyList()
+        }
     }
 
     LazyColumn(
@@ -180,7 +194,7 @@ fun TextureTunerScreen(
         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 96.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        // 1. Device & GPU Compatibility Card
+        // 1. Device, GPU & ANGLE Driver Compatibility Card
         item {
             Card(
                 modifier = Modifier
@@ -231,7 +245,7 @@ fun TextureTunerScreen(
                                 horizontalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
                                 Text(
-                                    text = "GPU COMPATIBILITY",
+                                    text = "GPU & ANGLE DRIVER",
                                     style = MaterialTheme.typography.labelMedium,
                                     fontWeight = FontWeight.Black,
                                     letterSpacing = 0.6.sp,
@@ -322,12 +336,16 @@ fun TextureTunerScreen(
                             enabled = true
                         )
                         CompatibilityFeatureChip(
-                            label = "Mipmap LOD Bias",
-                            enabled = compat.supportsLodBiasControl
+                            label = compat.angleDriverStatus,
+                            enabled = compat.supportsAngleDriver
                         )
                         CompatibilityFeatureChip(
-                            label = "Sharp Pixel Filter",
-                            enabled = compat.supportsNearestNeighborFilter
+                            label = if (compat.codmAngleActive) "CODM ANGLE: Active" else "CODM ANGLE: Ready",
+                            enabled = compat.codmAngleActive || config.codmAngleSupport
+                        )
+                        CompatibilityFeatureChip(
+                            label = "Mipmap LOD Bias",
+                            enabled = compat.supportsLodBiasControl
                         )
                         CompatibilityFeatureChip(
                             label = "Mode: ${connectionOverview.method.name}",
@@ -365,7 +383,7 @@ fun TextureTunerScreen(
                         .padding(14.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    // Split-Screen Interactive Canvas (Hardware-Accelerated Pre-Cached Bitmap Blit)
+                    // Split-Screen Interactive Canvas
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -461,6 +479,13 @@ fun TextureTunerScreen(
                             }
 
                             // Top-right "AFTER" label
+                            val afterBadgeLabel = if (isHoldingBefore) {
+                                "HOLDING: BEFORE"
+                            } else if (!config.isActive) {
+                                "AFTER (ORIGINAL)"
+                            } else {
+                                "AFTER (${config.preset.shortLabel.uppercase()} • ${config.detailLevel.label.uppercase()})"
+                            }
                             Surface(
                                 shape = RoundedCornerShape(8.dp),
                                 color = Color.Black.copy(alpha = 0.65f),
@@ -469,13 +494,35 @@ fun TextureTunerScreen(
                                     .padding(10.dp)
                             ) {
                                 Text(
-                                    text = if (isHoldingBefore) "HOLDING: BEFORE" else "AFTER (${config.detailLevel.label.uppercase()})",
+                                    text = afterBadgeLabel,
                                     style = MaterialTheme.typography.labelSmall,
                                     fontWeight = FontWeight.Black,
                                     color = if (isHoldingBefore) KyroOrange else TextureSkyBlue,
                                     letterSpacing = 0.8.sp,
                                     fontSize = 10.sp,
                                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                )
+                            }
+
+                            // Bottom-left Live Filter & LOD Telemetry Pill
+                            val lodFormatted = String.format(Locale.US, "+%.1f", config.detailLevel.lodBias)
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = Color.Black.copy(alpha = 0.68f),
+                                modifier = Modifier
+                                    .align(Alignment.BottomStart)
+                                    .padding(10.dp)
+                            ) {
+                                Text(
+                                    text = "${config.filterModeLabel} • LOD $lodFormatted • ${config.driverMode.shortLabel}",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontFamily = FontFamily.Monospace,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White.copy(alpha = 0.9f),
+                                    fontSize = 9.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp)
                                 )
                             }
 
@@ -631,7 +678,204 @@ fun TextureTunerScreen(
             }
         }
 
-        // 3. Quick Presets + Texture Detail Slider + Sharp Pixels & Hard Distance Cutoff Toggles
+        // 3. ANGLE Support Driver & CODM Integration Card (Zayon Method)
+        item {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("angle_driver_codm_card"),
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant
+                ),
+                border = BorderStroke(
+                    1.dp,
+                    if (config.driverMode == AngleDriverMode.ANGLE) {
+                        TextureSkyBlue.copy(alpha = 0.55f)
+                    } else {
+                        MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)
+                    }
+                ),
+                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = TextureSkyBlue.copy(alpha = 0.16f),
+                            modifier = Modifier.size(40.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = Icons.Default.Memory,
+                                    contentDescription = null,
+                                    tint = TextureSkyBlue,
+                                    modifier = Modifier.size(22.dp)
+                                )
+                            }
+                        }
+
+                        Column(
+                            modifier = Modifier.weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(2.dp)
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Text(
+                                    text = "ANGLE SUPPORT DRIVER",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.Black,
+                                    letterSpacing = 0.6.sp,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Surface(
+                                    shape = RoundedCornerShape(6.dp),
+                                    color = TextureSkyBlue.copy(alpha = 0.2f)
+                                ) {
+                                    Text(
+                                        text = config.driverMode.shortLabel.uppercase(),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = TextureSkyBlue,
+                                        fontSize = 9.sp,
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                    )
+                                }
+                            }
+                            Text(
+                                text = "Required for Lightweight Texture & CODM OpenGL-on-Vulkan driver routing",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontSize = 11.sp,
+                                lineHeight = 14.sp
+                            )
+                        }
+                    }
+
+                    // Driver Mode Segmented Selector (ANGLE / Native / Default)
+                    Surface(
+                        shape = RoundedCornerShape(14.dp),
+                        color = Color(0xFF0C0E14),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(4.dp),
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            AngleDriverMode.entries.forEach { mode ->
+                                val isSelected = config.driverMode == mode
+                                Surface(
+                                    onClick = {
+                                        repository.updateTextureConfigDraft(
+                                            config.copy(driverMode = mode)
+                                        )
+                                    },
+                                    shape = RoundedCornerShape(10.dp),
+                                    color = if (isSelected) TextureSkyBlue else Color.Transparent,
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(38.dp)
+                                        .testTag("angle_driver_mode_${mode.name.lowercase()}")
+                                ) {
+                                    Box(
+                                        contentAlignment = Alignment.Center,
+                                        modifier = Modifier.padding(horizontal = 4.dp)
+                                    ) {
+                                        Text(
+                                            text = mode.shortLabel,
+                                            style = MaterialTheme.typography.labelSmall,
+                                            fontWeight = FontWeight.Bold,
+                                            color = if (isSelected) {
+                                                Color(0xFF061320)
+                                            } else {
+                                                MaterialTheme.colorScheme.onSurfaceVariant
+                                            },
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                            fontSize = 11.sp
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // CODM ANGLE Support Driver Toggle Card
+                    FilterToggleCard(
+                        title = "CODM ANGLE Support Driver",
+                        description = if (installedCodmApps.isNotEmpty()) {
+                            "Detected: ${installedCodmApps.joinToString(", ")}. Injects CODM into angle_gl_driver_selection_pkgs (angle) & angle_whitelist."
+                        } else {
+                            "Adds Call of Duty: Mobile (Garena, Global, VNG, KR, CN) into Android ANGLE driver & whitelist."
+                        },
+                        checked = config.codmAngleSupport,
+                        onCheckedChange = { enabled ->
+                            repository.updateTextureConfigDraft(
+                                config.copy(
+                                    codmAngleSupport = enabled,
+                                    driverMode = if (enabled) AngleDriverMode.ANGLE else config.driverMode
+                                )
+                            )
+                        },
+                        testTag = "toggle_codm_angle_support",
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    // Quick 1-Tap CODM + ANGLE Injection Button
+                    OutlinedButton(
+                        onClick = {
+                            scope.launch {
+                                val res = repository.injectCodmAngleDriverSupport()
+                                val msg = res.getOrElse { "CODM added to ANGLE Support Driver!" }
+                                Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                            }
+                        },
+                        shape = RoundedCornerShape(12.dp),
+                        border = BorderStroke(1.dp, TextureSkyBlue.copy(alpha = 0.55f)),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            contentColor = TextureSkyBlue
+                        ),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(42.dp)
+                            .testTag("inject_codm_angle_btn")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Bolt,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp),
+                            tint = TextureSkyBlue
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = if (compat.codmAngleActive) {
+                                "Re-Inject CODM + Target Game to ANGLE Driver (Active)"
+                            } else {
+                                "Activate CODM in ANGLE Support Driver Now"
+                            },
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
+        }
+
+        // 4. Quick Presets + Texture Detail Slider + Sharp Pixels & Hard Distance Cutoff Toggles
         item {
             Card(
                 modifier = Modifier
@@ -652,13 +896,28 @@ fun TextureTunerScreen(
                 ) {
                     // QUICK PRESETS (Smooth / Retro / Total Blocky / Custom)
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text(
-                            text = "QUICK PRESETS",
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.Bold,
-                            letterSpacing = 1.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "QUICK PRESETS",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = 1.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                text = config.summaryBadge,
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = TextureSkyBlue,
+                                fontSize = 10.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
 
                         Surface(
                             shape = RoundedCornerShape(14.dp),
@@ -673,13 +932,21 @@ fun TextureTunerScreen(
                                 horizontalArrangement = Arrangement.spacedBy(4.dp)
                             ) {
                                 TextureQuickPreset.entries.forEach { preset ->
-                                    val isSelected = config.preset == preset
+                                    val isSelected = config.isActive && config.preset == preset
                                     Surface(
                                         onClick = {
                                             val updated = if (preset == TextureQuickPreset.CUSTOM) {
-                                                config.copy(preset = TextureQuickPreset.CUSTOM)
+                                                val nextDetail = if (config.detailLevel == TextureDetailLevel.ORIGINAL) {
+                                                    TextureDetailLevel.RETRO
+                                                } else {
+                                                    config.detailLevel
+                                                }
+                                                config.copy(
+                                                    preset = TextureQuickPreset.CUSTOM,
+                                                    detailLevel = nextDetail
+                                                )
                                             } else {
-                                                TextureConfig(
+                                                config.copy(
                                                     preset = preset,
                                                     detailLevel = preset.defaultDetail,
                                                     sharpPixels = preset.defaultSharpPixels,
@@ -733,7 +1000,7 @@ fun TextureTunerScreen(
                                 color = MaterialTheme.colorScheme.onSurface
                             )
                             Text(
-                                text = config.detailLevel.label,
+                                text = "${config.detailLevel.label} (${config.detailLevel.filterTag})",
                                 style = MaterialTheme.typography.titleSmall,
                                 fontWeight = FontWeight.Bold,
                                 color = TextureSkyBlue
@@ -827,17 +1094,23 @@ fun TextureTunerScreen(
                     ) {
                         FilterToggleCard(
                             title = "Sharp Pixels",
-                            description = "Crisp blocky pixel texture edges. Turn off for smooth bilinear blur.",
+                            description = "Crisp blocky pixel texture edges (GL_NEAREST). Turn off for smooth clay blur (GL_LINEAR).",
                             checked = config.sharpPixels,
                             onCheckedChange = { enabled ->
+                                val nextDetail = if (config.detailLevel == TextureDetailLevel.ORIGINAL) {
+                                    TextureDetailLevel.RETRO
+                                } else {
+                                    config.detailLevel
+                                }
                                 val matchedPreset = TextureQuickPreset.resolveMatchingPreset(
-                                    detailLevel = config.detailLevel,
+                                    detailLevel = nextDetail,
                                     sharpPixels = enabled,
                                     hardCutoff = config.hardDistanceCutoff
                                 )
                                 repository.updateTextureConfigDraft(
                                     config.copy(
                                         preset = matchedPreset,
+                                        detailLevel = nextDetail,
                                         sharpPixels = enabled
                                     )
                                 )
@@ -851,14 +1124,20 @@ fun TextureTunerScreen(
                             description = "Near-to-far mipmap detail transitions become sharply stepped.",
                             checked = config.hardDistanceCutoff,
                             onCheckedChange = { enabled ->
+                                val nextDetail = if (config.detailLevel == TextureDetailLevel.ORIGINAL) {
+                                    TextureDetailLevel.BLOCKY
+                                } else {
+                                    config.detailLevel
+                                }
                                 val matchedPreset = TextureQuickPreset.resolveMatchingPreset(
-                                    detailLevel = config.detailLevel,
+                                    detailLevel = nextDetail,
                                     sharpPixels = config.sharpPixels,
                                     hardCutoff = enabled
                                 )
                                 repository.updateTextureConfigDraft(
                                     config.copy(
                                         preset = matchedPreset,
+                                        detailLevel = nextDetail,
                                         hardDistanceCutoff = enabled
                                     )
                                 )
@@ -866,6 +1145,46 @@ fun TextureTunerScreen(
                             testTag = "toggle_hard_distance_cutoff",
                             modifier = Modifier.fillMaxWidth()
                         )
+                    }
+
+                    // Live Status Banner
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = if (tunerState.isAppliedLive) {
+                            KyroGreen.copy(alpha = 0.12f)
+                        } else {
+                            TextureSkyBlue.copy(alpha = 0.10f)
+                        },
+                        border = BorderStroke(
+                            1.dp,
+                            if (tunerState.isAppliedLive) {
+                                KyroGreen.copy(alpha = 0.35f)
+                            } else {
+                                TextureSkyBlue.copy(alpha = 0.30f)
+                            }
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(
+                                imageVector = if (tunerState.isAppliedLive) Icons.Default.CheckCircle else Icons.Default.Info,
+                                contentDescription = null,
+                                tint = if (tunerState.isAppliedLive) KyroGreen else TextureSkyBlue,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Text(
+                                text = tunerState.statusMessage,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                fontSize = 11.sp,
+                                lineHeight = 15.sp,
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
                     }
 
                     // Helpful In-Game Tips
@@ -881,7 +1200,7 @@ fun TextureTunerScreen(
                                 modifier = Modifier.size(14.dp)
                             )
                             Text(
-                                text = "Changed while playing? Close the game and reopen it to reload GPU textures.",
+                                text = "Save & Apply automatically force-stops the target game so ANGLE & GPU textures reload cleanly.",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 fontSize = 11.sp
@@ -898,7 +1217,7 @@ fun TextureTunerScreen(
                                 modifier = Modifier.size(14.dp)
                             )
                             Text(
-                                text = "Most noticeable when in-game graphics quality is set to Smooth / Low.",
+                                text = "Most noticeable when in-game graphics quality is set to Smooth / Low with ANGLE enabled.",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 fontSize = 11.sp
@@ -942,7 +1261,7 @@ fun TextureTunerScreen(
                             onClick = {
                                 scope.launch {
                                     val res = repository.saveAndApplyTextureConfig()
-                                    val msg = res.getOrElse { "Texture settings saved & applied!" }
+                                    val msg = res.getOrElse { "Texture & ANGLE settings saved & applied!" }
                                     Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
                                 }
                             },
@@ -1053,7 +1372,7 @@ fun TextureTunerScreen(
                                         fontWeight = FontWeight.Bold
                                     )
                                     Text(
-                                        text = "System-wide OpenGL ES / HWUI / EGL LOD bias",
+                                        text = "System-wide ANGLE Driver, CODM & OpenGL ES LOD bias",
                                         style = MaterialTheme.typography.labelSmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
@@ -1112,6 +1431,7 @@ fun TextureTunerScreen(
                         val gameIconBitmap = remember(game.packageName) {
                             AppIconCache.getIcon(context, game.packageName)?.asImageBitmap()
                         }
+                        val isCodm = AngleDriverPackages.isCodmPackage(game.packageName)
                         Surface(
                             onClick = {
                                 repository.selectTextureTargetPackage(game.packageName)
@@ -1174,7 +1494,21 @@ fun TextureTunerScreen(
                                             overflow = TextOverflow.Ellipsis,
                                             modifier = Modifier.weight(1f, fill = false)
                                         )
-                                        if (game.isGame || game.isAddedToHome) {
+                                        if (isCodm) {
+                                            Surface(
+                                                shape = RoundedCornerShape(5.dp),
+                                                color = KyroGreen.copy(alpha = 0.18f)
+                                            ) {
+                                                Text(
+                                                    text = "ANGLE READY",
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = KyroGreen,
+                                                    fontSize = 8.sp,
+                                                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
+                                                )
+                                            }
+                                        } else if (game.isGame || game.isAddedToHome) {
                                             Surface(
                                                 shape = RoundedCornerShape(5.dp),
                                                 color = TextureSkyBlue.copy(alpha = 0.16f)
@@ -1320,9 +1654,10 @@ private fun FilterToggleCard(
 }
 
 /**
- * Generates a compact, pre-cached 120x76 ImageBitmap of the 3D Brick Wall + Grassy Ground scene.
- * Running this once in `remember` and drawing it with hardware-accelerated `drawImage` eliminates
- * thousands of per-frame Canvas `drawRect` calls so opening and dragging the preview has zero lag.
+ * Generates a pre-cached 120x76 ImageBitmap of the 3D Brick Wall + Grassy Ground scene.
+ * When `sharpPixels` is false (Smooth mode), it downsamples the mipmap buffer and applies real
+ * bilinear filtering (`createScaledBitmap(..., filter = true)`) so Smooth vs Retro vs Blocky
+ * produces an immediate, realistic visual difference with zero frame lag.
  */
 private fun buildScenePreviewBitmap(
     detailLevel: TextureDetailLevel,
@@ -1376,13 +1711,6 @@ private fun buildScenePreviewBitmap(
                     r = (0.56f + hash * 0.15f + grain).coerceIn(0.25f, 0.82f)
                     g = (0.45f + hash * 0.12f + grain).coerceIn(0.20f, 0.70f)
                     b = (0.35f + hash * 0.09f + grain).coerceIn(0.15f, 0.60f)
-                }
-
-                if (!sharpPixels && detailLevel != TextureDetailLevel.ORIGINAL) {
-                    val blend = (detailLevel.stepIndex * 0.16f).coerceIn(0.15f, 0.65f)
-                    r += (0.54f - r) * blend
-                    g += (0.45f - g) * blend
-                    b += (0.36f - b) * blend
                 }
 
                 pixels[y * width + x] = packRgb(r, g, b)
@@ -1440,20 +1768,20 @@ private fun buildScenePreviewBitmap(
                 g += (0.15f - g) * shade
                 b += (0.12f - b) * shade
 
-                if (!sharpPixels && detailLevel != TextureDetailLevel.ORIGINAL) {
-                    val blend = (detailLevel.stepIndex * 0.17f).coerceIn(0.18f, 0.68f)
-                    r += (0.38f - r) * blend
-                    g += (0.35f - g) * blend
-                    b += (0.22f - b) * blend
-                }
-
                 pixels[y * width + x] = packRgb(r, g, b)
             }
         }
     }
 
-    val bmp = Bitmap.createBitmap(pixels, width, height, Bitmap.Config.ARGB_8888)
-    return bmp.asImageBitmap()
+    val baseBmp = Bitmap.createBitmap(pixels, width, height, Bitmap.Config.ARGB_8888)
+    if (!sharpPixels && detailLevel != TextureDetailLevel.ORIGINAL) {
+        val downW = (width / stepBlock).coerceAtLeast(6)
+        val downH = (height / stepBlock).coerceAtLeast(4)
+        val mipBmp = Bitmap.createScaledBitmap(baseBmp, downW, downH, true)
+        val smoothBmp = Bitmap.createScaledBitmap(mipBmp, width, height, true)
+        return smoothBmp.asImageBitmap()
+    }
+    return baseBmp.asImageBitmap()
 }
 
 private fun packRgb(r: Float, g: Float, b: Float): Int {

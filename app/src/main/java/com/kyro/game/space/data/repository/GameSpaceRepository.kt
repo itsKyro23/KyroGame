@@ -40,6 +40,8 @@ import com.kyro.game.space.data.model.ResolutionPreset
 import com.kyro.game.space.data.model.ResolutionState
 import com.kyro.game.space.data.model.RootInfo
 import com.kyro.game.space.data.model.ShizukuInfo
+import com.kyro.game.space.data.model.AngleDriverMode
+import com.kyro.game.space.data.model.AngleDriverPackages
 import com.kyro.game.space.data.model.TextureConfig
 import com.kyro.game.space.data.model.TextureDetailLevel
 import com.kyro.game.space.data.model.TextureQuickPreset
@@ -274,11 +276,23 @@ class GameSpaceRepository(
                         ?: TextureDetailLevel.ORIGINAL
                     val sharp = parts[6].toBooleanStrictOrNull() ?: false
                     val hardCutoff = parts[7].toBooleanStrictOrNull() ?: false
+                    val driverMode = if (parts.size >= 9) {
+                        AngleDriverMode.entries.firstOrNull { it.name == parts[8] } ?: AngleDriverMode.ANGLE
+                    } else {
+                        AngleDriverMode.ANGLE
+                    }
+                    val codmAngle = if (parts.size >= 10) {
+                        parts[9].toBooleanStrictOrNull() ?: true
+                    } else {
+                        true
+                    }
                     TextureConfig(
                         preset = preset,
                         detailLevel = detail,
                         sharpPixels = sharp,
-                        hardDistanceCutoff = hardCutoff
+                        hardDistanceCutoff = hardCutoff,
+                        driverMode = driverMode,
+                        codmAngleSupport = codmAngle
                     )
                 } else {
                     TextureConfig()
@@ -304,29 +318,42 @@ class GameSpaceRepository(
 
     suspend fun saveAndApplyGameConfig(packageName: String, config: GameCustomConfig): Result<String> {
         val sanitizedScale = config.downscaleFactor.coerceIn(0.3f, 1.0f)
-        val sanitizedConfig = config.copy(downscaleFactor = sanitizedScale)
-        val tex = sanitizedConfig.textureConfig
+        // Preserve existing saved texture config for this package if the incoming config is inactive
+        val existingTex = parseTextureConfig(prefs.getString("tex_cfg_$packageName", null))
+        val effectiveTex = if (config.textureConfig.isActive) {
+            config.textureConfig
+        } else {
+            existingTex ?: config.textureConfig
+        }
+        val sanitizedConfig = config.copy(
+            downscaleFactor = sanitizedScale,
+            textureConfig = effectiveTex
+        )
         val serialized = String.format(
             Locale.US,
-            "%s|%.2f|%d|%s|%s|%s|%b|%b",
+            "%s|%.2f|%d|%s|%s|%s|%b|%b|%s|%b",
             sanitizedConfig.mode.name,
             sanitizedConfig.downscaleFactor,
             sanitizedConfig.fpsLimit,
             sanitizedConfig.apiTarget.name,
-            tex.preset.name,
-            tex.detailLevel.name,
-            tex.sharpPixels,
-            tex.hardDistanceCutoff
+            effectiveTex.preset.name,
+            effectiveTex.detailLevel.name,
+            effectiveTex.sharpPixels,
+            effectiveTex.hardDistanceCutoff,
+            effectiveTex.driverMode.name,
+            effectiveTex.codmAngleSupport
         )
-        prefs.edit()
-            .putString("game_cfg_$packageName", serialized)
-            .putString("tex_cfg_$packageName", serializeTextureConfig(tex))
-            .apply()
+        val editor = prefs.edit().putString("game_cfg_$packageName", serialized)
+        if (effectiveTex.isActive) {
+            editor.putString("tex_cfg_$packageName", serializeTextureConfig(effectiveTex))
+        }
+        editor.apply()
+
         _gameConfigs.value = _gameConfigs.value.toMutableMap().apply {
             put(packageName, sanitizedConfig)
         }
-        if (_textureTunerState.value.selectedTargetPackage == packageName) {
-            _textureTunerState.value = _textureTunerState.value.copy(currentConfig = tex)
+        if (_textureTunerState.value.selectedTargetPackage == packageName && effectiveTex.isActive) {
+            _textureTunerState.value = _textureTunerState.value.copy(currentConfig = effectiveTex)
         }
 
         val scaleStr = formatDownscaleClean(sanitizedConfig.downscaleFactor)
@@ -367,8 +394,16 @@ class GameSpaceRepository(
                     if (cfg.mode != GameOptimizationMode.STANDARD || cfg.downscaleFactor < 0.99f) {
                         executeCommand(cfg.buildShellCommand(packageName))
                     }
-                    if (cfg.textureConfig.isActive) {
-                        executeCommand(cfg.textureConfig.buildShellCommand(packageName))
+                    val activeTex = getTextureConfigForTarget(packageName)
+                    if (activeTex.isActive) {
+                        val existingAngle = GpuTextureCompatibilityProbe.readExistingAngleDriverMap(context)
+                        executeCommand(
+                            activeTex.buildShellCommand(
+                                packageName = packageName,
+                                existingAngleMap = existingAngle,
+                                forceStopTargets = false
+                            )
+                        )
                     }
                     recordGameLaunch(packageName)
                 }
@@ -1651,7 +1686,7 @@ class GameSpaceRepository(
     // =========================================================================
 
     private fun serializeTextureConfig(config: TextureConfig): String {
-        return "${config.preset.name}|${config.detailLevel.name}|${config.sharpPixels}|${config.hardDistanceCutoff}"
+        return "${config.preset.name}|${config.detailLevel.name}|${config.sharpPixels}|${config.hardDistanceCutoff}|${config.driverMode.name}|${config.codmAngleSupport}"
     }
 
     private fun parseTextureConfig(raw: String?): TextureConfig? {
@@ -1662,14 +1697,26 @@ class GameSpaceRepository(
                 val preset = TextureQuickPreset.entries.firstOrNull { it.name == parts[0] }
                     ?: TextureQuickPreset.RETRO
                 val detail = TextureDetailLevel.entries.firstOrNull { it.name == parts[1] }
-                    ?: TextureDetailLevel.ORIGINAL
-                val sharp = parts[2].toBooleanStrictOrNull() ?: false
+                    ?: TextureDetailLevel.RETRO
+                val sharp = parts[2].toBooleanStrictOrNull() ?: true
                 val hardCutoff = parts[3].toBooleanStrictOrNull() ?: false
+                val driverMode = if (parts.size >= 5) {
+                    AngleDriverMode.entries.firstOrNull { it.name == parts[4] } ?: AngleDriverMode.ANGLE
+                } else {
+                    AngleDriverMode.ANGLE
+                }
+                val codmSupport = if (parts.size >= 6) {
+                    parts[5].toBooleanStrictOrNull() ?: true
+                } else {
+                    true
+                }
                 TextureConfig(
                     preset = preset,
                     detailLevel = detail,
                     sharpPixels = sharp,
-                    hardDistanceCutoff = hardCutoff
+                    hardDistanceCutoff = hardCutoff,
+                    driverMode = driverMode,
+                    codmAngleSupport = codmSupport
                 )
             } else null
         } catch (_: Throwable) {
@@ -1685,69 +1732,181 @@ class GameSpaceRepository(
             preset = TextureQuickPreset.RETRO,
             detailLevel = TextureDetailLevel.RETRO,
             sharpPixels = true,
-            hardDistanceCutoff = false
+            hardDistanceCutoff = false,
+            driverMode = AngleDriverMode.ANGLE,
+            codmAngleSupport = true
         )
-        val savedConfig = parseTextureConfig(prefs.getString(key, null))
-            ?: if (savedTargetPkg.isNotBlank()) {
-                getGameConfig(savedTargetPkg).textureConfig.takeIf { it.isActive } ?: defaultRetro
-            } else {
-                defaultRetro
+        val rawSaved = parseTextureConfig(prefs.getString(key, null))
+        val savedConfig = when {
+            rawSaved != null && rawSaved.isActive -> rawSaved
+            savedTargetPkg.isNotBlank() && getGameConfig(savedTargetPkg).textureConfig.isActive -> {
+                getGameConfig(savedTargetPkg).textureConfig
             }
+            rawSaved != null -> rawSaved.copy(
+                preset = TextureQuickPreset.RETRO,
+                detailLevel = TextureDetailLevel.RETRO,
+                sharpPixels = true
+            )
+            else -> defaultRetro
+        }
 
         return TextureTunerState(
             selectedTargetPackage = savedTargetPkg,
             currentConfig = savedConfig,
             compatibility = compatibility,
-            statusMessage = "${compatibility.compatibilityBadge} • Ready to tune 3D texture mipmaps & pixel filtering."
+            isAppliedLive = compatibility.activeAnglePackagesCount > 0,
+            statusMessage = "${compatibility.compatibilityBadge} • Ready to apply ANGLE & Lightweight Texture."
         )
     }
 
     fun getTextureConfigForTarget(packageName: String): TextureConfig {
         val cleanPkg = packageName.trim()
         if (cleanPkg.isNotEmpty()) {
+            parseTextureConfig(prefs.getString("tex_cfg_$cleanPkg", null))
+                ?.takeIf { it.isActive }
+                ?.let { return it }
             val gameTex = getGameConfig(cleanPkg).textureConfig
             if (gameTex.isActive) return gameTex
-            parseTextureConfig(prefs.getString("tex_cfg_$cleanPkg", null))?.let { return it }
         }
         return parseTextureConfig(prefs.getString("tex_cfg_global", null))
+            ?.takeIf { it.isActive }
             ?: TextureConfig(
                 preset = TextureQuickPreset.RETRO,
                 detailLevel = TextureDetailLevel.RETRO,
                 sharpPixels = true,
-                hardDistanceCutoff = false
+                hardDistanceCutoff = false,
+                driverMode = AngleDriverMode.ANGLE,
+                codmAngleSupport = true
             )
+    }
+
+    private fun persistTextureConfigLocally(cleanPkg: String, config: TextureConfig) {
+        val serialized = serializeTextureConfig(config)
+        val prefKey = if (cleanPkg.isEmpty()) "tex_cfg_global" else "tex_cfg_$cleanPkg"
+        prefs.edit()
+            .putString("tex_selected_target_pkg", cleanPkg)
+            .putString(prefKey, serialized)
+            .apply()
+
+        if (cleanPkg.isNotEmpty()) {
+            val existingGameCfg = getGameConfig(cleanPkg)
+            val updatedGameCfg = existingGameCfg.copy(textureConfig = config)
+            val gameSerialized = String.format(
+                Locale.US,
+                "%s|%.2f|%d|%s|%s|%s|%b|%b|%s|%b",
+                updatedGameCfg.mode.name,
+                updatedGameCfg.downscaleFactor,
+                updatedGameCfg.fpsLimit,
+                updatedGameCfg.apiTarget.name,
+                config.preset.name,
+                config.detailLevel.name,
+                config.sharpPixels,
+                config.hardDistanceCutoff,
+                config.driverMode.name,
+                config.codmAngleSupport
+            )
+            prefs.edit().putString("game_cfg_$cleanPkg", gameSerialized).apply()
+            _gameConfigs.value = _gameConfigs.value.toMutableMap().apply {
+                put(cleanPkg, updatedGameCfg)
+            }
+        }
     }
 
     fun selectTextureTargetPackage(packageName: String) {
         val cleanPkg = packageName.trim()
-        prefs.edit().putString("tex_selected_target_pkg", cleanPkg).apply()
-        val cfg = getTextureConfigForTarget(cleanPkg)
+        val currentDraft = _textureTunerState.value.currentConfig
+        val savedTargetCfg = if (cleanPkg.isNotEmpty()) {
+            parseTextureConfig(prefs.getString("tex_cfg_$cleanPkg", null))?.takeIf { it.isActive }
+                ?: getGameConfig(cleanPkg).textureConfig.takeIf { it.isActive }
+        } else {
+            parseTextureConfig(prefs.getString("tex_cfg_global", null))?.takeIf { it.isActive }
+        }
+        // Keep the user's current active configuration if the newly selected target doesn't have one saved yet
+        val nextCfg = savedTargetCfg ?: if (currentDraft.isActive) {
+            currentDraft
+        } else {
+            TextureConfig(
+                preset = TextureQuickPreset.RETRO,
+                detailLevel = TextureDetailLevel.RETRO,
+                sharpPixels = true,
+                hardDistanceCutoff = false,
+                driverMode = AngleDriverMode.ANGLE,
+                codmAngleSupport = true
+            )
+        }
+        persistTextureConfigLocally(cleanPkg, nextCfg)
         val targetLabel = if (cleanPkg.isEmpty()) "Global System GPU" else cleanPkg
         _textureTunerState.value = _textureTunerState.value.copy(
             selectedTargetPackage = cleanPkg,
-            currentConfig = cfg,
-            statusMessage = "Loaded texture profile for $targetLabel (${cfg.summaryBadge})."
+            currentConfig = nextCfg,
+            isAppliedLive = false,
+            statusMessage = "Target set to $targetLabel (${nextCfg.summaryBadge}). Tap Save & Apply to activate."
         )
     }
 
     fun updateTextureConfigDraft(config: TextureConfig) {
+        val cleanPkg = _textureTunerState.value.selectedTargetPackage.trim()
+        persistTextureConfigLocally(cleanPkg, config)
         _textureTunerState.value = _textureTunerState.value.copy(
-            currentConfig = config
+            currentConfig = config,
+            isAppliedLive = false,
+            statusMessage = "Selected: ${config.summaryBadge} — Tap Save & Apply to inject into GPU & ANGLE driver."
         )
     }
 
     suspend fun refreshTextureCompatibility(): DeviceTextureCompatibility = withContext(Dispatchers.IO) {
         _textureTunerState.value = _textureTunerState.value.copy(
             isCheckingCompatibility = true,
-            statusMessage = "Scanning GPU hardware renderer, OpenGL ES / Vulkan extensions, and driver hooks..."
+            statusMessage = "Scanning GPU renderer, ANGLE Vulkan driver, and CODM driver hooks..."
         )
         val baseCompat = GpuTextureCompatibilityProbe.inspectDeviceCompatibility(context)
         _textureTunerState.value = _textureTunerState.value.copy(
             compatibility = baseCompat,
             isCheckingCompatibility = false,
-            statusMessage = "Device Check: ${baseCompat.compatibilityBadge} (${baseCompat.glEsVersion})"
+            statusMessage = "Device Check: ${baseCompat.compatibilityBadge}"
         )
         baseCompat
+    }
+
+    private suspend fun collectExistingAngleMapWithShellFallback(): Map<String, String> {
+        val localMap = GpuTextureCompatibilityProbe.readExistingAngleDriverMap(context)
+        if (localMap.isNotEmpty()) return localMap
+        return try {
+            val res = executeCommand(
+                "echo PKGS:\$(settings get global angle_gl_driver_selection_pkgs 2>/dev/null); " +
+                    "echo VALS:\$(settings get global angle_gl_driver_selection_values 2>/dev/null)"
+            )
+            if (res.isSuccess && res.stdout.isNotBlank()) {
+                val lines = res.stdout.lines()
+                val pkgsLine = lines.firstOrNull { it.startsWith("PKGS:") }?.removePrefix("PKGS:")?.trim().orEmpty()
+                val valsLine = lines.firstOrNull { it.startsWith("VALS:") }?.removePrefix("VALS:")?.trim().orEmpty()
+                if (pkgsLine.isNotEmpty() && pkgsLine != "null") {
+                    val parsed = LinkedHashMap<String, String>()
+                    val pkgs = pkgsLine.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+                    val vals = valsLine.split(",").map { it.trim() }
+                    for (i in pkgs.indices) {
+                        parsed[pkgs[i]] = vals.getOrNull(i)?.ifEmpty { "default" } ?: "default"
+                    }
+                    parsed
+                } else emptyMap()
+            } else emptyMap()
+        } catch (_: Throwable) {
+            emptyMap()
+        }
+    }
+
+    suspend fun injectCodmAngleDriverSupport(): Result<String> = withContext(Dispatchers.IO) {
+        val currentCfg = _textureTunerState.value.currentConfig.copy(
+            driverMode = AngleDriverMode.ANGLE,
+            codmAngleSupport = true,
+            detailLevel = if (_textureTunerState.value.currentConfig.detailLevel == TextureDetailLevel.ORIGINAL) {
+                TextureDetailLevel.RETRO
+            } else {
+                _textureTunerState.value.currentConfig.detailLevel
+            }
+        )
+        val currentPkg = _textureTunerState.value.selectedTargetPackage
+        saveAndApplyTextureConfig(packageName = currentPkg, config = currentCfg)
     }
 
     suspend fun saveAndApplyTextureConfig(
@@ -1761,52 +1920,44 @@ class GameSpaceRepository(
             isApplying = true
         )
 
-        val serialized = serializeTextureConfig(config)
-        val prefKey = if (cleanPkg.isEmpty()) "tex_cfg_global" else "tex_cfg_$cleanPkg"
-        prefs.edit()
-            .putString("tex_selected_target_pkg", cleanPkg)
-            .putString(prefKey, serialized)
-            .apply()
+        persistTextureConfigLocally(cleanPkg, config)
 
-        // Also synchronize with the game's GameCustomConfig if targeting a specific game
-        if (cleanPkg.isNotEmpty()) {
-            val existingGameCfg = getGameConfig(cleanPkg)
-            val updatedGameCfg = existingGameCfg.copy(textureConfig = config)
-            val gameSerialized = String.format(
-                Locale.US,
-                "%s|%.2f|%d|%s|%s|%s|%b|%b",
-                updatedGameCfg.mode.name,
-                updatedGameCfg.downscaleFactor,
-                updatedGameCfg.fpsLimit,
-                updatedGameCfg.apiTarget.name,
-                config.preset.name,
-                config.detailLevel.name,
-                config.sharpPixels,
-                config.hardDistanceCutoff
-            )
-            prefs.edit().putString("game_cfg_$cleanPkg", gameSerialized).apply()
-            _gameConfigs.value = _gameConfigs.value.toMutableMap().apply {
-                put(cleanPkg, updatedGameCfg)
-            }
+        // Gather all user-added Home games when Global is selected so ANGLE driver applies to all their games
+        val homePkgs = try {
+            _gameConfigs.value.keys.toList()
+        } catch (_: Throwable) {
+            emptyList()
         }
+        val existingAngleMap = collectExistingAngleMapWithShellFallback()
 
-        val cmd = config.buildShellCommand(cleanPkg)
+        val cmd = config.buildShellCommand(
+            packageName = cleanPkg,
+            additionalTargetPackages = homePkgs,
+            existingAngleMap = existingAngleMap,
+            forceStopTargets = true
+        )
         val cmdRes = try {
             executeCommand(cmd)
         } catch (_: Throwable) {
             null
         }
 
-        val targetDesc = if (cleanPkg.isEmpty()) "Global GPU" else cleanPkg
-        val msg = if (cmdRes?.isSuccess == true) {
-            "Applied ${config.summaryBadge} to $targetDesc via ${executionMethod.value.name}."
+        val updatedCompat = GpuTextureCompatibilityProbe.inspectDeviceCompatibility(context)
+        val targetDesc = if (cleanPkg.isEmpty()) "Global GPU + CODM" else cleanPkg
+        val codmTag = if (config.codmAngleSupport) " + CODM ANGLE" else ""
+        val appliedOk = cmdRes?.isSuccess == true
+
+        val msg = if (appliedOk) {
+            "Applied ${config.summaryBadge}$codmTag to $targetDesc via ${executionMethod.value.name}."
         } else {
-            "Saved ${config.summaryBadge} for $targetDesc. Grant ${executionMethod.value.name} permission to apply live."
+            "Saved ${config.summaryBadge}$codmTag for $targetDesc. Connect ${executionMethod.value.name} to apply live."
         }
 
         _textureTunerState.value = _textureTunerState.value.copy(
             currentConfig = config,
+            compatibility = updatedCompat,
             isApplying = false,
+            isAppliedLive = appliedOk,
             statusMessage = msg
         )
         Result.success(msg)
@@ -1819,7 +1970,9 @@ class GameSpaceRepository(
             preset = TextureQuickPreset.CUSTOM,
             detailLevel = TextureDetailLevel.ORIGINAL,
             sharpPixels = false,
-            hardDistanceCutoff = false
+            hardDistanceCutoff = false,
+            driverMode = AngleDriverMode.DEFAULT,
+            codmAngleSupport = false
         )
         return saveAndApplyTextureConfig(packageName = packageName, config = orig)
     }
