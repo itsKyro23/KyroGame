@@ -1,0 +1,6 @@
+{
+  "summary":  "Implementation plan for the Lightweight Texture & GPU Texture Filter Tuner feature, including real-time Before/After split-screen texture preview, Quick Presets (Smooth, Retro, Total Blocky, Custom), 5-step Texture Detail (Mipmap LOD Bias) slider, Sharp Pixels (GL_NEAREST) and Hard Distance Cutoff (Mipmap Snap) toggles, per-game and global targeting, and a real Device & GPU Compatibility Scanner.",
+  "updatedAt":  "2026-11-02T11:57:52.974166178Z",
+  "requestFeedback":  true,
+  "userFacing":  true
+}

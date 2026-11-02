@@ -46,6 +46,7 @@ import com.kyro.game.space.ui.screens.HomeScreen
 import com.kyro.game.space.ui.screens.NetworkOptimizerScreen
 import com.kyro.game.space.ui.screens.ResolutionChangerScreen
 import com.kyro.game.space.ui.screens.SettingsScreen
+import com.kyro.game.space.ui.screens.TextureTunerScreen
 import com.kyro.game.space.ui.screens.ToolsScreen
 import com.kyro.game.space.ui.theme.KyroAccent
 import com.kyro.game.space.ui.theme.KyroPrimary
@@ -64,6 +65,7 @@ enum class GameSpaceTab(
 enum class ToolSubScreen {
     NONE,
     RESOLUTION_CHANGER,
+    TEXTURE_TUNER,
     NETWORK_OPTIMIZER
 }
 
@@ -109,6 +111,7 @@ fun GameSpaceApp(
                     Text(
                         text = when (activeSubScreen) {
                             ToolSubScreen.RESOLUTION_CHANGER -> "RESOLUTION CHANGER"
+                            ToolSubScreen.TEXTURE_TUNER -> "LIGHTWEIGHT TEXTURE"
                             ToolSubScreen.NETWORK_OPTIMIZER -> "NETWORK OPTIMIZER"
                             ToolSubScreen.NONE -> when (currentTab) {
                                 GameSpaceTab.HOME -> "GAME SPACE"
@@ -177,6 +180,13 @@ fun GameSpaceApp(
                         onBack = { activeSubScreen = ToolSubScreen.NONE }
                     )
                 }
+                ToolSubScreen.TEXTURE_TUNER -> {
+                    TextureTunerScreen(
+                        repository = repository,
+                        allApps = allApps,
+                        onBack = { activeSubScreen = ToolSubScreen.NONE }
+                    )
+                }
                 ToolSubScreen.NETWORK_OPTIMIZER -> {
                     NetworkOptimizerScreen(
                         repository = repository,
@@ -203,6 +213,10 @@ fun GameSpaceApp(
                                 onNavigateToApps = { currentTab = GameSpaceTab.APPS },
                                 onNavigateToNetworkOptimizer = {
                                     activeSubScreen = ToolSubScreen.NETWORK_OPTIMIZER
+                                },
+                                onNavigateToTextureTuner = { pkg ->
+                                    repository.selectTextureTargetPackage(pkg)
+                                    activeSubScreen = ToolSubScreen.TEXTURE_TUNER
                                 }
                             )
                             GameSpaceTab.TOOLS -> ToolsScreen(
@@ -212,6 +226,9 @@ fun GameSpaceApp(
                                 },
                                 onOpenNetworkOptimizer = {
                                     activeSubScreen = ToolSubScreen.NETWORK_OPTIMIZER
+                                },
+                                onOpenTextureTuner = {
+                                    activeSubScreen = ToolSubScreen.TEXTURE_TUNER
                                 }
                             )
                             GameSpaceTab.APPS -> AppsScreen(

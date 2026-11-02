@@ -31,6 +31,8 @@ import com.kyro.game.space.data.model.GameApiTarget
 import com.kyro.game.space.data.model.GameCustomConfig
 import com.kyro.game.space.data.model.GameItem
 import com.kyro.game.space.data.model.GameOptimizationMode
+import com.kyro.game.space.data.model.DeviceTextureCompatibility
+import com.kyro.game.space.data.model.GpuTextureCompatibilityProbe
 import com.kyro.game.space.data.model.ManualAdbInfo
 import com.kyro.game.space.data.model.NetworkOptimizerState
 import com.kyro.game.space.data.model.NetworkTransportType
@@ -38,6 +40,10 @@ import com.kyro.game.space.data.model.ResolutionPreset
 import com.kyro.game.space.data.model.ResolutionState
 import com.kyro.game.space.data.model.RootInfo
 import com.kyro.game.space.data.model.ShizukuInfo
+import com.kyro.game.space.data.model.TextureConfig
+import com.kyro.game.space.data.model.TextureDetailLevel
+import com.kyro.game.space.data.model.TextureQuickPreset
+import com.kyro.game.space.data.model.TextureTunerState
 import com.kyro.game.space.data.model.formatDownscaleClean
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -99,6 +105,9 @@ class GameSpaceRepository(
     private val _resolutionState = MutableStateFlow(loadInitialResolutionState())
     val resolutionState: StateFlow<ResolutionState> = _resolutionState.asStateFlow()
     private var resolutionCountdownJob: Job? = null
+
+    private val _textureTunerState = MutableStateFlow(loadInitialTextureTunerState())
+    val textureTunerState: StateFlow<TextureTunerState> = _textureTunerState.asStateFlow()
 
     @Volatile
     private var isProbingDaemon: Boolean = true
@@ -254,7 +263,29 @@ class GameSpaceRepository(
                 } else {
                     GameApiTarget.detectDefaultForDevice()
                 }
-                GameCustomConfig(mode = mode, downscaleFactor = scale, fpsLimit = fps, apiTarget = target)
+                val texConfig = if (parts.size >= 8) {
+                    val preset = TextureQuickPreset.entries.firstOrNull { it.name == parts[4] }
+                        ?: TextureQuickPreset.RETRO
+                    val detail = TextureDetailLevel.entries.firstOrNull { it.name == parts[5] }
+                        ?: TextureDetailLevel.ORIGINAL
+                    val sharp = parts[6].toBooleanStrictOrNull() ?: false
+                    val hardCutoff = parts[7].toBooleanStrictOrNull() ?: false
+                    TextureConfig(
+                        preset = preset,
+                        detailLevel = detail,
+                        sharpPixels = sharp,
+                        hardDistanceCutoff = hardCutoff
+                    )
+                } else {
+                    TextureConfig()
+                }
+                GameCustomConfig(
+                    mode = mode,
+                    downscaleFactor = scale,
+                    fpsLimit = fps,
+                    apiTarget = target,
+                    textureConfig = texConfig
+                )
             } else null
         } catch (_: Throwable) {
             null
@@ -270,32 +301,44 @@ class GameSpaceRepository(
     suspend fun saveAndApplyGameConfig(packageName: String, config: GameCustomConfig): Result<String> {
         val sanitizedScale = config.downscaleFactor.coerceIn(0.3f, 1.0f)
         val sanitizedConfig = config.copy(downscaleFactor = sanitizedScale)
+        val tex = sanitizedConfig.textureConfig
         val serialized = String.format(
             Locale.US,
-            "%s|%.2f|%d|%s",
+            "%s|%.2f|%d|%s|%s|%s|%b|%b",
             sanitizedConfig.mode.name,
             sanitizedConfig.downscaleFactor,
             sanitizedConfig.fpsLimit,
-            sanitizedConfig.apiTarget.name
+            sanitizedConfig.apiTarget.name,
+            tex.preset.name,
+            tex.detailLevel.name,
+            tex.sharpPixels,
+            tex.hardDistanceCutoff
         )
-        prefs.edit().putString("game_cfg_$packageName", serialized).apply()
+        prefs.edit()
+            .putString("game_cfg_$packageName", serialized)
+            .putString("tex_cfg_$packageName", serializeTextureConfig(tex))
+            .apply()
         _gameConfigs.value = _gameConfigs.value.toMutableMap().apply {
             put(packageName, sanitizedConfig)
+        }
+        if (_textureTunerState.value.selectedTargetPackage == packageName) {
+            _textureTunerState.value = _textureTunerState.value.copy(currentConfig = tex)
         }
 
         val scaleStr = formatDownscaleClean(sanitizedConfig.downscaleFactor)
         val fpsStr = sanitizedConfig.fpsLimit.toString()
+        val texSummary = if (tex.isActive) " • Tex: ${tex.detailLevel.label}" else ""
         val shellCmd = sanitizedConfig.buildShellCommand(packageName)
 
         return try {
             val cmdRes = executeCommand(shellCmd)
             if (cmdRes.isSuccess) {
-                Result.success("Applied ${sanitizedConfig.mode.label} (${scaleStr}x • ${fpsStr} FPS • ${sanitizedConfig.apiTarget.shortTag})")
+                Result.success("Applied ${sanitizedConfig.mode.label} (${scaleStr}x • ${fpsStr} FPS • ${sanitizedConfig.apiTarget.shortTag}$texSummary)")
             } else {
-                Result.success("Saved ${sanitizedConfig.mode.label} (${scaleStr}x • ${fpsStr} FPS • ${sanitizedConfig.apiTarget.shortTag}). Connect Shizuku/Daemon to apply.")
+                Result.success("Saved ${sanitizedConfig.mode.label} (${scaleStr}x • ${fpsStr} FPS • ${sanitizedConfig.apiTarget.shortTag}$texSummary). Connect Shizuku/Daemon/Root to apply.")
             }
         } catch (_: Throwable) {
-            Result.success("Saved ${sanitizedConfig.mode.label} (${scaleStr}x • ${fpsStr} FPS • ${sanitizedConfig.apiTarget.shortTag})")
+            Result.success("Saved ${sanitizedConfig.mode.label} (${scaleStr}x • ${fpsStr} FPS • ${sanitizedConfig.apiTarget.shortTag}$texSummary)")
         }
     }
 
@@ -318,7 +361,10 @@ class GameSpaceRepository(
             if (launchIntent != null) {
                 scope.launch {
                     val cfg = getGameConfig(packageName)
-                    if (cfg.mode != GameOptimizationMode.STANDARD || cfg.downscaleFactor < 0.99f) {
+                    if (cfg.mode != GameOptimizationMode.STANDARD ||
+                        cfg.downscaleFactor < 0.99f ||
+                        cfg.textureConfig.isActive
+                    ) {
                         saveAndApplyGameConfig(packageName, cfg)
                     }
                     recordGameLaunch(packageName)
@@ -1573,6 +1619,169 @@ class GameSpaceRepository(
             statusMessage = msg
         )
         Result.success(msg)
+    }
+
+    // =========================================================================
+    // Lightweight Texture & GPU Texture Filter Tuner + Compatibility Engine
+    // =========================================================================
+
+    private fun serializeTextureConfig(config: TextureConfig): String {
+        return "${config.preset.name}|${config.detailLevel.name}|${config.sharpPixels}|${config.hardDistanceCutoff}"
+    }
+
+    private fun parseTextureConfig(raw: String?): TextureConfig? {
+        if (raw.isNullOrBlank()) return null
+        return try {
+            val parts = raw.split("|")
+            if (parts.size >= 4) {
+                val preset = TextureQuickPreset.entries.firstOrNull { it.name == parts[0] }
+                    ?: TextureQuickPreset.RETRO
+                val detail = TextureDetailLevel.entries.firstOrNull { it.name == parts[1] }
+                    ?: TextureDetailLevel.ORIGINAL
+                val sharp = parts[2].toBooleanStrictOrNull() ?: false
+                val hardCutoff = parts[3].toBooleanStrictOrNull() ?: false
+                TextureConfig(
+                    preset = preset,
+                    detailLevel = detail,
+                    sharpPixels = sharp,
+                    hardDistanceCutoff = hardCutoff
+                )
+            } else null
+        } catch (_: Throwable) {
+            null
+        }
+    }
+
+    private fun loadInitialTextureTunerState(): TextureTunerState {
+        val compatibility = GpuTextureCompatibilityProbe.inspectDeviceCompatibility(context)
+        val savedTargetPkg = prefs.getString("tex_selected_target_pkg", "") ?: ""
+        val key = if (savedTargetPkg.isBlank()) "tex_cfg_global" else "tex_cfg_$savedTargetPkg"
+        val defaultRetro = TextureConfig(
+            preset = TextureQuickPreset.RETRO,
+            detailLevel = TextureDetailLevel.RETRO,
+            sharpPixels = true,
+            hardDistanceCutoff = false
+        )
+        val savedConfig = parseTextureConfig(prefs.getString(key, null))
+            ?: if (savedTargetPkg.isNotBlank()) {
+                getGameConfig(savedTargetPkg).textureConfig.takeIf { it.isActive } ?: defaultRetro
+            } else {
+                defaultRetro
+            }
+
+        return TextureTunerState(
+            selectedTargetPackage = savedTargetPkg,
+            currentConfig = savedConfig,
+            compatibility = compatibility,
+            statusMessage = "${compatibility.compatibilityBadge} • Ready to tune 3D texture mipmaps & pixel filtering."
+        )
+    }
+
+    fun getTextureConfigForTarget(packageName: String): TextureConfig {
+        val cleanPkg = packageName.trim()
+        if (cleanPkg.isNotEmpty()) {
+            val gameTex = getGameConfig(cleanPkg).textureConfig
+            if (gameTex.isActive) return gameTex
+            parseTextureConfig(prefs.getString("tex_cfg_$cleanPkg", null))?.let { return it }
+        }
+        return parseTextureConfig(prefs.getString("tex_cfg_global", null))
+            ?: TextureConfig(
+                preset = TextureQuickPreset.RETRO,
+                detailLevel = TextureDetailLevel.RETRO,
+                sharpPixels = true,
+                hardDistanceCutoff = false
+            )
+    }
+
+    fun selectTextureTargetPackage(packageName: String) {
+        val cleanPkg = packageName.trim()
+        prefs.edit().putString("tex_selected_target_pkg", cleanPkg).apply()
+        val cfg = getTextureConfigForTarget(cleanPkg)
+        val targetLabel = if (cleanPkg.isEmpty()) "Global System GPU" else cleanPkg
+        _textureTunerState.value = _textureTunerState.value.copy(
+            selectedTargetPackage = cleanPkg,
+            currentConfig = cfg,
+            statusMessage = "Loaded texture profile for $targetLabel (${cfg.summaryBadge})."
+        )
+    }
+
+    fun updateTextureConfigDraft(config: TextureConfig) {
+        _textureTunerState.value = _textureTunerState.value.copy(
+            currentConfig = config
+        )
+    }
+
+    suspend fun refreshTextureCompatibility(): DeviceTextureCompatibility = withContext(Dispatchers.IO) {
+        _textureTunerState.value = _textureTunerState.value.copy(
+            isCheckingCompatibility = true,
+            statusMessage = "Scanning GPU hardware renderer, OpenGL ES / Vulkan extensions, and driver hooks..."
+        )
+        val baseCompat = GpuTextureCompatibilityProbe.inspectDeviceCompatibility(context)
+        _textureTunerState.value = _textureTunerState.value.copy(
+            compatibility = baseCompat,
+            isCheckingCompatibility = false,
+            statusMessage = "Device Check: ${baseCompat.compatibilityBadge} (${baseCompat.glEsVersion})"
+        )
+        baseCompat
+    }
+
+    suspend fun saveAndApplyTextureConfig(
+        packageName: String = _textureTunerState.value.selectedTargetPackage,
+        config: TextureConfig = _textureTunerState.value.currentConfig
+    ): Result<String> = withContext(Dispatchers.IO) {
+        val cleanPkg = packageName.trim()
+        _textureTunerState.value = _textureTunerState.value.copy(
+            selectedTargetPackage = cleanPkg,
+            currentConfig = config,
+            isApplying = true
+        )
+
+        val serialized = serializeTextureConfig(config)
+        val prefKey = if (cleanPkg.isEmpty()) "tex_cfg_global" else "tex_cfg_$cleanPkg"
+        prefs.edit()
+            .putString("tex_selected_target_pkg", cleanPkg)
+            .putString(prefKey, serialized)
+            .apply()
+
+        // Also synchronize with the game's GameCustomConfig if targeting a specific game
+        if (cleanPkg.isNotEmpty()) {
+            val existingGameCfg = getGameConfig(cleanPkg)
+            val updatedGameCfg = existingGameCfg.copy(textureConfig = config)
+            saveAndApplyGameConfig(cleanPkg, updatedGameCfg)
+        }
+
+        val cmd = config.buildShellCommand(cleanPkg)
+        val cmdRes = try {
+            executeCommand(cmd)
+        } catch (_: Throwable) {
+            null
+        }
+
+        val targetDesc = if (cleanPkg.isEmpty()) "Global GPU" else cleanPkg
+        val msg = if (cmdRes?.isSuccess == true) {
+            "Applied ${config.summaryBadge} to $targetDesc via ${executionMethod.value.name}."
+        } else {
+            "Saved ${config.summaryBadge} for $targetDesc. Connect Shizuku/Daemon/Root to apply live."
+        }
+
+        _textureTunerState.value = _textureTunerState.value.copy(
+            currentConfig = config,
+            isApplying = false,
+            statusMessage = msg
+        )
+        Result.success(msg)
+    }
+
+    suspend fun resetTextureConfigToOriginal(
+        packageName: String = _textureTunerState.value.selectedTargetPackage
+    ): Result<String> {
+        val orig = TextureConfig(
+            preset = TextureQuickPreset.CUSTOM,
+            detailLevel = TextureDetailLevel.ORIGINAL,
+            sharpPixels = false,
+            hardDistanceCutoff = false
+        )
+        return saveAndApplyTextureConfig(packageName = packageName, config = orig)
     }
 
     private fun isPackageInstalled(packageName: String): Boolean {

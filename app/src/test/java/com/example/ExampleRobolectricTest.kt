@@ -113,6 +113,30 @@ class ExampleRobolectricTest {
       repo.setExecutionMethod(com.kyro.game.space.data.model.ExecutionMethod.ROOT)
       assertEquals(com.kyro.game.space.data.model.ExecutionMethod.ROOT, repo.connectionState.value.method)
       assertEquals(false, repo.networkOptimizerState.value.isBenchmarking)
+
+      // Verify Lightweight Texture Tuner & Device GPU Compatibility Probe
+      val compat = repo.refreshTextureCompatibility()
+      assertTrue(compat.isSupported)
+      assertTrue(compat.glEsVersion.contains("OpenGL ES"))
+
+      val blockyConfig = com.kyro.game.space.data.model.TextureConfig(
+        preset = com.kyro.game.space.data.model.TextureQuickPreset.TOTAL_BLOCKY,
+        detailLevel = com.kyro.game.space.data.model.TextureDetailLevel.BLOCKY,
+        sharpPixels = true,
+        hardDistanceCutoff = true
+      )
+      assertEquals("GL_NEAREST_MIPMAP_NEAREST", blockyConfig.filterModeLabel)
+      assertTrue(blockyConfig.buildShellCommand("com.dts.freefiremax").contains("debug.hwui.texture_lod_bias 2.60"))
+
+      repo.saveAndApplyTextureConfig("com.dts.freefiremax", blockyConfig)
+      assertEquals("com.dts.freefiremax", repo.textureTunerState.value.selectedTargetPackage)
+      assertEquals(com.kyro.game.space.data.model.TextureDetailLevel.BLOCKY, repo.textureTunerState.value.currentConfig.detailLevel)
+      assertEquals(true, repo.getGameConfig("com.dts.freefiremax").textureConfig.sharpPixels)
+      assertEquals(true, repo.getGameConfig("com.dts.freefiremax").textureConfig.hardDistanceCutoff)
+
+      repo.resetTextureConfigToOriginal("com.dts.freefiremax")
+      assertEquals(com.kyro.game.space.data.model.TextureDetailLevel.ORIGINAL, repo.textureTunerState.value.currentConfig.detailLevel)
+      assertEquals(false, repo.textureTunerState.value.currentConfig.isActive)
     } finally {
       repo.cleanUp()
     }

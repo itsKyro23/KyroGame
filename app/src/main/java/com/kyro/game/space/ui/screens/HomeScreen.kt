@@ -68,6 +68,7 @@ fun HomeScreen(
     onRequestNotification: () -> Unit,
     onNavigateToApps: () -> Unit,
     onNavigateToNetworkOptimizer: () -> Unit = {},
+    onNavigateToTextureTuner: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -343,6 +344,10 @@ fun HomeScreen(
                     val msg = res.getOrElse { "Saved profile for ${liveGame.appName}" }
                     Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
                 }
+            },
+            onOpenTextureTuner = { pkg ->
+                customizingGame = null
+                onNavigateToTextureTuner(pkg)
             }
         )
     }

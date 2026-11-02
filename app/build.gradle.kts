@@ -69,6 +69,10 @@ android {
       isReturnDefaultValues = true
       all {
         it.maxHeapSize = "2048m"
+        it.systemProperty(
+          "robolectric.dependency.repo.url",
+          "https://maven-central.storage-download.googleapis.com/maven2/"
+        )
         it.jvmArgs("-Djava.awt.headless=true", "-XX:+UseG1GC", "-XX:MaxMetaspaceSize=512m")
       }
     }

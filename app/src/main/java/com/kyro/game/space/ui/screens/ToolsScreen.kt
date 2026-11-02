@@ -18,7 +18,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.AspectRatio
+import androidx.compose.material.icons.filled.AutoAwesomeMosaic
 import androidx.compose.material.icons.filled.Build
+import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.NetworkCheck
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Speed
@@ -53,10 +55,12 @@ fun ToolsScreen(
     repository: GameSpaceRepository,
     onOpenResolutionChanger: () -> Unit = {},
     onOpenNetworkOptimizer: () -> Unit = {},
+    onOpenTextureTuner: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val resState by repository.resolutionState.collectAsState()
     val netState by repository.networkOptimizerState.collectAsState()
+    val texState by repository.textureTunerState.collectAsState()
     val stats by repository.deviceStats.collectAsState()
 
     val pingColor = when {
@@ -245,7 +249,153 @@ fun ToolsScreen(
             }
         }
 
-        // 2. Network Optimizer Tool Card
+        // 2. Lightweight Texture (GPU Texture & Mipmap LOD Tuner) Card
+        item {
+            val texSkyBlue = Color(0xFF56B4E9)
+            Card(
+                onClick = onOpenTextureTuner,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("tools_texture_tuner_card"),
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant
+                ),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)),
+                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(18.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(
+                            modifier = Modifier.weight(1f),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Surface(
+                                shape = RoundedCornerShape(14.dp),
+                                color = texSkyBlue.copy(alpha = 0.16f),
+                                modifier = Modifier.size(48.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = Icons.Default.AutoAwesomeMosaic,
+                                        contentDescription = null,
+                                        tint = texSkyBlue,
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                }
+                            }
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "Lightweight Texture",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Black,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    text = "GPU Mipmap LOD Bias • Smooth / Retro / Blocky Pixels",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = texSkyBlue.copy(alpha = 0.15f),
+                            border = BorderStroke(1.dp, texSkyBlue.copy(alpha = 0.45f))
+                        ) {
+                            Text(
+                                text = texState.currentConfig.detailLevel.label,
+                                style = MaterialTheme.typography.labelSmall,
+                                fontFamily = FontFamily.Monospace,
+                                fontWeight = FontWeight.Bold,
+                                color = texSkyBlue,
+                                fontSize = 11.sp,
+                                modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp)
+                            )
+                        }
+                    }
+
+                    Text(
+                        text = "Tune 3D game texture filtering (Smooth Bilinear, Retro Pixel, or Total Blocky Mipmaps) with a live Before/After split preview and GPU compatibility check — without shrinking UI resolution.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        lineHeight = 17.sp
+                    )
+
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.25f))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Memory,
+                                contentDescription = null,
+                                tint = KyroGreen,
+                                modifier = Modifier.size(15.dp)
+                            )
+                            Text(
+                                text = texState.compatibility.compatibilityBadge,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = KyroGreen,
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 11.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.width(8.dp))
+
+                        Button(
+                            onClick = onOpenTextureTuner,
+                            shape = RoundedCornerShape(10.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.primary,
+                                contentColor = Color.White
+                            ),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
+                            modifier = Modifier
+                                .height(34.dp)
+                                .testTag("open_texture_tuner_btn")
+                        ) {
+                            Text(
+                                text = "Open",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                                contentDescription = null,
+                                modifier = Modifier.size(14.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // 3. Network Optimizer Tool Card
         item {
             Card(
                 onClick = onOpenNetworkOptimizer,

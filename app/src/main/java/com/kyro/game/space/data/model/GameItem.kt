@@ -52,14 +52,15 @@ data class GameCustomConfig(
     val mode: GameOptimizationMode = GameOptimizationMode.STANDARD,
     val downscaleFactor: Float = 1.0f, // 0.3f .. 1.0f
     val fpsLimit: Int = 60,
-    val apiTarget: GameApiTarget = GameApiTarget.detectDefaultForDevice()
+    val apiTarget: GameApiTarget = GameApiTarget.detectDefaultForDevice(),
+    val textureConfig: TextureConfig = TextureConfig()
 ) {
     fun buildShellCommand(packageName: String): String {
         val scaleStr = formatDownscaleClean(downscaleFactor)
         val fpsStr = fpsLimit.toString()
         val modeId = mode.systemModeId
 
-        return when (apiTarget) {
+        val baseCmd = when (apiTarget) {
             GameApiTarget.ANDROID_16_PLUS -> {
                 "cmd game set --mode $modeId --downscale $scaleStr --fps $fpsStr $packageName"
             }
@@ -71,6 +72,11 @@ data class GameCustomConfig(
                     "device_config put game_overlay $packageName $overlaySpec; cmd game mode $modeId $packageName 2>/dev/null || true"
                 }
             }
+        }
+        return if (textureConfig.isActive) {
+            "$baseCmd; ${textureConfig.buildShellCommand(packageName)}"
+        } else {
+            baseCmd
         }
     }
 }
@@ -96,7 +102,12 @@ data class GameItem(
     val formattedConfigSummary: String
         get() {
             val scaleStr = "${formatDownscaleClean(customConfig.downscaleFactor)}x"
-            return "${customConfig.mode.label} • $scaleStr • ${customConfig.fpsLimit} FPS • ${customConfig.apiTarget.shortTag}"
+            val texTag = if (customConfig.textureConfig.isActive) {
+                " • Tex: ${customConfig.textureConfig.detailLevel.label}"
+            } else {
+                ""
+            }
+            return "${customConfig.mode.label} • $scaleStr • ${customConfig.fpsLimit} FPS • ${customConfig.apiTarget.shortTag}$texTag"
         }
 
     companion object {

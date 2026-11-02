@@ -19,7 +19,9 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.Android
+import androidx.compose.material.icons.filled.AutoAwesomeMosaic
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Memory
@@ -62,6 +64,10 @@ import com.kyro.game.space.data.model.GameApiTarget
 import com.kyro.game.space.data.model.GameCustomConfig
 import com.kyro.game.space.data.model.GameItem
 import com.kyro.game.space.data.model.GameOptimizationMode
+import com.kyro.game.space.data.model.GpuTextureCompatibilityProbe
+import com.kyro.game.space.data.model.TextureConfig
+import com.kyro.game.space.data.model.TextureDetailLevel
+import com.kyro.game.space.data.model.TextureQuickPreset
 import com.kyro.game.space.data.model.formatDownscaleClean
 import kotlin.math.roundToInt
 
@@ -101,10 +107,12 @@ fun getDeviceSupportedFpsLimits(context: Context): Pair<Int, List<Int>> {
 fun GameCustomizeDialog(
     game: GameItem,
     onDismiss: () -> Unit,
-    onSaveConfig: (GameCustomConfig) -> Unit
+    onSaveConfig: (GameCustomConfig) -> Unit,
+    onOpenTextureTuner: ((String) -> Unit)? = null
 ) {
     val context = LocalContext.current
     val (maxDeviceFps, fpsOptions) = remember(context) { getDeviceSupportedFpsLimits(context) }
+    val texCompat = remember(context) { GpuTextureCompatibilityProbe.inspectDeviceCompatibility(context) }
     val autoDetectedTarget = remember { GameApiTarget.detectDefaultForDevice() }
 
     val initialConfig = game.customConfig
@@ -124,13 +132,17 @@ fun GameCustomizeDialog(
         val closest = fpsOptions.minByOrNull { kotlin.math.abs(it - startFps) } ?: maxDeviceFps
         mutableIntStateOf(closest)
     }
+    var textureConfig by remember(game.packageName) {
+        mutableStateOf(initialConfig.textureConfig)
+    }
 
-    val previewConfig = remember(selectedMode, downscaleFactor, selectedFps, selectedApiTarget) {
+    val previewConfig = remember(selectedMode, downscaleFactor, selectedFps, selectedApiTarget, textureConfig) {
         GameCustomConfig(
             mode = selectedMode,
             downscaleFactor = downscaleFactor,
             fpsLimit = selectedFps,
-            apiTarget = selectedApiTarget
+            apiTarget = selectedApiTarget,
+            textureConfig = textureConfig
         )
     }
 
@@ -556,6 +568,147 @@ fun GameCustomizeDialog(
                         }
                     }
 
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.25f))
+
+                    // 4. Lightweight Texture (GPU Filter & Mipmap LOD Bias) Section
+                    val texSkyBlue = Color(0xFF56B4E9)
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.AutoAwesomeMosaic,
+                                    contentDescription = null,
+                                    tint = texSkyBlue,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Text(
+                                    text = "LIGHTWEIGHT TEXTURE (GPU LOD)",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    letterSpacing = 0.7.sp,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = if (texCompat.isSupported) {
+                                    Color(0xFF00E676).copy(alpha = 0.14f)
+                                } else {
+                                    Color(0xFFFFAB00).copy(alpha = 0.14f)
+                                },
+                                border = BorderStroke(
+                                    1.dp,
+                                    if (texCompat.isSupported) Color(0xFF00E676).copy(alpha = 0.35f) else Color(0xFFFFAB00).copy(alpha = 0.35f)
+                                )
+                            ) {
+                                Text(
+                                    text = if (texCompat.isSupported) "GPU Supported" else "Limited GPU",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (texCompat.isSupported) Color(0xFF00E676) else Color(0xFFFFAB00),
+                                    fontSize = 10.sp,
+                                    modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp)
+                                )
+                            }
+                        }
+
+                        // Quick Texture Mode Chips (Original, Smooth, Retro, Blocky)
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            val quickOptions = listOf(
+                                Triple("Original", false, TextureConfig(detailLevel = TextureDetailLevel.ORIGINAL)),
+                                Triple("Smooth", textureConfig.isActive && textureConfig.preset == TextureQuickPreset.SMOOTH, TextureConfig(
+                                    preset = TextureQuickPreset.SMOOTH,
+                                    detailLevel = TextureDetailLevel.RETRO,
+                                    sharpPixels = false,
+                                    hardDistanceCutoff = false
+                                )),
+                                Triple("Retro", textureConfig.isActive && textureConfig.preset == TextureQuickPreset.RETRO, TextureConfig(
+                                    preset = TextureQuickPreset.RETRO,
+                                    detailLevel = TextureDetailLevel.RETRO,
+                                    sharpPixels = true,
+                                    hardDistanceCutoff = false
+                                )),
+                                Triple("Blocky", textureConfig.isActive && textureConfig.preset == TextureQuickPreset.TOTAL_BLOCKY, TextureConfig(
+                                    preset = TextureQuickPreset.TOTAL_BLOCKY,
+                                    detailLevel = TextureDetailLevel.BLOCKY,
+                                    sharpPixels = true,
+                                    hardDistanceCutoff = true
+                                ))
+                            )
+
+                            quickOptions.forEach { (label, isMatched, targetCfg) ->
+                                val isSelected = if (label == "Original") !textureConfig.isActive else isMatched
+                                Surface(
+                                    onClick = { textureConfig = targetCfg },
+                                    shape = RoundedCornerShape(10.dp),
+                                    color = if (isSelected) texSkyBlue else MaterialTheme.colorScheme.surfaceVariant,
+                                    border = BorderStroke(
+                                        1.dp,
+                                        if (isSelected) texSkyBlue else MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)
+                                    ),
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(34.dp)
+                                        .testTag("dialog_tex_chip_${label.lowercase()}")
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Text(
+                                            text = label,
+                                            style = MaterialTheme.typography.labelSmall,
+                                            fontWeight = FontWeight.Bold,
+                                            color = if (isSelected) Color(0xFF061320) else MaterialTheme.colorScheme.onSurfaceVariant,
+                                            fontSize = 11.sp
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        if (onOpenTextureTuner != null) {
+                            OutlinedButton(
+                                onClick = {
+                                    onSaveConfig(previewConfig)
+                                    onOpenTextureTuner(game.packageName)
+                                },
+                                shape = RoundedCornerShape(10.dp),
+                                border = BorderStroke(1.dp, texSkyBlue.copy(alpha = 0.5f)),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(36.dp)
+                                    .testTag("open_full_texture_tuner_btn"),
+                                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 0.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.OpenInNew,
+                                    contentDescription = null,
+                                    tint = texSkyBlue,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                androidx.compose.foundation.layout.Spacer(modifier = Modifier.padding(horizontal = 3.dp))
+                                Text(
+                                    text = "Open Lightweight Texture Tuner (Before/After Preview)",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = texSkyBlue,
+                                    fontSize = 11.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+                    }
+
                     // Live Command Preview Box
                     Surface(
                         shape = RoundedCornerShape(10.dp),
@@ -579,7 +732,9 @@ fun GameCustomizeDialog(
                                 style = MaterialTheme.typography.labelSmall,
                                 fontFamily = FontFamily.Monospace,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                fontSize = 10.sp
+                                fontSize = 10.sp,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
                     }
