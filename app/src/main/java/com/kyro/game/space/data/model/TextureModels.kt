@@ -195,7 +195,7 @@ data class DeviceTextureCompatibility(
     val supportsAnisotropicExtension: Boolean = true,
     val supportsPerGameGpuDriver: Boolean = true,
     val compatibilityBadge: String = "Compatible • GPU Texture & LOD Supported",
-    val compatibilitySummary: String = "Hardware supports OpenGL ES / Vulkan Mipmap LOD Bias, Nearest-Neighbor (GL_NEAREST) sharp pixel sampling, and per-game GPU driver hooks."
+    val compatibilitySummary: String = "Hardware supports OpenGL ES / Vulkan Mipmap LOD Bias, Sharp Pixel sampling, and per-game GPU driver hooks."
 )
 
 data class TextureTunerState(
@@ -302,7 +302,7 @@ object GpuTextureCompatibilityProbe {
             "Limited Support • $renderer"
         }
         val vulkanTag = if (hasVulkan) "Vulkan + $glVersionText" else glVersionText
-        val summary = "GPU: $vendor $renderer ($vulkanTag) • Supports Mipmap LOD Bias, GL_NEAREST sharp pixel filtering, and ${if (supportsGameDriver) "Android Game Driver per-app hooks" else "system GLES properties"}."
+        val summary = "GPU: $vendor $renderer ($vulkanTag) • Supports Mipmap LOD Bias, Sharp Pixel filtering, and ${if (supportsGameDriver) "Android Game Driver per-app hooks" else "system GLES properties"}."
 
         val result = DeviceTextureCompatibility(
             isSupported = isSupported,

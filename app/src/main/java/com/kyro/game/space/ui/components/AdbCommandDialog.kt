@@ -1,7 +1,5 @@
 package com.kyro.game.space.ui.components
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -23,7 +21,6 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -55,18 +52,10 @@ fun AdbCommandDialog(
     onExecute: suspend (String) -> CommandResult,
     executorName: String
 ) {
-    var commandText by remember { mutableStateOf("getprop ro.product.model") }
+    var commandText by remember { mutableStateOf("") }
     var isExecuting by remember { mutableStateOf(false) }
     var result by remember { mutableStateOf<CommandResult?>(null) }
     val scope = rememberCoroutineScope()
-
-    val quickCommands = listOf(
-        "getprop ro.product.model",
-        "dumpsys battery",
-        "wm size",
-        "getprop ro.build.version.release",
-        "dumpsys meminfo --compact"
-    )
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -95,33 +84,11 @@ fun AdbCommandDialog(
                     .fillMaxWidth()
                     .verticalScroll(rememberScrollState())
             ) {
-                Text(
-                    text = "Quick Presets:",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    quickCommands.forEach { preset ->
-                        FilterChip(
-                            selected = commandText == preset,
-                            onClick = { commandText = preset },
-                            label = { Text(preset, style = MaterialTheme.typography.labelSmall) }
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(10.dp))
-
                 OutlinedTextField(
                     value = commandText,
                     onValueChange = { commandText = it },
-                    label = { Text("Command") },
+                    label = { Text("Shell Command") },
+                    placeholder = { Text("Enter command to execute...") },
                     modifier = Modifier
                         .fillMaxWidth()
                         .testTag("adb_command_input"),

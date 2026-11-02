@@ -25,7 +25,6 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.PhotoSizeSelectSmall
 import androidx.compose.material.icons.filled.Speed
-import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -52,7 +51,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -282,7 +280,6 @@ fun GameCustomizeDialog(
                                     Text(
                                         text = target.commandHint,
                                         style = MaterialTheme.typography.labelSmall,
-                                        fontFamily = FontFamily.Monospace,
                                         color = if (isSelected) {
                                             MaterialTheme.colorScheme.primary
                                         } else {
@@ -552,36 +549,6 @@ fun GameCustomizeDialog(
                                     labelColor = MaterialTheme.colorScheme.onSurfaceVariant
                                 ),
                                 modifier = Modifier.testTag("fps_chip_$fps")
-                            )
-                        }
-                    }
-
-                    // Live Command Preview Box
-                    Surface(
-                        shape = RoundedCornerShape(10.dp),
-                        color = Color(0xFF0E0E14),
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Terminal,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(15.dp)
-                            )
-                            Text(
-                                text = previewConfig.buildShellCommand(game.packageName),
-                                style = MaterialTheme.typography.labelSmall,
-                                fontFamily = FontFamily.Monospace,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                fontSize = 10.sp,
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis
                             )
                         }
                     }

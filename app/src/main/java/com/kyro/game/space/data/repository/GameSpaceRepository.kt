@@ -1521,7 +1521,7 @@ class GameSpaceRepository(
             statusMessage = if (cmdRes.isSuccess) {
                 "Testing ${targetW}×${targetH} (${targetDpi} DPI). Confirm within 10s or it will revert automatically."
             } else {
-                "Previewing ${targetW}×${targetH} (${targetDpi} DPI). Connect Shizuku/Daemon for system-wide wm size."
+                "Previewing ${targetW}×${targetH} (${targetDpi} DPI). Grant ${executionMethod.value.name} permission for system-wide display scaling."
             }
         )
 

@@ -16,12 +16,12 @@ enum class GameApiTarget(val label: String, val shortTag: String, val commandHin
     ANDROID_15_BELOW(
         label = "Under Android 15 (≤ A15)",
         shortTag = "≤A15",
-        commandHint = "device_config put game_overlay"
+        commandHint = "Legacy Game Overlay Engine"
     ),
     ANDROID_16_PLUS(
         label = "Android 16+ (A16+)",
         shortTag = "A16+",
-        commandHint = "cmd game set"
+        commandHint = "Native Game Mode Engine"
     );
 
     companion object {

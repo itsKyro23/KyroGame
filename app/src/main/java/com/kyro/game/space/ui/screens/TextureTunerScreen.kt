@@ -29,13 +29,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AutoAwesomeMosaic
-import androidx.compose.material.icons.filled.BlurOn
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Compare
-import androidx.compose.material.icons.filled.GridOn
-import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Lightbulb
 import androidx.compose.material.icons.filled.Memory
@@ -44,7 +39,6 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Restore
 import androidx.compose.material.icons.filled.SportsEsports
 import androidx.compose.material.icons.filled.SwapHoriz
-import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material.icons.filled.TouchApp
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.AlertDialog
@@ -210,63 +204,66 @@ fun TextureTunerScreen(
                 ) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalAlignment = Alignment.Top
                     ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(10.dp),
-                            modifier = Modifier.weight(1f)
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = (if (compat.isSupported) KyroGreen else KyroOrange).copy(alpha = 0.16f),
+                            modifier = Modifier.size(40.dp)
                         ) {
-                            Surface(
-                                shape = RoundedCornerShape(12.dp),
-                                color = (if (compat.isSupported) KyroGreen else KyroOrange).copy(alpha = 0.16f),
-                                modifier = Modifier.size(40.dp)
-                            ) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    Icon(
-                                        imageVector = Icons.Default.Memory,
-                                        contentDescription = null,
-                                        tint = if (compat.isSupported) KyroGreen else KyroOrange,
-                                        modifier = Modifier.size(22.dp)
-                                    )
-                                }
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = Icons.Default.Memory,
+                                    contentDescription = null,
+                                    tint = if (compat.isSupported) KyroGreen else KyroOrange,
+                                    modifier = Modifier.size(22.dp)
+                                )
                             }
-                            Column(modifier = Modifier.weight(1f)) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                ) {
-                                    Text(
-                                        text = "DEVICE & GPU COMPATIBILITY",
-                                        style = MaterialTheme.typography.labelMedium,
-                                        fontWeight = FontWeight.Black,
-                                        letterSpacing = 0.7.sp,
-                                        color = MaterialTheme.colorScheme.onSurface
-                                    )
-                                    Surface(
-                                        shape = RoundedCornerShape(6.dp),
-                                        color = (if (compat.isSupported) KyroGreen else KyroOrange).copy(alpha = 0.18f)
-                                    ) {
-                                        Text(
-                                            text = if (compat.isSupported) "SUPPORTED" else "LIMITED",
-                                            style = MaterialTheme.typography.labelSmall,
-                                            fontWeight = FontWeight.Bold,
-                                            color = if (compat.isSupported) KyroGreen else KyroOrange,
-                                            fontSize = 9.sp,
-                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                        )
-                                    }
-                                }
+                        }
+
+                        Column(
+                            modifier = Modifier.weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
                                 Text(
-                                    text = "${compat.gpuVendor} • ${compat.gpuRenderer}",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    fontFamily = FontFamily.Monospace,
-                                    color = KyroCyan,
+                                    text = "GPU COMPATIBILITY",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.Black,
+                                    letterSpacing = 0.6.sp,
+                                    color = MaterialTheme.colorScheme.onSurface,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
                                 )
+                                Surface(
+                                    shape = RoundedCornerShape(6.dp),
+                                    color = (if (compat.isSupported) KyroGreen else KyroOrange).copy(alpha = 0.18f)
+                                ) {
+                                    Text(
+                                        text = if (compat.isSupported) "SUPPORTED" else "LIMITED",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (compat.isSupported) KyroGreen else KyroOrange,
+                                        fontSize = 9.sp,
+                                        maxLines = 1,
+                                        softWrap = false,
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                    )
+                                }
                             }
+                            Text(
+                                text = "${compat.gpuVendor} • ${compat.gpuRenderer}",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontFamily = FontFamily.Monospace,
+                                color = KyroCyan,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                                lineHeight = 15.sp
+                            )
                         }
 
                         OutlinedButton(
@@ -329,7 +326,7 @@ fun TextureTunerScreen(
                             enabled = compat.supportsLodBiasControl
                         )
                         CompatibilityFeatureChip(
-                            label = "GL_NEAREST Sharp Pixel",
+                            label = "Sharp Pixel Filter",
                             enabled = compat.supportsNearestNeighborFilter
                         )
                         CompatibilityFeatureChip(
@@ -482,24 +479,6 @@ fun TextureTunerScreen(
                                 )
                             }
 
-                            // Bottom-left active GLES filter mode tag
-                            Surface(
-                                shape = RoundedCornerShape(8.dp),
-                                color = Color.Black.copy(alpha = 0.65f),
-                                modifier = Modifier
-                                    .align(Alignment.BottomStart)
-                                    .padding(10.dp)
-                            ) {
-                                Text(
-                                    text = "${config.filterModeLabel} • LOD +${config.detailLevel.lodBias}",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    fontFamily = FontFamily.Monospace,
-                                    color = Color.White.copy(alpha = 0.9f),
-                                    fontSize = 9.sp,
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                                )
-                            }
-
                             // Bottom-right "Hold: Before" button
                             Surface(
                                 shape = RoundedCornerShape(20.dp),
@@ -560,63 +539,63 @@ fun TextureTunerScreen(
                                 .fillMaxWidth()
                                 .padding(horizontal = 12.dp, vertical = 10.dp),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                                modifier = Modifier.weight(1f)
+                            val iconBmp = remember(tunerState.selectedTargetPackage) {
+                                tunerState.selectedTargetPackage
+                                    .takeIf { it.isNotBlank() }
+                                    ?.let { pkg -> AppIconCache.getIcon(context, pkg)?.asImageBitmap() }
+                            }
+                            Surface(
+                                shape = RoundedCornerShape(10.dp),
+                                color = TextureSkyBlue.copy(alpha = 0.16f),
+                                modifier = Modifier.size(40.dp)
                             ) {
-                                val iconBmp = remember(selectedGameItem?.packageName) {
-                                    selectedGameItem?.packageName?.let { pkg ->
-                                        AppIconCache.getIcon(context, pkg)
-                                    }
-                                }
-                                Surface(
-                                    shape = RoundedCornerShape(10.dp),
-                                    color = TextureSkyBlue.copy(alpha = 0.16f),
-                                    modifier = Modifier.size(38.dp)
-                                ) {
-                                    if (iconBmp != null) {
-                                        Image(
-                                            bitmap = iconBmp.asImageBitmap(),
-                                            contentDescription = targetTitle,
-                                            modifier = Modifier.fillMaxSize()
+                                if (iconBmp != null) {
+                                    Image(
+                                        bitmap = iconBmp,
+                                        contentDescription = targetTitle,
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .clip(RoundedCornerShape(10.dp))
+                                    )
+                                } else {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(
+                                            imageVector = if (tunerState.selectedTargetPackage.isNotBlank()) {
+                                                Icons.Default.SportsEsports
+                                            } else {
+                                                Icons.Default.Public
+                                            },
+                                            contentDescription = null,
+                                            tint = TextureSkyBlue,
+                                            modifier = Modifier.size(20.dp)
                                         )
-                                    } else {
-                                        Box(contentAlignment = Alignment.Center) {
-                                            Icon(
-                                                imageVector = if (selectedGameItem != null) {
-                                                    Icons.Default.SportsEsports
-                                                } else {
-                                                    Icons.Default.Public
-                                                },
-                                                contentDescription = null,
-                                                tint = TextureSkyBlue,
-                                                modifier = Modifier.size(20.dp)
-                                            )
-                                        }
                                     }
                                 }
+                            }
 
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = targetTitle,
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.onSurface,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                    Text(
-                                        text = targetSubtitle,
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        fontSize = 11.sp,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                }
+                            Column(
+                                modifier = Modifier.weight(1f),
+                                verticalArrangement = Arrangement.spacedBy(2.dp)
+                            ) {
+                                Text(
+                                    text = targetTitle,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Text(
+                                    text = targetSubtitle,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    fontSize = 11.sp,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis,
+                                    lineHeight = 14.sp
+                                )
                             }
 
                             Surface(
@@ -625,7 +604,7 @@ fun TextureTunerScreen(
                                 border = BorderStroke(1.dp, TextureSkyBlue.copy(alpha = 0.45f))
                             ) {
                                 Row(
-                                    modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp),
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                                 ) {
@@ -640,7 +619,9 @@ fun TextureTunerScreen(
                                         style = MaterialTheme.typography.labelSmall,
                                         fontWeight = FontWeight.Bold,
                                         color = TextureSkyBlue,
-                                        fontSize = 11.sp
+                                        fontSize = 11.sp,
+                                        maxLines = 1,
+                                        softWrap = false
                                     )
                                 }
                             }
@@ -794,7 +775,7 @@ fun TextureTunerScreen(
                         // Step labels row (Original, Light, Retro, Blocky, Extreme)
                         Row(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
                             TextureDetailLevel.entries.forEach { level ->
                                 val active = config.detailLevel == level
@@ -814,34 +795,24 @@ fun TextureTunerScreen(
                                     },
                                     shape = RoundedCornerShape(8.dp),
                                     color = if (active) {
-                                        TextureSkyBlue.copy(alpha = 0.15f)
+                                        TextureSkyBlue.copy(alpha = 0.18f)
                                     } else {
                                         Color.Transparent
-                                    }
+                                    },
+                                    modifier = Modifier.weight(1f)
                                 ) {
-                                    Row(
-                                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 3.dp),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(3.dp)
+                                    Box(
+                                        contentAlignment = Alignment.Center,
+                                        modifier = Modifier.padding(horizontal = 2.dp, vertical = 6.dp)
                                     ) {
-                                        Icon(
-                                            imageVector = when (level) {
-                                                TextureDetailLevel.ORIGINAL -> Icons.Default.GridOn
-                                                TextureDetailLevel.LIGHT -> Icons.Default.BlurOn
-                                                TextureDetailLevel.RETRO -> Icons.Default.AutoAwesomeMosaic
-                                                TextureDetailLevel.BLOCKY -> Icons.Default.GridView
-                                                TextureDetailLevel.EXTREME -> Icons.Default.Compare
-                                            },
-                                            contentDescription = null,
-                                            tint = if (active) TextureSkyBlue else MaterialTheme.colorScheme.onSurfaceVariant,
-                                            modifier = Modifier.size(12.dp)
-                                        )
                                         Text(
                                             text = level.label,
                                             style = MaterialTheme.typography.labelSmall,
-                                            fontWeight = if (active) FontWeight.Bold else FontWeight.Normal,
+                                            fontWeight = if (active) FontWeight.Bold else FontWeight.Medium,
                                             color = if (active) TextureSkyBlue else MaterialTheme.colorScheme.onSurfaceVariant,
-                                            fontSize = 10.sp
+                                            fontSize = 10.sp,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
                                         )
                                     }
                                 }
@@ -849,10 +820,10 @@ fun TextureTunerScreen(
                         }
                     }
 
-                    // TWO FILTER TOGGLE CARDS (Sharp Pixels & Hard Distance Cutoff)
-                    Row(
+                    // TWO FILTER TOGGLE CARDS (Stacked full-width for responsive layout on all screen sizes)
+                    Column(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         FilterToggleCard(
                             title = "Sharp Pixels",
@@ -872,7 +843,7 @@ fun TextureTunerScreen(
                                 )
                             },
                             testTag = "toggle_sharp_pixels",
-                            modifier = Modifier.weight(1f)
+                            modifier = Modifier.fillMaxWidth()
                         )
 
                         FilterToggleCard(
@@ -893,7 +864,7 @@ fun TextureTunerScreen(
                                 )
                             },
                             testTag = "toggle_hard_distance_cutoff",
-                            modifier = Modifier.weight(1f)
+                            modifier = Modifier.fillMaxWidth()
                         )
                     }
 
@@ -931,36 +902,6 @@ fun TextureTunerScreen(
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 fontSize = 11.sp
-                            )
-                        }
-                    }
-
-                    // Live GPU Command Preview Box
-                    Surface(
-                        shape = RoundedCornerShape(10.dp),
-                        color = Color(0xFF0A0C12),
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Terminal,
-                                contentDescription = null,
-                                tint = TextureSkyBlue,
-                                modifier = Modifier.size(14.dp)
-                            )
-                            Text(
-                                text = "[${connectionOverview.method.name}] ${config.buildShellCommand(tunerState.selectedTargetPackage)}",
-                                style = MaterialTheme.typography.labelSmall,
-                                fontFamily = FontFamily.Monospace,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                fontSize = 10.sp,
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis
                             )
                         }
                     }
@@ -1133,6 +1074,9 @@ fun TextureTunerScreen(
 
                     items(items = gameCandidates, key = { it.packageName }) { game ->
                         val isSelected = tunerState.selectedTargetPackage == game.packageName
+                        val gameIconBitmap = remember(game.packageName) {
+                            AppIconCache.getIcon(context, game.packageName)?.asImageBitmap()
+                        }
                         Surface(
                             onClick = {
                                 repository.selectTextureTargetPackage(game.packageName)
@@ -1153,30 +1097,64 @@ fun TextureTunerScreen(
                             Row(
                                 modifier = Modifier.padding(10.dp),
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
                             ) {
                                 Surface(
-                                    shape = RoundedCornerShape(8.dp),
+                                    shape = RoundedCornerShape(10.dp),
                                     color = TextureSkyBlue.copy(alpha = 0.14f),
-                                    modifier = Modifier.size(34.dp)
+                                    modifier = Modifier.size(40.dp)
                                 ) {
-                                    Box(contentAlignment = Alignment.Center) {
-                                        Icon(
-                                            imageVector = Icons.Default.SportsEsports,
-                                            contentDescription = null,
-                                            tint = TextureSkyBlue,
-                                            modifier = Modifier.size(18.dp)
+                                    if (gameIconBitmap != null) {
+                                        Image(
+                                            bitmap = gameIconBitmap,
+                                            contentDescription = game.appName,
+                                            modifier = Modifier
+                                                .fillMaxSize()
+                                                .clip(RoundedCornerShape(10.dp))
                                         )
+                                    } else {
+                                        Box(contentAlignment = Alignment.Center) {
+                                            Icon(
+                                                imageVector = Icons.Default.SportsEsports,
+                                                contentDescription = null,
+                                                tint = TextureSkyBlue,
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                        }
                                     }
                                 }
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = game.appName,
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        fontWeight = FontWeight.Bold,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
+                                Column(
+                                    modifier = Modifier.weight(1f),
+                                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        Text(
+                                            text = game.appName,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            fontWeight = FontWeight.Bold,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                            modifier = Modifier.weight(1f, fill = false)
+                                        )
+                                        if (game.isGame || game.isAddedToHome) {
+                                            Surface(
+                                                shape = RoundedCornerShape(5.dp),
+                                                color = TextureSkyBlue.copy(alpha = 0.16f)
+                                            ) {
+                                                Text(
+                                                    text = "GAME",
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = TextureSkyBlue,
+                                                    fontSize = 8.sp,
+                                                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
+                                                )
+                                            }
+                                        }
+                                    }
                                     Text(
                                         text = game.packageName,
                                         style = MaterialTheme.typography.labelSmall,
@@ -1269,39 +1247,38 @@ private fun FilterToggleCard(
         ),
         modifier = modifier.testTag(testTag)
     ) {
-        Column(
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 Text(
                     text = title,
-                    style = MaterialTheme.typography.labelMedium,
+                    style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.weight(1f)
+                    color = MaterialTheme.colorScheme.onSurface
                 )
-                Switch(
-                    checked = checked,
-                    onCheckedChange = onCheckedChange,
-                    colors = SwitchDefaults.colors(
-                        checkedThumbColor = Color(0xFF061320),
-                        checkedTrackColor = TextureSkyBlue
-                    )
+                Text(
+                    text = description,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = 11.sp,
+                    lineHeight = 14.sp
                 )
             }
-            Text(
-                text = description,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                fontSize = 10.sp,
-                lineHeight = 13.sp
+            Switch(
+                checked = checked,
+                onCheckedChange = onCheckedChange,
+                colors = SwitchDefaults.colors(
+                    checkedThumbColor = Color(0xFF061320),
+                    checkedTrackColor = TextureSkyBlue
+                )
             )
         }
     }
