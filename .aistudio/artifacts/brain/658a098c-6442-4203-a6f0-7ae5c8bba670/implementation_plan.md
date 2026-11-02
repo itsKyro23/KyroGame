@@ -10,6 +10,10 @@ Delivers a dedicated **Lightweight Texture Tuner** (inspired by the reference sc
 - **Confirmed Entry Points**: Accessible **both** from the **Tools Hub** (as a 3rd tactical card alongside Resolution Changer and Network Optimizer) **and** directly from each game's **Customize Game Profile** dialog (with a quick preset selector and a shortcut to launch the full Texture Tuner pre-targeted to that game).
 - **Confirmed Interactive Preview**: Includes an interactive **Before / After Split-Screen Preview Canvas** with a draggable vertical divider handle (`↔`) and a press-and-hold **"Hold: Before"** comparison button that renders brick wall and ground terrain textures in real time with the exact pixelation, blockiness, bilinear blur, or nearest-neighbor filtering selected.
 - **Confirmed Target Scope**: Supports **Per-Game Selection** (e.g., *Free Fire MAX*, *Call of Duty Mobile*, *Mobile Legends*, or any installed game) as well as a **Global GPU Profile** option.
+- **Universal ANGLE Vulkan Driver Mode**: All texture tuning presets automatically enforce ANGLE Vulkan translation without manual selector confusion.
+- **Permission Access Gate (Shizuku / Wireless ADB / Root)**: All tools, features, game customization, and app additions require at least 1 verified active execution permission.
+- **Cyber Gaming Splash Screen**: High-octane initial loading screen with live hardware and execution checks.
+- **Pre-Launch Game Boost Animation**: Tactical 5-stage pre-launch optimization triggered upon tapping Play.
 
 ---
 

@@ -97,14 +97,18 @@ class FloatingHudService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        try {
+            createNotificationChannel()
+            startForeground(NOTIFICATION_ID, buildNotification())
+        } catch (_: Throwable) {
+        }
+
         if (!Settings.canDrawOverlays(this)) {
             stopSelf()
             return
         }
 
         restoreExecutorConfig()
-        createNotificationChannel()
-        startForeground(NOTIFICATION_ID, buildNotification())
         initFloatingOverlay()
         startChoreographerMonitor()
         startTelemetryLoop()

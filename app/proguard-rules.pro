@@ -12,10 +12,16 @@
 #   public *;
 #}
 
-# Uncomment this to preserve the line number information for
-# debugging stack traces.
-#-keepattributes SourceFile,LineNumberTable
+# Keep Room
+-keep class * extends androidx.room.RoomDatabase
+-keep @androidx.room.Entity class *
+-dontwarn androidx.room.paging.**
 
-# If you keep the line number information, uncomment this to
-# hide the original source file name.
-#-renamesourcefileattribute SourceFile
+# Keep Shizuku
+-keep class rikka.shizuku.** { *; }
+-keep interface rikka.shizuku.** { *; }
+
+# Keep Data Models
+-keep class com.kyro.game.space.data.model.** { *; }
+-keepclassmembers class com.kyro.game.space.data.model.** { *; }
+

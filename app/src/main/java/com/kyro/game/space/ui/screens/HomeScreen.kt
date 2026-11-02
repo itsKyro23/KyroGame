@@ -55,6 +55,14 @@ import kotlinx.coroutines.launch
 
 import com.kyro.game.space.data.model.ExecutionMethod
 import com.kyro.game.space.ui.components.ManualAdbPairingDialog
+import com.kyro.game.space.ui.components.GameBoostDialog
+import com.kyro.game.space.ui.components.PermissionRequiredBanner
+import com.kyro.game.space.ui.theme.KyroCyan
+import com.kyro.game.space.ui.theme.KyroOrange
+import androidx.compose.ui.graphics.Color
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
 
 @Composable
 fun HomeScreen(
@@ -75,6 +83,8 @@ fun HomeScreen(
     var showTerminalDialog by remember { mutableStateOf(false) }
     var showPairingDialog by remember { mutableStateOf(false) }
     var customizingGame by remember { mutableStateOf<GameItem?>(null) }
+    var boostingGame by remember { mutableStateOf<GameItem?>(null) }
+    var showPermissionBlockedDialog by remember { mutableStateOf<String?>(null) }
 
     androidx.compose.runtime.LaunchedEffect(overview.method) {
         repository.refreshActiveExecutionMethodStatus()
@@ -147,6 +157,28 @@ fun HomeScreen(
                     showTerminalDialog = true
                 }
             )
+        }
+
+        // Section A.1: Prominent Permission Lock Barrier Banner if no permission active
+        if (!overview.isAnyPermissionActive) {
+            item {
+                PermissionRequiredBanner(
+                    overview = overview,
+                    onConnectShizuku = {
+                        val status = repository.requestShizukuPermission()
+                        if (status != "ALREADY_GRANTED") {
+                            Toast.makeText(context, "Opening Shizuku...", Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    onPairAdb = { showPairingDialog = true },
+                    onRequestRoot = {
+                        scope.launch {
+                            val rootInfo = repository.requestRootPermission()
+                            Toast.makeText(context, rootInfo.statusMessage, Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                )
+            }
         }
 
         // Section B: Device Performance Cards (Temperature, RAM, Ping)
@@ -266,13 +298,18 @@ fun HomeScreen(
                 GameCard(
                     game = game,
                     onPlayClick = {
-                        val launched = repository.launchGame(game.packageName)
-                        if (!launched) {
-                            Toast.makeText(context, "Could not launch ${game.appName}", Toast.LENGTH_SHORT).show()
+                        if (!overview.isAnyPermissionActive) {
+                            showPermissionBlockedDialog = "Cannot Boost & Launch: Active Shizuku, Wireless ADB, or Root permission is required to optimize and boost games before playing."
+                        } else {
+                            boostingGame = game
                         }
                     },
                     onCustomizeClick = {
-                        customizingGame = game
+                        if (!overview.isAnyPermissionActive) {
+                            showPermissionBlockedDialog = "Cannot Tune Game: Active Shizuku, Wireless ADB, or Root permission is required to customize game graphics and fps."
+                        } else {
+                            customizingGame = game
+                        }
                     },
                     onRemoveClick = {
                         scope.launch {
@@ -357,6 +394,71 @@ fun HomeScreen(
                     val res = repository.saveAndApplyGameConfig(liveGame.packageName, newConfig)
                     val msg = res.getOrElse { "Saved profile for ${liveGame.appName}" }
                     Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                }
+            }
+        )
+    }
+
+    boostingGame?.let { targetGame ->
+        GameBoostDialog(
+            game = targetGame,
+            repository = repository,
+            onDismiss = { boostingGame = null }
+        )
+    }
+
+    showPermissionBlockedDialog?.let { message ->
+        AlertDialog(
+            onDismissRequest = { showPermissionBlockedDialog = null },
+            containerColor = Color(0xFF141724),
+            shape = RoundedCornerShape(22.dp),
+            title = {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Lock,
+                        contentDescription = null,
+                        tint = KyroOrange
+                    )
+                    Text(
+                        text = "Permission Required",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
+                }
+            },
+            text = {
+                Text(
+                    text = message,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Color(0xFFC0CDDE),
+                    lineHeight = 20.sp
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showPermissionBlockedDialog = null
+                        val status = repository.requestShizukuPermission()
+                        if (status != "ALREADY_GRANTED") {
+                            Toast.makeText(context, "Opening Shizuku...", Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = KyroCyan,
+                        contentColor = Color(0xFF061424)
+                    )
+                ) {
+                    Text("Connect Shizuku", fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showPermissionBlockedDialog = null }) {
+                    Text("Close", color = Color(0xFFA0A7BD))
                 }
             }
         )

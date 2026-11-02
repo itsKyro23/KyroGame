@@ -57,4 +57,31 @@ data class ConnectionOverview(
     val root: RootInfo = RootInfo(),
     val androidVersion: String = "",
     val lastCommandLog: String? = null
-)
+) {
+    /**
+     * Checks if at least 1 of the 3 execution permissions (Shizuku, Wireless/Manual ADB, or Root)
+     * is currently active and authorized.
+     */
+    val isAnyPermissionActive: Boolean
+        get() = (shizuku.isRunning && shizuku.isPermissionGranted) ||
+                manualAdb.isConnected ||
+                manualAdb.isDaemonInjected ||
+                root.isRootGranted ||
+                status == ConnectionStatus.CONNECTED
+
+    val isCurrentMethodActive: Boolean
+        get() = when (method) {
+            ExecutionMethod.SHIZUKU -> shizuku.isRunning && shizuku.isPermissionGranted
+            ExecutionMethod.MANUAL_ADB -> manualAdb.isConnected || manualAdb.isDaemonInjected
+            ExecutionMethod.ROOT -> root.isRootGranted
+        } || status == ConnectionStatus.CONNECTED
+
+    val activePermissionName: String?
+        get() = when {
+            root.isRootGranted -> "Root (su)"
+            shizuku.isRunning && shizuku.isPermissionGranted -> "Shizuku"
+            manualAdb.isConnected || manualAdb.isDaemonInjected -> "Wireless ADB"
+            status == ConnectionStatus.CONNECTED -> method.name
+            else -> null
+        }
+}

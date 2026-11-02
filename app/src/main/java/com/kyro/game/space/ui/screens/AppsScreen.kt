@@ -51,9 +51,21 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import android.widget.Toast
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.collectAsState
+import com.kyro.game.space.data.model.ConnectionOverview
 import com.kyro.game.space.data.model.GameItem
 import com.kyro.game.space.data.repository.GameSpaceRepository
+import com.kyro.game.space.ui.components.ManualAdbPairingDialog
+import com.kyro.game.space.ui.components.PermissionRequiredBanner
 import com.kyro.game.space.ui.theme.KyroAccent
+import com.kyro.game.space.ui.theme.KyroCyan
+import com.kyro.game.space.ui.theme.KyroOrange
 import com.kyro.game.space.ui.theme.KyroPrimary
 import kotlinx.coroutines.launch
 
@@ -68,11 +80,15 @@ enum class AppFilter {
 fun AppsScreen(
     repository: GameSpaceRepository,
     allApps: List<GameItem>,
+    overview: ConnectionOverview = repository.connectionState.collectAsState().value,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var searchQuery by remember { mutableStateOf("") }
     var selectedFilter by remember { mutableStateOf(AppFilter.ALL) }
+    var showPermissionBlockedDialog by remember { mutableStateOf(false) }
+    var showPairingDialog by remember { mutableStateOf(false) }
 
     val filteredApps by remember(allApps, searchQuery, selectedFilter) {
         derivedStateOf {
@@ -159,23 +175,119 @@ fun AppsScreen(
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 96.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
+            if (!overview.isAnyPermissionActive) {
+                item {
+                    PermissionRequiredBanner(
+                        overview = overview,
+                        onConnectShizuku = {
+                            val status = repository.requestShizukuPermission()
+                            if (status != "ALREADY_GRANTED") {
+                                Toast.makeText(context, "Opening Shizuku...", Toast.LENGTH_SHORT).show()
+                            }
+                        },
+                        onPairAdb = { showPairingDialog = true },
+                        onRequestRoot = {
+                            scope.launch {
+                                val rootInfo = repository.requestRootPermission()
+                                Toast.makeText(context, rootInfo.statusMessage, Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    )
+                }
+            }
+
             items(items = filteredApps, key = { it.packageName }) { app ->
                 AppListItem(
                     app = app,
+                    isPermissionActive = overview.isAnyPermissionActive,
                     onToggleHome = { newState ->
-                        scope.launch {
-                            repository.setAddedToHome(app.packageName, newState)
+                        if (!overview.isAnyPermissionActive) {
+                            showPermissionBlockedDialog = true
+                        } else {
+                            scope.launch {
+                                repository.setAddedToHome(app.packageName, newState)
+                            }
                         }
                     }
                 )
             }
         }
     }
+
+    if (showPermissionBlockedDialog) {
+        AlertDialog(
+            onDismissRequest = { showPermissionBlockedDialog = false },
+            containerColor = Color(0xFF141724),
+            shape = RoundedCornerShape(22.dp),
+            title = {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Lock,
+                        contentDescription = null,
+                        tint = KyroOrange
+                    )
+                    Text(
+                        text = "Cannot Add Games",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
+                }
+            },
+            text = {
+                Text(
+                    text = "Adding games to Game Space Home requires an active execution permission (Shizuku, Wireless ADB, or Root) to inject game optimizations, ANGLE drivers, and performance monitors.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Color(0xFFC0CDDE),
+                    lineHeight = 20.sp
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showPermissionBlockedDialog = false
+                        val status = repository.requestShizukuPermission()
+                        if (status != "ALREADY_GRANTED") {
+                            Toast.makeText(context, "Opening Shizuku...", Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = KyroCyan,
+                        contentColor = Color(0xFF061424)
+                    )
+                ) {
+                    Text("Connect Shizuku", fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showPermissionBlockedDialog = false }) {
+                    Text("Close", color = Color(0xFFA0A7BD))
+                }
+            }
+        )
+    }
+
+    if (showPairingDialog) {
+        ManualAdbPairingDialog(
+            manualAdbInfo = overview.manualAdb,
+            onPair = { h, p, c -> repository.pairManualAdb(h, p, c) },
+            onConnect = { h, p -> repository.connectManualAdb(h, p) },
+            onInjectDaemon = { repository.injectManualAdbDaemon() },
+            onStartAutoScan = { notif -> repository.startWirelessAdbScan(notif) },
+            onDisconnect = { repository.disconnectManualAdb() },
+            onDismiss = { showPairingDialog = false }
+        )
+    }
 }
 
 @Composable
 private fun AppListItem(
     app: GameItem,
+    isPermissionActive: Boolean,
     onToggleHome: (Boolean) -> Unit
 ) {
     val context = LocalContext.current

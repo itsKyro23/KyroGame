@@ -20,6 +20,7 @@ android {
     versionName = "1.0.0"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    resourceConfigurations.addAll(listOf("en", "in", "ms"))
   }
 
   // Do not remove or modify these signingConfigs. They are necessary for building, installing,
@@ -79,6 +80,16 @@ android {
     }
   }
   packaging {
+    resources {
+      excludes += listOf(
+        "/META-INF/{AL2.0,LGPL2.1}",
+        "/META-INF/INDEX.LIST",
+        "/META-INF/DEPENDENCIES",
+        "/META-INF/LICENSE*",
+        "/META-INF/NOTICE*",
+        "DebugProbesKt.bin"
+      )
+    }
     jniLibs {
       useLegacyPackaging = true
     }

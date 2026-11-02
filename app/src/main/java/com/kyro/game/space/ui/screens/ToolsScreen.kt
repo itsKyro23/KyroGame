@@ -45,10 +45,23 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import android.widget.Toast
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
 import com.kyro.game.space.data.repository.GameSpaceRepository
+import com.kyro.game.space.ui.components.ManualAdbPairingDialog
+import com.kyro.game.space.ui.components.PermissionRequiredBanner
 import com.kyro.game.space.ui.theme.KyroCyan
 import com.kyro.game.space.ui.theme.KyroGreen
 import com.kyro.game.space.ui.theme.KyroOrange
+import com.kyro.game.space.ui.theme.KyroPrimary
+import kotlinx.coroutines.launch
 
 @Composable
 fun ToolsScreen(
@@ -58,10 +71,24 @@ fun ToolsScreen(
     onOpenTextureTuner: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val overview by repository.connectionState.collectAsState()
     val resState by repository.resolutionState.collectAsState()
     val netState by repository.networkOptimizerState.collectAsState()
     val texState by repository.textureTunerState.collectAsState()
     val stats by repository.deviceStats.collectAsState()
+
+    var showPermissionBlockedDialog by remember { mutableStateOf<String?>(null) }
+    var showPairingDialog by remember { mutableStateOf(false) }
+
+    val openToolSafely: (() -> Unit, String) -> Unit = { action, toolTitle ->
+        if (!overview.isAnyPermissionActive) {
+            showPermissionBlockedDialog = "Cannot Open $toolTitle: Active Shizuku, Wireless ADB, or Root permission is required to configure system displays and gaming optimizations."
+        } else {
+            action()
+        }
+    }
 
     val pingColor = when {
         stats.pingMs == null -> MaterialTheme.colorScheme.error
@@ -102,10 +129,31 @@ fun ToolsScreen(
             }
         }
 
+        if (!overview.isAnyPermissionActive) {
+            item {
+                PermissionRequiredBanner(
+                    overview = overview,
+                    onConnectShizuku = {
+                        val status = repository.requestShizukuPermission()
+                        if (status != "ALREADY_GRANTED") {
+                            Toast.makeText(context, "Opening Shizuku...", Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    onPairAdb = { showPairingDialog = true },
+                    onRequestRoot = {
+                        scope.launch {
+                            val info = repository.requestRootPermission()
+                            Toast.makeText(context, info.statusMessage, Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                )
+            }
+        }
+
         // 1. Resolution Changer Tool Card
         item {
             Card(
-                onClick = onOpenResolutionChanger,
+                onClick = { openToolSafely(onOpenResolutionChanger, "Resolution Changer") },
                 modifier = Modifier
                     .fillMaxWidth()
                     .testTag("tools_resolution_changer_card"),
@@ -221,7 +269,7 @@ fun ToolsScreen(
                         }
 
                         Button(
-                            onClick = onOpenResolutionChanger,
+                            onClick = { openToolSafely(onOpenResolutionChanger, "Resolution Changer") },
                             shape = RoundedCornerShape(10.dp),
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = MaterialTheme.colorScheme.primary,
@@ -253,7 +301,7 @@ fun ToolsScreen(
         item {
             val texSkyBlue = Color(0xFF56B4E9)
             Card(
-                onClick = onOpenTextureTuner,
+                onClick = { openToolSafely(onOpenTextureTuner, "Lightweight Texture") },
                 modifier = Modifier
                     .fillMaxWidth()
                     .testTag("tools_texture_tuner_card"),
@@ -367,7 +415,7 @@ fun ToolsScreen(
                         Spacer(modifier = Modifier.width(8.dp))
 
                         Button(
-                            onClick = onOpenTextureTuner,
+                            onClick = { openToolSafely(onOpenTextureTuner, "Lightweight Texture") },
                             shape = RoundedCornerShape(10.dp),
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = MaterialTheme.colorScheme.primary,
@@ -398,7 +446,7 @@ fun ToolsScreen(
         // 3. Network Optimizer Tool Card
         item {
             Card(
-                onClick = onOpenNetworkOptimizer,
+                onClick = { openToolSafely(onOpenNetworkOptimizer, "Network Optimizer") },
                 modifier = Modifier
                     .fillMaxWidth()
                     .testTag("tools_network_optimizer_card"),
@@ -509,7 +557,7 @@ fun ToolsScreen(
                         }
 
                         Button(
-                            onClick = onOpenNetworkOptimizer,
+                            onClick = { openToolSafely(onOpenNetworkOptimizer, "Network Optimizer") },
                             shape = RoundedCornerShape(10.dp),
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = MaterialTheme.colorScheme.primary,
@@ -536,5 +584,66 @@ fun ToolsScreen(
                 }
             }
         }
+    }
+
+    showPermissionBlockedDialog?.let { message ->
+        AlertDialog(
+            onDismissRequest = { showPermissionBlockedDialog = null },
+            icon = {
+                Icon(
+                    imageVector = Icons.Default.Lock,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.error
+                )
+            },
+            title = {
+                Text(
+                    text = "Permission Required",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Text(
+                    text = message,
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showPermissionBlockedDialog = null
+                        val status = repository.requestShizukuPermission()
+                        if (status != "ALREADY_GRANTED") {
+                            Toast.makeText(context, "Opening Shizuku...", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                ) {
+                    Text("Grant Shizuku")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        showPermissionBlockedDialog = null
+                        showPairingDialog = true
+                    }
+                ) {
+                    Text("Pair ADB")
+                }
+            }
+        )
+    }
+
+    if (showPairingDialog) {
+        ManualAdbPairingDialog(
+            manualAdbInfo = overview.manualAdb,
+            onPair = { h, p, c -> repository.pairManualAdb(h, p, c) },
+            onConnect = { h, p -> repository.connectManualAdb(h, p) },
+            onInjectDaemon = { repository.injectManualAdbDaemon() },
+            onStartAutoScan = { notif -> repository.startWirelessAdbScan(notif) },
+            onDisconnect = { repository.disconnectManualAdb() },
+            onDismiss = { showPairingDialog = false }
+        )
     }
 }

@@ -59,6 +59,7 @@ import com.kyro.game.space.ui.screens.HomeScreen
 import com.kyro.game.space.ui.screens.NetworkOptimizerScreen
 import com.kyro.game.space.ui.screens.ResolutionChangerScreen
 import com.kyro.game.space.ui.screens.SettingsScreen
+import com.kyro.game.space.ui.screens.SplashScreen
 import com.kyro.game.space.ui.screens.TextureTunerScreen
 import com.kyro.game.space.ui.screens.ToolsScreen
 import com.kyro.game.space.ui.theme.KyroAccent
@@ -92,13 +93,10 @@ fun GameSpaceApp(
     onRequestNotification: () -> Unit
 ) {
     val context = LocalContext.current
+    var showSplash by rememberSaveable { mutableStateOf(true) }
     var currentTab by rememberSaveable { mutableStateOf(GameSpaceTab.HOME) }
     var activeSubScreen by rememberSaveable { mutableStateOf(ToolSubScreen.NONE) }
     var showExitDialog by remember { mutableStateOf(false) }
-
-    BackHandler(enabled = activeSubScreen == ToolSubScreen.NONE) {
-        showExitDialog = true
-    }
 
     val overview by repository.connectionState.collectAsState()
     val stats by repository.deviceStats.collectAsState()
@@ -107,6 +105,18 @@ fun GameSpaceApp(
 
     val refreshIntervalMs by repository.refreshIntervalMs.collectAsState()
     val floatingHudEnabled by repository.floatingHudEnabled.collectAsState()
+
+    if (showSplash) {
+        SplashScreen(
+            overview = overview,
+            onSplashFinished = { showSplash = false }
+        )
+        return
+    }
+
+    BackHandler(enabled = activeSubScreen == ToolSubScreen.NONE) {
+        showExitDialog = true
+    }
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
@@ -248,7 +258,8 @@ fun GameSpaceApp(
                             )
                             GameSpaceTab.APPS -> AppsScreen(
                                 repository = repository,
-                                allApps = allApps
+                                allApps = allApps,
+                                overview = overview
                             )
                             GameSpaceTab.SETTINGS -> SettingsScreen(
                                 repository = repository,
