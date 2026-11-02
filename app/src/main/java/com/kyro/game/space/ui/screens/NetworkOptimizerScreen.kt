@@ -50,7 +50,6 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -99,13 +98,6 @@ fun NetworkOptimizerScreen(
                 NetworkTransportType.WIFI
             }
         )
-    }
-
-    // Run an initial multi-pass ping benchmark on page open if not already sampled
-    LaunchedEffect(Unit) {
-        if (netState.benchmarkResults.all { it.sampleCount == 0 } && !netState.isBenchmarking) {
-            repository.benchmarkAllDnsAndSelectStable(autoApplyBest = false, rounds = 3)
-        }
     }
 
     val pingColor = when {
@@ -303,7 +295,7 @@ fun NetworkOptimizerScreen(
                                 scope.launch {
                                     val best = repository.benchmarkAllDnsAndSelectStable(
                                         autoApplyBest = true,
-                                        rounds = 6
+                                        rounds = 10
                                     )
                                     if (best != null) {
                                         Toast.makeText(
@@ -651,7 +643,7 @@ fun NetworkOptimizerScreen(
                     FilledTonalButton(
                         onClick = {
                             scope.launch {
-                                repository.benchmarkAllDnsAndSelectStable(autoApplyBest = false, rounds = 5)
+                                repository.benchmarkAllDnsAndSelectStable(autoApplyBest = false, rounds = 8)
                             }
                         },
                         enabled = !netState.isBenchmarking,

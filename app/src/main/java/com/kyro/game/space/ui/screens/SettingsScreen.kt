@@ -23,6 +23,7 @@ import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material.icons.filled.Wifi
@@ -118,7 +119,7 @@ fun SettingsScreen(
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "Choose how elevated system optimization commands are dispatched without root.",
+                        text = "Choose how elevated system optimization commands are dispatched (Shizuku, Wireless ADB Daemon, or Root).",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -149,6 +150,19 @@ fun SettingsScreen(
                         }
                     )
 
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    // Option 3: Root Access (su / Magisk / KernelSU)
+                    ExecutionOptionRow(
+                        title = "Root Access (su / Magisk / KernelSU)",
+                        subtitle = overview.root.statusMessage,
+                        icon = Icons.Default.Security,
+                        selected = overview.method == ExecutionMethod.ROOT,
+                        onClick = {
+                            repository.setExecutionMethod(ExecutionMethod.ROOT)
+                        }
+                    )
+
                     Spacer(modifier = Modifier.height(16.dp))
 
                     // Action buttons based on selected method
@@ -156,37 +170,63 @@ fun SettingsScreen(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        if (overview.method == ExecutionMethod.SHIZUKU) {
-                            Button(
-                                onClick = {
-                                    val status = repository.requestShizukuPermission()
-                                    when (status) {
-                                        "ALREADY_GRANTED" -> Toast.makeText(context, "Shizuku permission is active and verified!", Toast.LENGTH_SHORT).show()
-                                        "REQUESTED" -> Toast.makeText(context, "Requesting Shizuku permission...", Toast.LENGTH_SHORT).show()
-                                        "OPENED_SHIZUKU" -> Toast.makeText(context, "Opening Shizuku app. Please ensure Shizuku service is Running.", Toast.LENGTH_LONG).show()
-                                        "NOT_INSTALLED" -> Toast.makeText(context, "Shizuku app is not installed on this device.", Toast.LENGTH_LONG).show()
-                                        else -> Toast.makeText(context, status, Toast.LENGTH_SHORT).show()
-                                    }
-                                },
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .testTag("request_shizuku_perm_btn"),
-                                shape = RoundedCornerShape(12.dp)
-                            ) {
-                                Text("Check / Grant Permission")
+                        when (overview.method) {
+                            ExecutionMethod.SHIZUKU -> {
+                                Button(
+                                    onClick = {
+                                        val status = repository.requestShizukuPermission()
+                                        when (status) {
+                                            "ALREADY_GRANTED" -> Toast.makeText(context, "Shizuku permission is active and verified!", Toast.LENGTH_SHORT).show()
+                                            "REQUESTED" -> Toast.makeText(context, "Requesting Shizuku permission...", Toast.LENGTH_SHORT).show()
+                                            "OPENED_SHIZUKU" -> Toast.makeText(context, "Opening Shizuku app. Please ensure Shizuku service is Running.", Toast.LENGTH_LONG).show()
+                                            "NOT_INSTALLED" -> Toast.makeText(context, "Shizuku app is not installed on this device.", Toast.LENGTH_LONG).show()
+                                            else -> Toast.makeText(context, status, Toast.LENGTH_SHORT).show()
+                                        }
+                                    },
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .testTag("request_shizuku_perm_btn"),
+                                    shape = RoundedCornerShape(12.dp)
+                                ) {
+                                    Text("Check / Grant Permission")
+                                }
                             }
-                        } else {
-                            Button(
-                                onClick = { showPairingDialog = true },
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .testTag("open_pairing_dialog_btn"),
-                                shape = RoundedCornerShape(12.dp),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = MaterialTheme.colorScheme.primary
-                                )
-                            ) {
-                                Text(if (overview.manualAdb.isDaemonInjected) "Daemon Active (Setup)" else "Auto-Scan, Pair & Inject")
+                            ExecutionMethod.MANUAL_ADB -> {
+                                Button(
+                                    onClick = { showPairingDialog = true },
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .testTag("open_pairing_dialog_btn"),
+                                    shape = RoundedCornerShape(12.dp),
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = MaterialTheme.colorScheme.primary
+                                    )
+                                ) {
+                                    Text(if (overview.manualAdb.isDaemonInjected) "Daemon Active (Setup)" else "Auto-Scan, Pair & Inject")
+                                }
+                            }
+                            ExecutionMethod.ROOT -> {
+                                Button(
+                                    onClick = {
+                                        scope.launch {
+                                            val rootInfo = repository.requestRootPermission()
+                                            Toast.makeText(
+                                                context,
+                                                rootInfo.statusMessage,
+                                                Toast.LENGTH_SHORT
+                                            ).show()
+                                        }
+                                    },
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .testTag("request_root_perm_btn"),
+                                    shape = RoundedCornerShape(12.dp),
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = MaterialTheme.colorScheme.primary
+                                    )
+                                ) {
+                                    Text(if (overview.root.isRootGranted) "Root Active (Verify)" else "Check / Grant Root Access")
+                                }
                             }
                         }
 

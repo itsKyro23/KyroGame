@@ -94,26 +94,40 @@ fun HomeScreen(
                 onReconnect = {
                     repository.updateShizukuStatus()
                     scope.launch {
-                        val alive = repository.checkDaemonAndSyncState()
-                        val msg = if (alive) {
-                            "Persistent Daemon is Active & Connected!"
+                        if (overview.method == ExecutionMethod.ROOT) {
+                            val rootInfo = repository.checkRootStatus(triggerPrompt = true)
+                            Toast.makeText(context, rootInfo.statusMessage, Toast.LENGTH_SHORT).show()
                         } else {
-                            "Refreshed connection & daemon status"
+                            val alive = repository.checkDaemonAndSyncState()
+                            val msg = if (alive) {
+                                "Persistent Daemon is Active & Connected!"
+                            } else {
+                                "Refreshed connection & daemon status"
+                            }
+                            Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
                         }
-                        Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
                     }
                 },
                 onRequestPermission = {
-                    if (overview.method == ExecutionMethod.MANUAL_ADB) {
-                        showPairingDialog = true
-                    } else {
-                        val status = repository.requestShizukuPermission()
-                        when (status) {
-                            "ALREADY_GRANTED" -> Toast.makeText(context, "Shizuku permission is active and verified!", Toast.LENGTH_SHORT).show()
-                            "REQUESTED" -> Toast.makeText(context, "Requesting Shizuku permission...", Toast.LENGTH_SHORT).show()
-                            "OPENED_SHIZUKU" -> Toast.makeText(context, "Opening Shizuku app. Please ensure Shizuku service is Running.", Toast.LENGTH_LONG).show()
-                            "NOT_INSTALLED" -> Toast.makeText(context, "Shizuku app is not installed on this device.", Toast.LENGTH_LONG).show()
-                            else -> Toast.makeText(context, status, Toast.LENGTH_SHORT).show()
+                    when (overview.method) {
+                        ExecutionMethod.MANUAL_ADB -> {
+                            showPairingDialog = true
+                        }
+                        ExecutionMethod.ROOT -> {
+                            scope.launch {
+                                val rootInfo = repository.requestRootPermission()
+                                Toast.makeText(context, rootInfo.statusMessage, Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                        ExecutionMethod.SHIZUKU -> {
+                            val status = repository.requestShizukuPermission()
+                            when (status) {
+                                "ALREADY_GRANTED" -> Toast.makeText(context, "Shizuku permission is active and verified!", Toast.LENGTH_SHORT).show()
+                                "REQUESTED" -> Toast.makeText(context, "Requesting Shizuku permission...", Toast.LENGTH_SHORT).show()
+                                "OPENED_SHIZUKU" -> Toast.makeText(context, "Opening Shizuku app. Please ensure Shizuku service is Running.", Toast.LENGTH_LONG).show()
+                                "NOT_INSTALLED" -> Toast.makeText(context, "Shizuku app is not installed on this device.", Toast.LENGTH_LONG).show()
+                                else -> Toast.makeText(context, status, Toast.LENGTH_SHORT).show()
+                            }
                         }
                     }
                 },
@@ -261,21 +275,33 @@ fun HomeScreen(
         // Section D: Required Permissions
         item {
             RequiredPermissionsCard(
-                isShizukuGranted = overview.shizuku.isPermissionGranted || overview.manualAdb.isDaemonInjected || overview.manualAdb.isConnected,
+                isShizukuGranted = overview.shizuku.isPermissionGranted ||
+                    overview.manualAdb.isDaemonInjected ||
+                    overview.manualAdb.isConnected ||
+                    overview.root.isRootGranted,
                 isUsageAccessGranted = isUsageAccessGranted,
                 isOverlayGranted = isOverlayGranted,
                 isNotificationGranted = isNotificationGranted,
                 onRequestShizuku = {
-                    if (overview.method == ExecutionMethod.MANUAL_ADB) {
-                        showPairingDialog = true
-                    } else {
-                        val status = repository.requestShizukuPermission()
-                        when (status) {
-                            "ALREADY_GRANTED" -> Toast.makeText(context, "Shizuku permission is active and verified!", Toast.LENGTH_SHORT).show()
-                            "REQUESTED" -> Toast.makeText(context, "Requesting Shizuku permission...", Toast.LENGTH_SHORT).show()
-                            "OPENED_SHIZUKU" -> Toast.makeText(context, "Opening Shizuku app. Please ensure Shizuku service is Running.", Toast.LENGTH_LONG).show()
-                            "NOT_INSTALLED" -> Toast.makeText(context, "Shizuku app is not installed on this device.", Toast.LENGTH_LONG).show()
-                            else -> Toast.makeText(context, status, Toast.LENGTH_SHORT).show()
+                    when (overview.method) {
+                        ExecutionMethod.MANUAL_ADB -> {
+                            showPairingDialog = true
+                        }
+                        ExecutionMethod.ROOT -> {
+                            scope.launch {
+                                val rootInfo = repository.requestRootPermission()
+                                Toast.makeText(context, rootInfo.statusMessage, Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                        ExecutionMethod.SHIZUKU -> {
+                            val status = repository.requestShizukuPermission()
+                            when (status) {
+                                "ALREADY_GRANTED" -> Toast.makeText(context, "Shizuku permission is active and verified!", Toast.LENGTH_SHORT).show()
+                                "REQUESTED" -> Toast.makeText(context, "Requesting Shizuku permission...", Toast.LENGTH_SHORT).show()
+                                "OPENED_SHIZUKU" -> Toast.makeText(context, "Opening Shizuku app. Please ensure Shizuku service is Running.", Toast.LENGTH_LONG).show()
+                                "NOT_INSTALLED" -> Toast.makeText(context, "Shizuku app is not installed on this device.", Toast.LENGTH_LONG).show()
+                                else -> Toast.makeText(context, status, Toast.LENGTH_SHORT).show()
+                            }
                         }
                     }
                 },

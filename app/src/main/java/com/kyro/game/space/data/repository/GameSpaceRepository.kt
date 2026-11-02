@@ -8,12 +8,14 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
+import android.hardware.display.DisplayManager
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.os.BatteryManager
 import android.os.Build
 import android.os.Process
 import android.provider.Settings
+import android.view.Display
 import com.kyro.game.space.data.db.GameDao
 import com.kyro.game.space.data.db.GameEntity
 import com.kyro.game.space.data.db.GameSpaceDatabase
@@ -32,10 +34,14 @@ import com.kyro.game.space.data.model.GameOptimizationMode
 import com.kyro.game.space.data.model.ManualAdbInfo
 import com.kyro.game.space.data.model.NetworkOptimizerState
 import com.kyro.game.space.data.model.NetworkTransportType
+import com.kyro.game.space.data.model.ResolutionPreset
+import com.kyro.game.space.data.model.ResolutionState
+import com.kyro.game.space.data.model.RootInfo
 import com.kyro.game.space.data.model.ShizukuInfo
 import com.kyro.game.space.data.model.formatDownscaleClean
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -89,6 +95,10 @@ class GameSpaceRepository(
     private val _networkOptimizerState = MutableStateFlow(loadInitialNetworkOptimizerState())
     val networkOptimizerState: StateFlow<NetworkOptimizerState> = _networkOptimizerState.asStateFlow()
 
+    private val _resolutionState = MutableStateFlow(loadInitialResolutionState())
+    val resolutionState: StateFlow<ResolutionState> = _resolutionState.asStateFlow()
+    private var resolutionCountdownJob: Job? = null
+
     @Volatile
     private var isProbingDaemon: Boolean = true
 
@@ -141,6 +151,14 @@ class GameSpaceRepository(
         scope.launch {
             try {
                 checkDaemonAndSyncState()
+            } catch (_: Throwable) {
+            }
+            try {
+                checkRootStatus(triggerPrompt = executionMethod.value == ExecutionMethod.ROOT)
+            } catch (_: Throwable) {
+            }
+            try {
+                recoverUnconfirmedResolutionOnStartup()
             } catch (_: Throwable) {
             }
             try {
@@ -599,24 +617,27 @@ class GameSpaceRepository(
 
     suspend fun benchmarkAllDnsAndSelectStable(
         autoApplyBest: Boolean = true,
-        rounds: Int = if (autoApplyBest) 6 else 3
+        rounds: Int = if (autoApplyBest) 10 else 6,
+        minRoundDurationMs: Long = if (autoApplyBest) 1000L else 700L
     ): DnsPreset? = withContext(Dispatchers.IO) {
-        val totalRounds = rounds.coerceIn(2, 10)
+        val totalRounds = rounds.coerceIn(2, 15)
         val (transportType, transportDetails) = detectNetworkTransport()
         val presets = NetworkOptimizerState.DEFAULT_DNS_PRESETS
         val samplesById = presets.associate { it.id to mutableListOf<Int>() }
+        val approxSec = ((totalRounds * minRoundDurationMs) / 1000L).coerceAtLeast(totalRounds.toLong())
 
         _networkOptimizerState.value = _networkOptimizerState.value.copy(
             activeTransport = transportType,
             transportDetails = transportDetails,
             isBenchmarking = true,
-            benchmarkProgress = 0.05f,
+            benchmarkProgress = 0.04f,
             currentRound = 1,
             totalRounds = totalRounds,
-            statusLog = "Sampling all ${presets.size} DNS servers over ${totalRounds}s to calculate average latency & stability..."
+            statusLog = "Sampling all ${presets.size} DNS servers over ~${approxSec}s ($totalRounds passes) to calculate average latency & stability..."
         )
 
         for (round in 1..totalRounds) {
+            val roundStartMs = System.currentTimeMillis()
             coroutineScope {
                 val jobs = presets.map { preset ->
                     async {
@@ -675,8 +696,10 @@ class GameSpaceRepository(
                 statusLog = "Sampling all DNS servers (Pass $round/$totalRounds • ${(progress * 100).toInt()}%) — Averaging ping & jitter..."
             )
 
-            if (round < totalRounds) {
-                delay(if (autoApplyBest) 650L else 350L)
+            if (round < totalRounds && minRoundDurationMs > 0L) {
+                val elapsed = System.currentTimeMillis() - roundStartMs
+                val waitMs = (minRoundDurationMs - elapsed).coerceAtLeast((minRoundDurationMs * 4L) / 5L)
+                delay(waitMs)
             }
         }
 
@@ -1072,6 +1095,16 @@ class GameSpaceRepository(
         updateConnectionOverview()
     }
 
+    suspend fun checkRootStatus(triggerPrompt: Boolean = false): RootInfo {
+        val info = executorFactory.rootExecutor.probeAndRequestRoot(triggerPrompt = triggerPrompt)
+        updateConnectionOverview()
+        return info
+    }
+
+    suspend fun requestRootPermission(): RootInfo {
+        return checkRootStatus(triggerPrompt = true)
+    }
+
     suspend fun executeCommand(command: String): CommandResult {
         val currentMethod = executionMethod.value
         val executor = executorFactory.getExecutor(currentMethod)
@@ -1088,6 +1121,7 @@ class GameSpaceRepository(
         val currentMethod = executionMethod.value
         val currentShizuku = shizuku ?: _connectionState.value.shizuku
         val libAdb = executorFactory.libAdbExecutor
+        val rootExec = executorFactory.rootExecutor
         val scan = adbScanner.state.value
 
         val effectiveHost = if (libAdb.isConnectedSession) {
@@ -1115,6 +1149,13 @@ class GameSpaceRepository(
             scanStatus = scan.statusText,
             autoConnectEnabled = scan.autoConnectEnabled,
             error = libAdb.lastError
+        )
+
+        val rootInfo = RootInfo(
+            isSuBinaryPresent = rootExec.isSuBinaryPresent,
+            isRootGranted = rootExec.isRootGranted,
+            suVersion = rootExec.suVersion,
+            statusMessage = rootExec.statusMessage
         )
 
         val (status, details) = when (currentMethod) {
@@ -1154,6 +1195,22 @@ class GameSpaceRepository(
                     )
                 }
             }
+            ExecutionMethod.ROOT -> {
+                when {
+                    rootInfo.isRootGranted -> Pair(
+                        ConnectionStatus.CONNECTED,
+                        rootInfo.statusMessage
+                    )
+                    rootInfo.isSuBinaryPresent -> Pair(
+                        ConnectionStatus.PERMISSION_REQUIRED,
+                        rootInfo.statusMessage
+                    )
+                    else -> Pair(
+                        ConnectionStatus.DISCONNECTED,
+                        rootInfo.statusMessage
+                    )
+                }
+            }
         }
 
         _connectionState.value = ConnectionOverview(
@@ -1162,6 +1219,7 @@ class GameSpaceRepository(
             statusDetails = details,
             shizuku = currentShizuku,
             manualAdb = manualAdb,
+            root = rootInfo,
             androidVersion = "Android ${Build.VERSION.RELEASE} (SDK ${Build.VERSION.SDK_INT})",
             lastCommandLog = _connectionState.value.lastCommandLog
         )
@@ -1171,6 +1229,14 @@ class GameSpaceRepository(
         executionMethod.value = method
         prefs.edit().putString("execution_method", method.name).apply()
         updateConnectionOverview()
+        if (method == ExecutionMethod.ROOT) {
+            scope.launch {
+                try {
+                    checkRootStatus(triggerPrompt = true)
+                } catch (_: Throwable) {
+                }
+            }
+        }
     }
 
     fun setRefreshInterval(ms: Long) {
@@ -1181,6 +1247,318 @@ class GameSpaceRepository(
     fun setFloatingHudEnabled(enabled: Boolean) {
         floatingHudEnabled.value = enabled
         prefs.edit().putBoolean("floating_hud_enabled", enabled).apply()
+    }
+
+    // =========================================================================
+    // Resolution Changer Engine + 10s Countdown + Crash-Safe Watchdog
+    // =========================================================================
+
+    private fun detectHardwareDisplayMetrics(): Triple<Int, Int, Int> {
+        var physW = prefs.getInt("hw_native_width", 0)
+        var physH = prefs.getInt("hw_native_height", 0)
+        var physDpi = prefs.getInt("hw_native_density", 0)
+
+        try {
+            val dm = context.getSystemService(Context.DISPLAY_SERVICE) as? DisplayManager
+            val display = dm?.getDisplay(Display.DEFAULT_DISPLAY)
+            if (display != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                val maxMode = display.supportedModes.maxByOrNull { it.physicalWidth * it.physicalHeight }
+                    ?: display.mode
+                if (maxMode != null) {
+                    val w = minOf(maxMode.physicalWidth, maxMode.physicalHeight)
+                    val h = maxOf(maxMode.physicalWidth, maxMode.physicalHeight)
+                    if (w >= 360 && h >= 640 && w >= physW) {
+                        physW = w
+                        physH = h
+                    }
+                }
+            }
+        } catch (_: Throwable) {
+        }
+
+        val resMetrics = context.resources.displayMetrics
+        if (physW < 360 || physH < 640) {
+            val w = minOf(resMetrics.widthPixels, resMetrics.heightPixels).coerceAtLeast(720)
+            val h = maxOf(resMetrics.widthPixels, resMetrics.heightPixels).coerceAtLeast(1600)
+            physW = maxOf(physW, w)
+            physH = maxOf(physH, h)
+        }
+        if (physDpi <= 0) {
+            physDpi = resMetrics.densityDpi.coerceAtLeast(320)
+        }
+
+        prefs.edit()
+            .putInt("hw_native_width", physW)
+            .putInt("hw_native_height", physH)
+            .putInt("hw_native_density", physDpi)
+            .apply()
+
+        return Triple(physW, physH, physDpi)
+    }
+
+    private fun loadInitialResolutionState(): ResolutionState {
+        val (nativeW, nativeH, nativeDpi) = detectHardwareDisplayMetrics()
+        val confirmedW = prefs.getInt("res_confirmed_width", nativeW).coerceIn(360, nativeW)
+        val confirmedH = prefs.getInt("res_confirmed_height", nativeH)
+        val confirmedDpi = prefs.getInt("res_confirmed_density", nativeDpi)
+        val autoScaleDpi = prefs.getBoolean("res_auto_scale_dpi", true)
+
+        val presets = ResolutionState.buildDevicePresets(
+            nativeWidth = nativeW,
+            nativeHeight = nativeH,
+            nativeDensity = nativeDpi
+        )
+
+        return ResolutionState(
+            nativeWidth = nativeW,
+            nativeHeight = nativeH,
+            nativeDensityDpi = nativeDpi,
+            currentWidth = confirmedW,
+            currentHeight = confirmedH,
+            currentDensityDpi = confirmedDpi,
+            minWidth = ResolutionState.MIN_SUPPORTED_WIDTH,
+            maxWidth = nativeW,
+            autoScaleDensity = autoScaleDpi,
+            presets = presets,
+            pendingWidth = confirmedW,
+            pendingHeight = confirmedH,
+            pendingDensity = confirmedDpi
+        )
+    }
+
+    private suspend fun recoverUnconfirmedResolutionOnStartup() = withContext(Dispatchers.IO) {
+        val wasPending = prefs.getBoolean("res_pending_confirmation", false)
+        if (wasPending) {
+            prefs.edit().putBoolean("res_pending_confirmation", false).commit()
+            val cur = _resolutionState.value
+            val prevW = prefs.getInt("res_confirmed_width", cur.nativeWidth).coerceIn(360, cur.nativeWidth)
+            val prevH = prefs.getInt("res_confirmed_height", cur.nativeHeight)
+            val prevDpi = prefs.getInt("res_confirmed_density", cur.nativeDensityDpi)
+
+            val revertCmd = if (prevW == cur.nativeWidth) {
+                "wm size reset; wm density reset"
+            } else {
+                "wm size ${prevW}x${prevH}; wm density $prevDpi"
+            }
+            executeCommand(revertCmd)
+            _resolutionState.value = cur.copy(
+                currentWidth = prevW,
+                currentHeight = prevH,
+                currentDensityDpi = prevDpi,
+                isPendingConfirmation = false,
+                statusMessage = "Auto-Rollback Protection: Restored original resolution (${prevW}×${prevH}) after unexpected interruption."
+            )
+        }
+    }
+
+    fun setAutoScaleDensity(enabled: Boolean) {
+        prefs.edit().putBoolean("res_auto_scale_dpi", enabled).apply()
+        _resolutionState.value = _resolutionState.value.copy(autoScaleDensity = enabled)
+    }
+
+    suspend fun applyResolutionWithSafetyCountdown(targetWidthInput: Int): Result<String> = withContext(Dispatchers.IO) {
+        resolutionCountdownJob?.cancel()
+        val state = _resolutionState.value
+        val targetW = ((targetWidthInput.coerceIn(state.minWidth, state.maxWidth)) / 2) * 2
+        val targetH = state.computeHeightForWidth(targetW)
+        val targetDpi = if (state.autoScaleDensity) {
+            state.computeDensityForWidth(targetW)
+        } else {
+            state.nativeDensityDpi
+        }
+
+        val prevW = state.currentWidth
+        val prevH = state.currentHeight
+        val prevDpi = state.currentDensityDpi
+
+        // Record pending confirmation flag synchronously BEFORE running wm size in case of app crash
+        prefs.edit()
+            .putBoolean("res_pending_confirmation", true)
+            .putInt("res_confirmed_width", prevW)
+            .putInt("res_confirmed_height", prevH)
+            .putInt("res_confirmed_density", prevDpi)
+            .commit()
+
+        val applyCmd = if (targetW == state.nativeWidth) {
+            "wm size reset; wm density reset"
+        } else if (state.autoScaleDensity) {
+            "wm size ${targetW}x${targetH}; wm density $targetDpi"
+        } else {
+            "wm size ${targetW}x${targetH}"
+        }
+
+        val revertCmd = if (prevW == state.nativeWidth) {
+            "wm size reset; wm density reset"
+        } else if (state.autoScaleDensity) {
+            "wm size ${prevW}x${prevH}; wm density $prevDpi"
+        } else {
+            "wm size ${prevW}x${prevH}"
+        }
+
+        // Atomic shell command:
+        // 1. Clear confirmation marker /data/local/tmp/kyro_res_confirmed
+        // 2. Apply target resolution & density
+        // 3. Spawn detached background shell watchdog (survives app crash / force close!) that reverts after 11s if not confirmed
+        val fullShellCmd = "rm -f /data/local/tmp/kyro_res_confirmed 2>/dev/null || true; " +
+            "$applyCmd; " +
+            "nohup sh -c 'sleep 11; if [ ! -f /data/local/tmp/kyro_res_confirmed ]; then $revertCmd; fi' >/dev/null 2>&1 &"
+
+        _resolutionState.value = state.copy(
+            isApplying = true,
+            statusMessage = "Applying ${targetW}×${targetH} (${targetDpi} DPI) with 10s fail-safe protection..."
+        )
+
+        val cmdRes = try {
+            executeCommand(fullShellCmd)
+        } catch (t: Throwable) {
+            // If anything threw during execution, immediately roll back
+            prefs.edit().putBoolean("res_pending_confirmation", false).commit()
+            try {
+                executeCommand(revertCmd)
+            } catch (_: Throwable) {
+            }
+            _resolutionState.value = _resolutionState.value.copy(
+                isApplying = false,
+                isPendingConfirmation = false,
+                statusMessage = "Error applying resolution; reverted to safe ${prevW}×${prevH}."
+            )
+            return@withContext Result.failure(t)
+        }
+
+        // Start 10-second confirmation dialog & in-app countdown timer
+        _resolutionState.value = _resolutionState.value.copy(
+            isApplying = false,
+            isPendingConfirmation = true,
+            countdownSeconds = ResolutionState.CONFIRMATION_TIMEOUT_SECONDS,
+            pendingWidth = targetW,
+            pendingHeight = targetH,
+            pendingDensity = targetDpi,
+            statusMessage = if (cmdRes.isSuccess) {
+                "Testing ${targetW}×${targetH} (${targetDpi} DPI). Confirm within 10s or it will revert automatically."
+            } else {
+                "Previewing ${targetW}×${targetH} (${targetDpi} DPI). Connect Shizuku/Daemon for system-wide wm size."
+            }
+        )
+
+        startResolutionCountdownTimer()
+        Result.success("Testing ${targetW}×${targetH}")
+    }
+
+    private fun startResolutionCountdownTimer() {
+        resolutionCountdownJob?.cancel()
+        resolutionCountdownJob = scope.launch {
+            for (sec in ResolutionState.CONFIRMATION_TIMEOUT_SECONDS downTo 1) {
+                if (!_resolutionState.value.isPendingConfirmation) return@launch
+                _resolutionState.value = _resolutionState.value.copy(countdownSeconds = sec)
+                delay(1000L)
+            }
+            if (_resolutionState.value.isPendingConfirmation) {
+                revertResolutionToOriginal("10s confirmation timer expired. Automatically reverted to original resolution.")
+            }
+        }
+    }
+
+    suspend fun confirmResolutionChange(): Result<String> = withContext(Dispatchers.IO) {
+        resolutionCountdownJob?.cancel()
+        val cur = _resolutionState.value
+        val newW = cur.pendingWidth
+        val newH = cur.pendingHeight
+        val newDpi = cur.pendingDensity
+
+        // Signal the detached shell watchdog not to revert
+        try {
+            executeCommand("touch /data/local/tmp/kyro_res_confirmed 2>/dev/null || true")
+        } catch (_: Throwable) {
+        }
+
+        prefs.edit()
+            .putBoolean("res_pending_confirmation", false)
+            .putInt("res_confirmed_width", newW)
+            .putInt("res_confirmed_height", newH)
+            .putInt("res_confirmed_density", newDpi)
+            .commit()
+
+        val msg = "Saved & confirmed resolution: ${newW}×${newH} (${newDpi} DPI)."
+        _resolutionState.value = cur.copy(
+            currentWidth = newW,
+            currentHeight = newH,
+            currentDensityDpi = newDpi,
+            isPendingConfirmation = false,
+            countdownSeconds = ResolutionState.CONFIRMATION_TIMEOUT_SECONDS,
+            statusMessage = msg
+        )
+        Result.success(msg)
+    }
+
+    suspend fun revertResolutionToOriginal(
+        reason: String = "Reverted to previous safe resolution."
+    ): Result<String> = withContext(Dispatchers.IO) {
+        resolutionCountdownJob?.cancel()
+        val cur = _resolutionState.value
+        val prevW = cur.currentWidth.coerceIn(cur.minWidth, cur.maxWidth)
+        val prevH = cur.currentHeight
+        val prevDpi = cur.currentDensityDpi
+
+        prefs.edit().putBoolean("res_pending_confirmation", false).commit()
+
+        val revertCmd = if (prevW == cur.nativeWidth) {
+            "touch /data/local/tmp/kyro_res_confirmed 2>/dev/null || true; wm size reset; wm density reset"
+        } else if (cur.autoScaleDensity) {
+            "touch /data/local/tmp/kyro_res_confirmed 2>/dev/null || true; wm size ${prevW}x${prevH}; wm density $prevDpi"
+        } else {
+            "touch /data/local/tmp/kyro_res_confirmed 2>/dev/null || true; wm size ${prevW}x${prevH}"
+        }
+
+        try {
+            executeCommand(revertCmd)
+        } catch (_: Throwable) {
+        }
+
+        _resolutionState.value = cur.copy(
+            isPendingConfirmation = false,
+            countdownSeconds = ResolutionState.CONFIRMATION_TIMEOUT_SECONDS,
+            pendingWidth = prevW,
+            pendingHeight = prevH,
+            pendingDensity = prevDpi,
+            statusMessage = "$reason (${prevW}×${prevH})"
+        )
+        Result.success(reason)
+    }
+
+    suspend fun resetResolutionToNative(): Result<String> = withContext(Dispatchers.IO) {
+        resolutionCountdownJob?.cancel()
+        val cur = _resolutionState.value
+        prefs.edit()
+            .putBoolean("res_pending_confirmation", false)
+            .putInt("res_confirmed_width", cur.nativeWidth)
+            .putInt("res_confirmed_height", cur.nativeHeight)
+            .putInt("res_confirmed_density", cur.nativeDensityDpi)
+            .commit()
+
+        val cmd = "touch /data/local/tmp/kyro_res_confirmed 2>/dev/null || true; wm size reset; wm density reset"
+        val res = try {
+            executeCommand(cmd)
+        } catch (_: Throwable) {
+            null
+        }
+
+        val msg = if (res?.isSuccess == true) {
+            "Restored native hardware resolution: ${cur.nativeWidth}×${cur.nativeHeight} (${cur.nativeDensityDpi} DPI)."
+        } else {
+            "Reset to native profile: ${cur.nativeWidth}×${cur.nativeHeight} (${cur.nativeDensityDpi} DPI)."
+        }
+
+        _resolutionState.value = cur.copy(
+            currentWidth = cur.nativeWidth,
+            currentHeight = cur.nativeHeight,
+            currentDensityDpi = cur.nativeDensityDpi,
+            pendingWidth = cur.nativeWidth,
+            pendingHeight = cur.nativeHeight,
+            pendingDensity = cur.nativeDensityDpi,
+            isPendingConfirmation = false,
+            statusMessage = msg
+        )
+        Result.success(msg)
     }
 
     private fun isPackageInstalled(packageName: String): Boolean {

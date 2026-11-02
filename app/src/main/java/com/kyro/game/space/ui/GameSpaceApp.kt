@@ -10,9 +10,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Apps
+import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.outlined.Apps
+import androidx.compose.material.icons.outlined.Build
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -42,7 +44,9 @@ import com.kyro.game.space.data.repository.GameSpaceRepository
 import com.kyro.game.space.ui.screens.AppsScreen
 import com.kyro.game.space.ui.screens.HomeScreen
 import com.kyro.game.space.ui.screens.NetworkOptimizerScreen
+import com.kyro.game.space.ui.screens.ResolutionChangerScreen
 import com.kyro.game.space.ui.screens.SettingsScreen
+import com.kyro.game.space.ui.screens.ToolsScreen
 import com.kyro.game.space.ui.theme.KyroAccent
 import com.kyro.game.space.ui.theme.KyroPrimary
 
@@ -52,8 +56,15 @@ enum class GameSpaceTab(
     val unselectedIcon: ImageVector
 ) {
     HOME("Home", Icons.Filled.Home, Icons.Outlined.Home),
+    TOOLS("Tools", Icons.Filled.Build, Icons.Outlined.Build),
     APPS("Apps", Icons.Filled.Apps, Icons.Outlined.Apps),
     SETTINGS("Settings", Icons.Filled.Settings, Icons.Outlined.Settings)
+}
+
+enum class ToolSubScreen {
+    NONE,
+    RESOLUTION_CHANGER,
+    NETWORK_OPTIMIZER
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -66,7 +77,7 @@ fun GameSpaceApp(
     onRequestNotification: () -> Unit
 ) {
     var currentTab by rememberSaveable { mutableStateOf(GameSpaceTab.HOME) }
-    var showNetworkOptimizer by rememberSaveable { mutableStateOf(false) }
+    var activeSubScreen by rememberSaveable { mutableStateOf(ToolSubScreen.NONE) }
 
     val overview by repository.connectionState.collectAsState()
     val stats by repository.deviceStats.collectAsState()
@@ -81,14 +92,14 @@ fun GameSpaceApp(
         topBar = {
             TopAppBar(
                 navigationIcon = {
-                    if (showNetworkOptimizer) {
+                    if (activeSubScreen != ToolSubScreen.NONE) {
                         IconButton(
-                            onClick = { showNetworkOptimizer = false },
+                            onClick = { activeSubScreen = ToolSubScreen.NONE },
                             modifier = Modifier.testTag("network_optimizer_back_button")
                         ) {
                             Icon(
                                 imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = "Back to Home",
+                                contentDescription = "Back",
                                 tint = MaterialTheme.colorScheme.onBackground
                             )
                         }
@@ -96,11 +107,12 @@ fun GameSpaceApp(
                 },
                 title = {
                     Text(
-                        text = if (showNetworkOptimizer) {
-                            "NETWORK OPTIMIZER"
-                        } else {
-                            when (currentTab) {
+                        text = when (activeSubScreen) {
+                            ToolSubScreen.RESOLUTION_CHANGER -> "RESOLUTION CHANGER"
+                            ToolSubScreen.NETWORK_OPTIMIZER -> "NETWORK OPTIMIZER"
+                            ToolSubScreen.NONE -> when (currentTab) {
                                 GameSpaceTab.HOME -> "GAME SPACE"
+                                GameSpaceTab.TOOLS -> "TACTICAL TOOLS"
                                 GameSpaceTab.APPS -> "APP MANAGER"
                                 GameSpaceTab.SETTINGS -> "PREFERENCES"
                             }
@@ -122,12 +134,12 @@ fun GameSpaceApp(
                 tonalElevation = 6.dp,
                 modifier = Modifier.testTag("bottom_nav_bar")
             ) {
-                GameSpaceTab.values().forEach { tab ->
-                    val isSelected = currentTab == tab && !showNetworkOptimizer
+                GameSpaceTab.entries.forEach { tab ->
+                    val isSelected = currentTab == tab && activeSubScreen == ToolSubScreen.NONE
                     NavigationBarItem(
                         selected = isSelected,
                         onClick = {
-                            showNetworkOptimizer = false
+                            activeSubScreen = ToolSubScreen.NONE
                             currentTab = tab
                         },
                         icon = {
@@ -158,42 +170,62 @@ fun GameSpaceApp(
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
-            if (showNetworkOptimizer) {
-                NetworkOptimizerScreen(
-                    repository = repository,
-                    stats = stats,
-                    onBack = { showNetworkOptimizer = false }
-                )
-            } else {
-                AnimatedContent(
-                    targetState = currentTab,
-                    transitionSpec = { fadeIn() togetherWith fadeOut() },
-                    label = "tab_crossfade"
-                ) { targetTab ->
-                    when (targetTab) {
-                        GameSpaceTab.HOME -> HomeScreen(
-                            repository = repository,
-                            overview = overview,
-                            stats = stats,
-                            homeGames = homeGames,
-                            isUsageAccessGranted = isUsageAccessGranted,
-                            isOverlayGranted = isOverlayGranted,
-                            isNotificationGranted = isNotificationGranted,
-                            onRequestNotification = onRequestNotification,
-                            onNavigateToApps = { currentTab = GameSpaceTab.APPS },
-                            onNavigateToNetworkOptimizer = { showNetworkOptimizer = true }
-                        )
-                        GameSpaceTab.APPS -> AppsScreen(
-                            repository = repository,
-                            allApps = allApps
-                        )
-                        GameSpaceTab.SETTINGS -> SettingsScreen(
-                            repository = repository,
-                            overview = overview,
-                            refreshIntervalMs = refreshIntervalMs,
-                            floatingHudEnabled = floatingHudEnabled,
-                            isOverlayGranted = isOverlayGranted
-                        )
+            when (activeSubScreen) {
+                ToolSubScreen.RESOLUTION_CHANGER -> {
+                    ResolutionChangerScreen(
+                        repository = repository,
+                        onBack = { activeSubScreen = ToolSubScreen.NONE }
+                    )
+                }
+                ToolSubScreen.NETWORK_OPTIMIZER -> {
+                    NetworkOptimizerScreen(
+                        repository = repository,
+                        stats = stats,
+                        onBack = { activeSubScreen = ToolSubScreen.NONE }
+                    )
+                }
+                ToolSubScreen.NONE -> {
+                    AnimatedContent(
+                        targetState = currentTab,
+                        transitionSpec = { fadeIn() togetherWith fadeOut() },
+                        label = "tab_crossfade"
+                    ) { targetTab ->
+                        when (targetTab) {
+                            GameSpaceTab.HOME -> HomeScreen(
+                                repository = repository,
+                                overview = overview,
+                                stats = stats,
+                                homeGames = homeGames,
+                                isUsageAccessGranted = isUsageAccessGranted,
+                                isOverlayGranted = isOverlayGranted,
+                                isNotificationGranted = isNotificationGranted,
+                                onRequestNotification = onRequestNotification,
+                                onNavigateToApps = { currentTab = GameSpaceTab.APPS },
+                                onNavigateToNetworkOptimizer = {
+                                    activeSubScreen = ToolSubScreen.NETWORK_OPTIMIZER
+                                }
+                            )
+                            GameSpaceTab.TOOLS -> ToolsScreen(
+                                repository = repository,
+                                onOpenResolutionChanger = {
+                                    activeSubScreen = ToolSubScreen.RESOLUTION_CHANGER
+                                },
+                                onOpenNetworkOptimizer = {
+                                    activeSubScreen = ToolSubScreen.NETWORK_OPTIMIZER
+                                }
+                            )
+                            GameSpaceTab.APPS -> AppsScreen(
+                                repository = repository,
+                                allApps = allApps
+                            )
+                            GameSpaceTab.SETTINGS -> SettingsScreen(
+                                repository = repository,
+                                overview = overview,
+                                refreshIntervalMs = refreshIntervalMs,
+                                floatingHudEnabled = floatingHudEnabled,
+                                isOverlayGranted = isOverlayGranted
+                            )
+                        }
                     }
                 }
             }

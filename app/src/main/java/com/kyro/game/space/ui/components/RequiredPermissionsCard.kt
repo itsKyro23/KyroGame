@@ -84,8 +84,8 @@ fun RequiredPermissionsCard(
     val permissions = listOf(
         PermissionRequirement(
             id = "shizuku",
-            name = "Shizuku / Elevated ADB",
-            description = "Allows non-root system command execution and background optimizations.",
+            name = "Shizuku / Elevated ADB / Root",
+            description = "Allows elevated system command execution, resolution scaling, and game optimizations.",
             icon = Icons.Default.Cable,
             isGranted = isShizukuGranted,
             onGrant = { onRequestShizuku() }

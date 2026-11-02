@@ -2,7 +2,8 @@ package com.kyro.game.space.data.model
 
 enum class ExecutionMethod {
     SHIZUKU,
-    MANUAL_ADB
+    MANUAL_ADB,
+    ROOT
 }
 
 enum class ConnectionStatus {
@@ -19,6 +20,14 @@ data class ShizukuInfo(
     val isPermissionGranted: Boolean = false,
     val version: Int = 0,
     val uid: Int = -1
+)
+
+data class RootInfo(
+    val isSuBinaryPresent: Boolean = false,
+    val isRootGranted: Boolean = false,
+    val suVersion: String = "Not Detected",
+    val uid: Int = -1,
+    val statusMessage: String = "Root (su) status not checked yet."
 )
 
 data class ManualAdbInfo(
@@ -45,6 +54,7 @@ data class ConnectionOverview(
     val statusDetails: String = "Initializing connection...",
     val shizuku: ShizukuInfo = ShizukuInfo(),
     val manualAdb: ManualAdbInfo = ManualAdbInfo(),
+    val root: RootInfo = RootInfo(),
     val androidVersion: String = "",
     val lastCommandLog: String? = null
 )

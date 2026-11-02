@@ -74,6 +74,31 @@ class ExampleRobolectricTest {
     repo.setMobileDataBoostMode(true)
     assertEquals(true, repo.networkOptimizerState.value.mobileDataBoostEnabled)
 
+    // Verify Resolution Changer min 360p, presets, 10s pending confirmation & rollback
+    val resInit = repo.resolutionState.value
+    assertEquals(360, resInit.minWidth)
+    org.junit.Assert.assertTrue(resInit.maxWidth >= 360)
+    org.junit.Assert.assertTrue(resInit.presets.isNotEmpty())
+
+    repo.applyResolutionWithSafetyCountdown(540)
+    assertEquals(true, repo.resolutionState.value.isPendingConfirmation)
+    assertEquals(540, repo.resolutionState.value.pendingWidth)
+
+    repo.confirmResolutionChange()
+    assertEquals(false, repo.resolutionState.value.isPendingConfirmation)
+    assertEquals(540, repo.resolutionState.value.currentWidth)
+
+    repo.applyResolutionWithSafetyCountdown(360)
+    assertEquals(true, repo.resolutionState.value.isPendingConfirmation)
+    repo.revertResolutionToOriginal("Test revert")
+    assertEquals(false, repo.resolutionState.value.isPendingConfirmation)
+    assertEquals(540, repo.resolutionState.value.currentWidth)
+
+    // Verify Root execution method selection and state
+    repo.setExecutionMethod(com.kyro.game.space.data.model.ExecutionMethod.ROOT)
+    assertEquals(com.kyro.game.space.data.model.ExecutionMethod.ROOT, repo.connectionState.value.method)
+    assertEquals(false, repo.networkOptimizerState.value.isBenchmarking)
+
     repo.cleanUp()
   }
 }

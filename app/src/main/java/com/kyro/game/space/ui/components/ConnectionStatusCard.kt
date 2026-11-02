@@ -114,7 +114,11 @@ fun ConnectionStatusCard(
                     Spacer(modifier = Modifier.width(12.dp))
                     Column {
                         Text(
-                            text = if (overview.method == ExecutionMethod.SHIZUKU) "Shizuku Engine" else "Manual ADB (libadb.so)",
+                            text = when (overview.method) {
+                                ExecutionMethod.SHIZUKU -> "Shizuku Engine"
+                                ExecutionMethod.MANUAL_ADB -> "Manual ADB (libadb.so)"
+                                ExecutionMethod.ROOT -> "Root Access (su)"
+                            },
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold
                         )
@@ -189,37 +193,48 @@ fun ConnectionStatusCard(
                         )
                     }
 
-                    if (overview.method == ExecutionMethod.SHIZUKU) {
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Text(
-                            text = "Service: ${if (overview.shizuku.isRunning) "Running (API v${overview.shizuku.version})" else "Stopped"} • Permission: ${if (overview.shizuku.isPermissionGranted) "Granted" else "Not Granted"}",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                    when (overview.method) {
+                        ExecutionMethod.SHIZUKU -> {
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                text = "Service: ${if (overview.shizuku.isRunning) "Running (API v${overview.shizuku.version})" else "Stopped"} • Permission: ${if (overview.shizuku.isPermissionGranted) "Granted" else "Not Granted"}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
 
-                        if (!overview.shizuku.isRunning && overview.shizuku.isInstalled) {
-                            val context = androidx.compose.ui.platform.LocalContext.current
-                            Spacer(modifier = Modifier.height(10.dp))
-                            OutlinedButton(
-                                onClick = {
-                                    val launchIntent = context.packageManager.getLaunchIntentForPackage("moe.shizuku.privileged.api")
-                                    if (launchIntent != null) {
-                                        context.startActivity(launchIntent)
-                                    }
-                                },
-                                shape = RoundedCornerShape(10.dp),
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Text("Open Shizuku App (Start Service)")
+                            if (!overview.shizuku.isRunning && overview.shizuku.isInstalled) {
+                                val context = androidx.compose.ui.platform.LocalContext.current
+                                Spacer(modifier = Modifier.height(10.dp))
+                                OutlinedButton(
+                                    onClick = {
+                                        val launchIntent = context.packageManager.getLaunchIntentForPackage("moe.shizuku.privileged.api")
+                                        if (launchIntent != null) {
+                                            context.startActivity(launchIntent)
+                                        }
+                                    },
+                                    shape = RoundedCornerShape(10.dp),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text("Open Shizuku App (Start Service)")
+                                }
                             }
                         }
-                    } else {
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Text(
-                            text = "${overview.manualAdb.libAdbDetails}\n${overview.manualAdb.daemonStatus}",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = if (overview.manualAdb.isDaemonInjected) KyroGreen else MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                        ExecutionMethod.MANUAL_ADB -> {
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                text = "${overview.manualAdb.libAdbDetails}\n${overview.manualAdb.daemonStatus}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = if (overview.manualAdb.isDaemonInjected) KyroGreen else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        ExecutionMethod.ROOT -> {
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                text = "Binary: ${if (overview.root.isSuBinaryPresent) "su (${overview.root.suVersion})" else "Not Found"} • Access: ${if (overview.root.isRootGranted) "Granted (uid=0)" else "Not Granted"}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = if (overview.root.isRootGranted) KyroGreen else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                     }
                 }
             }
@@ -270,6 +285,16 @@ fun ConnectionStatusCard(
                         shape = RoundedCornerShape(12.dp)
                     ) {
                         Text("Setup / Inject", style = MaterialTheme.typography.labelLarge)
+                    }
+                } else if (overview.method == ExecutionMethod.ROOT && !overview.root.isRootGranted) {
+                    FilledTonalButton(
+                        onClick = onRequestPermission,
+                        modifier = Modifier
+                            .weight(1f)
+                            .testTag("grant_root_button"),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text("Grant Root", style = MaterialTheme.typography.labelLarge)
                     }
                 } else {
                     OutlinedButton(
