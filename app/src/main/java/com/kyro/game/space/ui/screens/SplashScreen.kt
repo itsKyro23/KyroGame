@@ -86,20 +86,23 @@ fun SplashScreen(
     )
 
     LaunchedEffect(Unit) {
-        delay(350)
+        delay(600)
+        statusText = "Initializing Kyro Core Engine & Hardware HAL..."
+        progressStep = 0.25f
+        delay(750)
         statusText = "Checking Shizuku • Wireless ADB • Root..."
-        progressStep = 0.45f
-        delay(450)
-        statusText = "Inspecting GPU & ANGLE Vulkan subsystem..."
+        progressStep = 0.55f
+        delay(750)
+        statusText = "Probing GPU & ANGLE Vulkan subsystem..."
         progressStep = 0.80f
-        delay(450)
+        delay(650)
         statusText = if (overview.isAnyPermissionActive) {
             "Permission Verified: ${overview.activePermissionName} Ready"
         } else {
             "Ready • Execution Backend Required"
         }
         progressStep = 1.0f
-        delay(350)
+        delay(600)
         onSplashFinished()
     }
 

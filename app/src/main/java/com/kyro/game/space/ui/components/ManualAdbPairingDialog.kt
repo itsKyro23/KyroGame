@@ -56,6 +56,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.kyro.game.space.data.executor.AdbKeyManager
+import com.kyro.game.space.data.executor.AdbNativeBridge
 import com.kyro.game.space.data.model.ManualAdbInfo
 import com.kyro.game.space.ui.theme.KyroCyan
 import com.kyro.game.space.ui.theme.KyroGreen
@@ -73,6 +75,7 @@ fun ManualAdbPairingDialog(
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
+    var clientDeviceName by remember { mutableStateOf(AdbKeyManager.getClientName(context)) }
     var host by remember { mutableStateOf(manualAdbInfo.host) }
     var pairingPortText by remember {
         mutableStateOf(if (manualAdbInfo.pairingPort > 0) manualAdbInfo.pairingPort.toString() else "37000")
@@ -283,6 +286,33 @@ fun ManualAdbPairingDialog(
 
                 Spacer(modifier = Modifier.height(12.dp))
 
+                // Custom ADB Device Name (e.g. KYRO, ZAYON)
+                OutlinedTextField(
+                    value = clientDeviceName,
+                    onValueChange = { newName ->
+                        val clean = newName.filter { ch -> ch.isLetterOrDigit() || ch == '_' || ch == '-' }
+                        clientDeviceName = clean
+                        AdbNativeBridge.syncClientDeviceName(context, clean)
+                    },
+                    label = { Text("ADB Paired Device Name (In Settings)") },
+                    placeholder = { Text("e.g. KYRO or ZAYON") },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("adb_client_name_input"),
+                    shape = RoundedCornerShape(12.dp),
+                    singleLine = true,
+                    supportingText = {
+                        Text(
+                            text = "Name displayed in Wireless Debugging > Paired devices. Reuses permanent RSA key to prevent duplicates.",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontSize = 11.sp
+                        )
+                    }
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
                 OutlinedTextField(
                     value = host,
                     onValueChange = { host = it },
@@ -351,7 +381,8 @@ fun ManualAdbPairingDialog(
                         onClick = {
                             scope.launch {
                                 isProcessing = true
-                                feedbackMessage = "Running libadb.so pair $host:$pairingPortText..."
+                                AdbNativeBridge.syncClientDeviceName(context, clientDeviceName)
+                                feedbackMessage = "Running libadb.so pair $host:$pairingPortText as $clientDeviceName..."
                                 val pPort = pairingPortText.toIntOrNull() ?: 0
                                 val result = onPair(host.trim(), pPort, pairingCode.trim())
                                 if (result.isSuccess) {
@@ -377,7 +408,8 @@ fun ManualAdbPairingDialog(
                         onClick = {
                             scope.launch {
                                 isProcessing = true
-                                feedbackMessage = "Connecting Wireless ADB & Injecting Daemon..."
+                                AdbNativeBridge.syncClientDeviceName(context, clientDeviceName)
+                                feedbackMessage = "Connecting Wireless ADB & Injecting Daemon as $clientDeviceName..."
                                 val cPort = connectPortText.toIntOrNull() ?: 5555
                                 val result = onConnect(host.trim(), cPort)
                                 if (result.isSuccess) {

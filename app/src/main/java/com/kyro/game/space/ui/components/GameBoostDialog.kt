@@ -98,8 +98,8 @@ fun GameBoostDialog(
                 isCompleted = true
             }
         }
-        // Small delay at 100% so user sees completion before dismiss
-        kotlinx.coroutines.delay(400)
+        // Delay at 100% so user clearly sees completion before dismiss
+        kotlinx.coroutines.delay(700)
         onDismiss()
     }
 

@@ -33,16 +33,22 @@ object AdbNativeBridge {
 
     private var homeDir: String = ""
     private var tmpDir: String = ""
+    private var appContext: Context? = null
 
     fun initialize(context: Context) {
         try {
+            appContext = context.applicationContext
             val nativeDir = context.applicationInfo.nativeLibraryDir
             val adbFile = File(nativeDir, "libadb.so")
-            homeDir = File(context.filesDir, "adb_home").apply {
+            val homeFolder = File(context.filesDir, "adb_home").apply {
                 mkdirs()
                 File(this, ".android").mkdirs()
-            }.absolutePath
+            }
+            homeDir = homeFolder.absolutePath
             tmpDir = File(context.cacheDir, "adb_tmp").apply { mkdirs() }.absolutePath
+
+            // Ensure persistent, single RSA key with custom client name (e.g. KYRO)
+            AdbKeyManager.ensurePersistentAdbKey(context, homeFolder)
 
             if (adbFile.exists()) {
                 if (!adbFile.canExecute()) {
@@ -71,6 +77,13 @@ object AdbNativeBridge {
         }
     }
 
+    fun syncClientDeviceName(context: Context, newName: String) {
+        AdbKeyManager.setClientName(context, newName)
+        if (homeDir.isNotBlank()) {
+            AdbKeyManager.ensurePersistentAdbKey(context, File(homeDir))
+        }
+    }
+
     /**
      * Executes `libadb.so` with the specified arguments and proper Android environment variables.
      */
@@ -94,13 +107,17 @@ object AdbNativeBridge {
             val cmdList = mutableListOf(binaryPath).apply { addAll(args) }
             val pb = ProcessBuilder(cmdList)
             val env = pb.environment()
+            val clientName = appContext?.let { AdbKeyManager.getClientName(it) } ?: AdbKeyManager.DEFAULT_CLIENT_NAME
             if (homeDir.isNotBlank()) {
                 env["HOME"] = homeDir
-                env["ADB_VENDOR_KEYS"] = homeDir
+                env["ADB_VENDOR_KEYS"] = File(homeDir, ".android").absolutePath
             }
             if (tmpDir.isNotBlank()) {
                 env["TMPDIR"] = tmpDir
             }
+            env["USER"] = clientName
+            env["LOGNAME"] = clientName
+            env["HOSTNAME"] = ""
             env["ANDROID_ADB_SERVER_PORT"] = "5037"
 
             val process = pb.start()

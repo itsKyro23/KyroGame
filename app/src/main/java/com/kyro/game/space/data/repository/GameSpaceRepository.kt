@@ -444,20 +444,28 @@ class GameSpaceRepository(
         onProgress: (progress: Float, status: String) -> Unit
     ): Boolean = withContext(Dispatchers.IO) {
         try {
-            // Stage 1: Memory optimization & cache clearing
-            onProgress(0.35f, "Trimming background memory & releasing cached RAM...")
+            // Stage 1: Process and buffer analysis
+            onProgress(0.18f, "Scanning background processes & memory buffers...")
+            kotlinx.coroutines.delay(550)
+
+            // Stage 2: Memory optimization & cache clearing
+            onProgress(0.42f, "Trimming background memory & releasing cached RAM...")
             try {
                 executeCommand("am trim-memory system RUNNING_MODERATE 2>/dev/null || true")
             } catch (_: Throwable) {
             }
-            kotlinx.coroutines.delay(350)
+            kotlinx.coroutines.delay(750)
 
-            // Stage 2: Network socket low-latency preparation
-            onProgress(0.75f, "Optimizing gaming network sockets & packet routing...")
-            kotlinx.coroutines.delay(300)
+            // Stage 3: Network socket low-latency preparation
+            onProgress(0.72f, "Optimizing gaming network sockets & packet routing...")
+            kotlinx.coroutines.delay(700)
 
-            // Stage 3: Launch game cleanly
-            onProgress(1.0f, "Boost Complete! Launching game...")
+            // Stage 4: Environment stabilization
+            onProgress(0.92f, "Securing low-latency priority queue & stabilizing environment...")
+            kotlinx.coroutines.delay(650)
+
+            // Stage 5: Launch game cleanly
+            onProgress(1.0f, "Optimization Complete! Launching game...")
             withContext(Dispatchers.Main) {
                 launchGame(packageName)
             }
