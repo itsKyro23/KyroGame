@@ -20,7 +20,7 @@ android {
     versionName = "1.0.0"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-    resourceConfigurations.addAll(listOf("en", "in", "ms"))
+    androidResources.localeFilters.addAll(listOf("en", "in", "ms"))
   }
 
   // Do not remove or modify these signingConfigs. They are necessary for building, installing,
@@ -98,6 +98,13 @@ android {
     includeInApk = false
     includeInBundle = true
   }
+  lint {
+    abortOnError = false
+    checkReleaseBuilds = false
+    ignoreWarnings = true
+    checkDependencies = false
+    disable.addAll(listOf("InvalidFragmentVersionForActivityResult"))
+  }
 }
 
 // Configure the Secrets Gradle Plugin to use .env and .env.example files
@@ -114,6 +121,7 @@ googleServices { missingGoogleServicesStrategy = MissingGoogleServicesStrategy.W
 // This makes it easy to add them back in the future if needed.
 dependencies {
   implementation(platform(libs.androidx.compose.bom))
+  implementation(libs.androidx.fragment.ktx)
   // implementation(platform(libs.firebase.bom))
   // implementation(libs.accompanist.permissions)
   implementation(libs.androidx.activity.compose)

@@ -5,6 +5,7 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
@@ -28,11 +29,6 @@ class MainActivity : ComponentActivity() {
     private var isUsageAccessGranted by mutableStateOf(false)
     private var isOverlayGranted by mutableStateOf(false)
 
-    private val notificationPermissionLauncher =
-        registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-            isNotificationGranted = granted
-        }
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -49,6 +45,12 @@ class MainActivity : ComponentActivity() {
         checkPermissions()
 
         setContent {
+            val notificationPermissionLauncher = rememberLauncherForActivityResult(
+                contract = ActivityResultContracts.RequestPermission()
+            ) { granted ->
+                isNotificationGranted = granted
+            }
+
             GameSpaceTheme {
                 GameSpaceApp(
                     repository = repository,
