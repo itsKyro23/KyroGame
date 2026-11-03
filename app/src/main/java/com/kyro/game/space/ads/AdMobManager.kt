@@ -3,7 +3,6 @@ package com.kyro.game.space.ads
 import android.app.Activity
 import android.content.Context
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -17,8 +16,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -37,9 +34,11 @@ import com.google.android.gms.ads.FullScreenContentCallback
 import com.google.android.gms.ads.LoadAdError
 import com.google.android.gms.ads.MobileAds
 import com.google.android.gms.ads.appopen.AppOpenAd
+import com.google.android.gms.ads.interstitial.InterstitialAd
+import com.google.android.gms.ads.interstitial.InterstitialAdLoadCallback
 
 /**
- * Manages Google AdMob Ads (App Open Ad & Adaptive Banner).
+ * Manages Google AdMob Ads (App Open Ad, Interstitial Energy Ad, and Adaptive Banner).
  * Includes toggle to switch between official Google Test IDs and Production IDs.
  */
 object AdMobManager {
@@ -53,12 +52,14 @@ object AdMobManager {
     // Official Google AdMob Test Ad Unit IDs (100% safe for development)
     const val TEST_APP_OPEN_AD_ID = "ca-app-pub-3940256099942544/9257396112"
     const val TEST_BANNER_AD_ID = "ca-app-pub-3940256099942544/6300978111"
+    const val TEST_INTERSTITIAL_AD_ID = "ca-app-pub-3940256099942544/1033173712"
     const val TEST_APP_ID = "ca-app-pub-3940256099942544~3347511713"
 
     // Production AdMob IDs provided by user
     const val PROD_APP_OPEN_AD_ID = "ca-app-pub-4611749728265191/6864245998"
     const val PROD_BANNER_AD_ID = "ca-app-pub-4611749728265191/5534852458"
     const val PROD_APP_ID = "ca-app-pub-4611749728265191~7055817688"
+    const val PROD_INTERSTITIAL_AD_ID = "ca-app-pub-4611749728265191/6759258038"
 
     val currentAppOpenAdId: String
         get() = if (USE_TEST_ADS) TEST_APP_OPEN_AD_ID else PROD_APP_OPEN_AD_ID
@@ -66,10 +67,17 @@ object AdMobManager {
     val currentBannerAdId: String
         get() = if (USE_TEST_ADS) TEST_BANNER_AD_ID else PROD_BANNER_AD_ID
 
+    val currentInterstitialAdId: String
+        get() = if (USE_TEST_ADS || PROD_INTERSTITIAL_AD_ID.isBlank()) TEST_INTERSTITIAL_AD_ID else PROD_INTERSTITIAL_AD_ID
+
     private var isInitialized = false
     private var appOpenAd: AppOpenAd? = null
     private var isLoadingAppOpen = false
     private var isShowingAppOpen = false
+
+    private var interstitialAd: InterstitialAd? = null
+    private var isLoadingInterstitial = false
+    private var isShowingInterstitial = false
 
     /**
      * Ensures App Open Ad is only shown ONCE per app launch session.
@@ -83,6 +91,7 @@ object AdMobManager {
             MobileAds.initialize(context) {
                 isInitialized = true
                 loadAppOpenAd(context)
+                loadInterstitialAd(context)
             }
         } catch (_: Throwable) {
         }
@@ -112,6 +121,33 @@ object AdMobManager {
             )
         } catch (_: Throwable) {
             isLoadingAppOpen = false
+        }
+    }
+
+    fun loadInterstitialAd(context: Context) {
+        if (isLoadingInterstitial || interstitialAd != null) return
+
+        try {
+            isLoadingInterstitial = true
+            val request = AdRequest.Builder().build()
+            InterstitialAd.load(
+                context.applicationContext,
+                currentInterstitialAdId,
+                request,
+                object : InterstitialAdLoadCallback() {
+                    override fun onAdLoaded(ad: InterstitialAd) {
+                        interstitialAd = ad
+                        isLoadingInterstitial = false
+                    }
+
+                    override fun onAdFailedToLoad(error: LoadAdError) {
+                        interstitialAd = null
+                        isLoadingInterstitial = false
+                    }
+                }
+            )
+        } catch (_: Throwable) {
+            isLoadingInterstitial = false
         }
     }
 
@@ -157,6 +193,45 @@ object AdMobManager {
             onComplete()
         }
     }
+
+    /**
+     * Shows Interstitial Ad to grant +40 Energy.
+     */
+    fun showInterstitialAd(activity: Activity, onReward: () -> Unit, onFailedOrDismissed: () -> Unit = {}) {
+        val ad = interstitialAd
+        if (ad == null || isShowingInterstitial) {
+            // If ad not cached yet, reload and award fallback gracefully
+            loadInterstitialAd(activity)
+            onReward()
+            return
+        }
+
+        try {
+            ad.fullScreenContentCallback = object : FullScreenContentCallback() {
+                override fun onAdDismissedFullScreenContent() {
+                    interstitialAd = null
+                    isShowingInterstitial = false
+                    loadInterstitialAd(activity)
+                    onReward()
+                }
+
+                override fun onAdFailedToShowFullScreenContent(error: AdError) {
+                    interstitialAd = null
+                    isShowingInterstitial = false
+                    loadInterstitialAd(activity)
+                    onReward()
+                }
+
+                override fun onAdShowedFullScreenContent() {
+                    isShowingInterstitial = true
+                }
+            }
+            ad.show(activity)
+        } catch (_: Throwable) {
+            isShowingInterstitial = false
+            onReward()
+        }
+    }
 }
 
 /**
@@ -167,7 +242,6 @@ object AdMobManager {
 fun AdMobBanner(
     modifier: Modifier = Modifier
 ) {
-    val context = LocalContext.current
     val currentUnitId = AdMobManager.currentBannerAdId
     val isTestMode = AdMobManager.USE_TEST_ADS
 

@@ -122,6 +122,7 @@ fun TextureTunerScreen(
     var splitFraction by remember { mutableFloatStateOf(0.50f) }
     var isHoldingBefore by remember { mutableStateOf(false) }
     var showTargetPickerDialog by remember { mutableStateOf(false) }
+    var showInsufficientEnergyDialog by remember { mutableStateOf(false) }
 
     val effectiveSplit = if (isHoldingBefore) 1.0f else splitFraction
 
@@ -1049,12 +1050,24 @@ fun TextureTunerScreen(
                             )
                         }
 
+                        val isAllGames = tunerState.selectedTargetPackage.isBlank()
+                        val requiredTextureEnergy = if (isAllGames) {
+                            com.kyro.game.space.data.energy.NoxEnergyManager.COST_LIGHTWEIGHT_TEXTURE_ALL
+                        } else {
+                            com.kyro.game.space.data.energy.NoxEnergyManager.COST_LIGHTWEIGHT_TEXTURE_SINGLE
+                        }
+
                         Button(
                             onClick = {
-                                scope.launch {
-                                    val res = repository.saveAndApplyTextureConfig()
-                                    val msg = res.getOrElse { "Texture & ANGLE settings saved & applied!" }
-                                    Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                                if (!com.kyro.game.space.data.energy.NoxEnergyManager.hasEnergy(context, requiredTextureEnergy)) {
+                                    showInsufficientEnergyDialog = true
+                                } else {
+                                    com.kyro.game.space.data.energy.NoxEnergyManager.consumeEnergy(context, requiredTextureEnergy)
+                                    scope.launch {
+                                        val res = repository.saveAndApplyTextureConfig()
+                                        val msg = res.getOrElse { "Texture & ANGLE settings saved & applied!" }
+                                        Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                                    }
                                 }
                             },
                             shape = RoundedCornerShape(14.dp),
@@ -1074,7 +1087,7 @@ fun TextureTunerScreen(
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
-                                text = if (tunerState.isApplying) "Applying..." else "Save & Apply",
+                                text = if (tunerState.isApplying) "Applying..." else "Save & Apply • ${requiredTextureEnergy}⚡",
                                 style = MaterialTheme.typography.titleSmall,
                                 fontWeight = FontWeight.Black
                             )
@@ -1325,6 +1338,29 @@ fun TextureTunerScreen(
             confirmButton = {
                 TextButton(onClick = { showTargetPickerDialog = false }) {
                     Text("Close")
+                }
+            }
+        )
+    }
+
+    if (showInsufficientEnergyDialog) {
+        val isAllGames = tunerState.selectedTargetPackage.isBlank()
+        val requiredTextureEnergy = if (isAllGames) {
+            com.kyro.game.space.data.energy.NoxEnergyManager.COST_LIGHTWEIGHT_TEXTURE_ALL
+        } else {
+            com.kyro.game.space.data.energy.NoxEnergyManager.COST_LIGHTWEIGHT_TEXTURE_SINGLE
+        }
+        com.kyro.game.space.ui.components.NoxInsufficientEnergyDialog(
+            featureName = if (isAllGames) "Lightweight Texture (All Games)" else "Lightweight Texture ($targetTitle)",
+            requiredCost = requiredTextureEnergy,
+            onDismiss = { showInsufficientEnergyDialog = false },
+            onEnergyGranted = {
+                if (com.kyro.game.space.data.energy.NoxEnergyManager.consumeEnergy(context, requiredTextureEnergy)) {
+                    scope.launch {
+                        val res = repository.saveAndApplyTextureConfig()
+                        val msg = res.getOrElse { "Texture & ANGLE settings saved & applied!" }
+                        Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                    }
                 }
             }
         )

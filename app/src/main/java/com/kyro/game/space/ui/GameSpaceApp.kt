@@ -104,6 +104,7 @@ fun GameSpaceApp(
     var currentTab by rememberSaveable { mutableStateOf(GameSpaceTab.HOME) }
     var activeSubScreen by rememberSaveable { mutableStateOf(ToolSubScreen.NONE) }
     var showExitDialog by remember { mutableStateOf(false) }
+    var showEnergyDialog by remember { mutableStateOf(false) }
 
     val overview by repository.connectionState.collectAsState()
     val stats by repository.deviceStats.collectAsState()
@@ -158,7 +159,7 @@ fun GameSpaceApp(
                             ToolSubScreen.TEXTURE_TUNER -> "LIGHTWEIGHT TEXTURE"
                             ToolSubScreen.NETWORK_OPTIMIZER -> "NETWORK OPTIMIZER"
                             ToolSubScreen.NONE -> when (currentTab) {
-                                GameSpaceTab.HOME -> "GAME SPACE"
+                                GameSpaceTab.HOME -> "NOX - GAME SPACE"
                                 GameSpaceTab.TOOLS -> "TACTICAL TOOLS"
                                 GameSpaceTab.APPS -> "APP MANAGER"
                                 GameSpaceTab.SETTINGS -> "PREFERENCES"
@@ -168,6 +169,12 @@ fun GameSpaceApp(
                         fontWeight = FontWeight.Black,
                         letterSpacing = 1.sp,
                         color = MaterialTheme.colorScheme.onBackground
+                    )
+                },
+                actions = {
+                    com.kyro.game.space.ui.components.NoxEnergyBadge(
+                        onClick = { showEnergyDialog = true },
+                        modifier = Modifier.padding(end = 12.dp)
                     )
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -408,6 +415,12 @@ fun GameSpaceApp(
                     )
                 }
             }
+        )
+    }
+
+    if (showEnergyDialog) {
+        com.kyro.game.space.ui.components.NoxEnergyTopUpDialog(
+            onDismiss = { showEnergyDialog = false }
         )
     }
 }

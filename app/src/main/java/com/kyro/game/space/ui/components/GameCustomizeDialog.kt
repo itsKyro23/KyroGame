@@ -596,7 +596,7 @@ fun GameCustomizeDialog(
                 modifier = Modifier.testTag("save_game_config_button")
             ) {
                 Text(
-                    text = "Save & Apply",
+                    text = "Save & Apply • 10⚡",
                     fontWeight = FontWeight.Bold
                 )
             }

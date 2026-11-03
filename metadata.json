@@ -1,5 +1,5 @@
 {
-  "name": "Game Space",
+  "name": "NOX - Game Space",
   "description": "Modern Material 3 Gaming Hub with performance monitoring, game launcher, playtime tracking, and Shizuku / Wireless ADB command engine.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]

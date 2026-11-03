@@ -81,7 +81,6 @@ fun ToolsScreen(
 
     var showPermissionBlockedDialog by remember { mutableStateOf<String?>(null) }
     var showPairingDialog by remember { mutableStateOf(false) }
-
     val openToolSafely: (() -> Unit, String) -> Unit = { action, toolTitle ->
         if (!overview.isAnyPermissionActive) {
             showPermissionBlockedDialog = "Cannot Open $toolTitle: Active Shizuku, Wireless ADB, or Root permission is required to configure system displays and gaming optimizations."

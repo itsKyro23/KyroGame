@@ -26,7 +26,69 @@ class ExampleRobolectricTest {
   fun `read string from context`() {
     val context = ApplicationProvider.getApplicationContext<Context>()
     val appName = context.getString(R.string.app_name)
-    assertEquals("Game Space", appName)
+    assertEquals("NOX - Game Space", appName)
+  }
+
+  @Test
+  fun `nox energy manager initial energy, ad reward, consumption, and anti-tamper work`() {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    // Clear any previous state
+    com.kyro.game.space.data.energy.NoxEnergyManager.resetForTesting()
+    context.getSharedPreferences("nox_secure_vault", Context.MODE_PRIVATE).edit().clear().commit()
+    com.kyro.game.space.data.energy.NoxEnergyManager.init(context)
+
+    // Initial energy must be 40
+    assertEquals(40, com.kyro.game.space.data.energy.NoxEnergyManager.getEnergy(context))
+
+    // Watch ad gives +40 (40 + 40 = 80)
+    val afterAd1 = com.kyro.game.space.data.energy.NoxEnergyManager.addEnergyFromAd(context)
+    assertEquals(80, afterAd1)
+
+    // Watch ad again capped at 120 (80 + 40 = 120)
+    val afterAd2 = com.kyro.game.space.data.energy.NoxEnergyManager.addEnergyFromAd(context)
+    assertEquals(120, afterAd2)
+
+    // Consume 40 energy for Lightweight Texture (All Games) (120 - 40 = 80)
+    val consumedAll = com.kyro.game.space.data.energy.NoxEnergyManager.consumeEnergy(
+        context,
+        com.kyro.game.space.data.energy.NoxEnergyManager.COST_LIGHTWEIGHT_TEXTURE_ALL
+    )
+    assertTrue(consumedAll)
+    assertEquals(80, com.kyro.game.space.data.energy.NoxEnergyManager.getEnergy(context))
+
+    // Consume 20 energy for Lightweight Texture (Single Package) (80 - 20 = 60)
+    val consumedSingle = com.kyro.game.space.data.energy.NoxEnergyManager.consumeEnergy(
+        context,
+        com.kyro.game.space.data.energy.NoxEnergyManager.COST_LIGHTWEIGHT_TEXTURE_SINGLE
+    )
+    assertTrue(consumedSingle)
+    assertEquals(60, com.kyro.game.space.data.energy.NoxEnergyManager.getEnergy(context))
+
+    // Consume 15 energy for Resolution Changer (60 - 15 = 45)
+    val consumedRes = com.kyro.game.space.data.energy.NoxEnergyManager.consumeEnergy(
+        context,
+        com.kyro.game.space.data.energy.NoxEnergyManager.COST_RESOLUTION_CHANGER
+    )
+    assertTrue(consumedRes)
+    assertEquals(45, com.kyro.game.space.data.energy.NoxEnergyManager.getEnergy(context))
+
+    // Consume 10 energy for Game Tune (45 - 10 = 35)
+    val consumedTune = com.kyro.game.space.data.energy.NoxEnergyManager.consumeEnergy(
+        context,
+        com.kyro.game.space.data.energy.NoxEnergyManager.COST_GAME_TUNE
+    )
+    assertTrue(consumedTune)
+    assertEquals(35, com.kyro.game.space.data.energy.NoxEnergyManager.getEnergy(context))
+
+    // External modification simulation: modify stored XML value illegally without matching signature
+    val prefs = context.getSharedPreferences("nox_secure_vault", Context.MODE_PRIVATE)
+    prefs.edit().putInt("nox_k7_val", 9999).commit() // Illegal mod
+    com.kyro.game.space.data.energy.NoxEnergyManager.resetForTesting()
+
+    // Next access must detect signature mismatch and penalize to -120!
+    val tamperedEnergy = com.kyro.game.space.data.energy.NoxEnergyManager.getEnergy(context)
+    assertEquals(-120, tamperedEnergy)
+    assertTrue(com.kyro.game.space.data.energy.NoxEnergyManager.isTampered.value)
   }
 
   @Test

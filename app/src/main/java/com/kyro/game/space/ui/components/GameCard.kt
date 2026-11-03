@@ -251,7 +251,7 @@ fun GameCard(
                             )
                             Spacer(modifier = Modifier.width(4.dp))
                             Text(
-                                text = "TUNE",
+                                text = "TUNE • 10⚡",
                                 style = MaterialTheme.typography.labelSmall,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 11.sp

@@ -63,6 +63,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.TextButton
+import com.kyro.game.space.data.energy.NoxEnergyManager
+import com.kyro.game.space.ui.components.NoxInsufficientEnergyDialog
 
 @Composable
 fun HomeScreen(
@@ -85,6 +87,7 @@ fun HomeScreen(
     var customizingGame by remember { mutableStateOf<GameItem?>(null) }
     var boostingGame by remember { mutableStateOf<GameItem?>(null) }
     var showPermissionBlockedDialog by remember { mutableStateOf<String?>(null) }
+    var insufficientEnergyTarget by remember { mutableStateOf<Triple<String, Int, () -> Unit>?>(null) }
 
     androidx.compose.runtime.LaunchedEffect(overview.method) {
         repository.refreshActiveExecutionMethodStatus()
@@ -390,11 +393,26 @@ fun HomeScreen(
             game = liveGame,
             onDismiss = { customizingGame = null },
             onSaveConfig = { newConfig ->
-                customizingGame = null
-                scope.launch {
-                    val res = repository.saveAndApplyGameConfig(liveGame.packageName, newConfig)
-                    val msg = res.getOrElse { "Saved profile for ${liveGame.appName}" }
-                    Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                if (!NoxEnergyManager.hasEnergy(context, NoxEnergyManager.COST_GAME_TUNE)) {
+                    insufficientEnergyTarget = Triple("Game Tune (${liveGame.appName})", NoxEnergyManager.COST_GAME_TUNE) {
+                        if (NoxEnergyManager.consumeEnergy(context, NoxEnergyManager.COST_GAME_TUNE)) {
+                            customizingGame = null
+                            scope.launch {
+                                val res = repository.saveAndApplyGameConfig(liveGame.packageName, newConfig)
+                                val msg = res.getOrElse { "Saved profile for ${liveGame.appName}" }
+                                Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    }
+                } else {
+                    if (NoxEnergyManager.consumeEnergy(context, NoxEnergyManager.COST_GAME_TUNE)) {
+                        customizingGame = null
+                        scope.launch {
+                            val res = repository.saveAndApplyGameConfig(liveGame.packageName, newConfig)
+                            val msg = res.getOrElse { "Saved profile for ${liveGame.appName}" }
+                            Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                        }
+                    }
                 }
             }
         )
@@ -461,6 +479,18 @@ fun HomeScreen(
                 TextButton(onClick = { showPermissionBlockedDialog = null }) {
                     Text("Close", color = Color(0xFFA0A7BD))
                 }
+            }
+        )
+    }
+
+    insufficientEnergyTarget?.let { (featureName, cost, onProceed) ->
+        NoxInsufficientEnergyDialog(
+            featureName = featureName,
+            requiredCost = cost,
+            onDismiss = { insufficientEnergyTarget = null },
+            onEnergyGranted = {
+                insufficientEnergyTarget = null
+                onProceed()
             }
         )
     }

@@ -40,6 +40,9 @@ class MainActivity : ComponentActivity() {
         // Initialize Google AdMob SDK
         AdMobManager.initialize(applicationContext)
 
+        // Initialize NOX Secure Energy Vault
+        com.kyro.game.space.data.energy.NoxEnergyManager.init(applicationContext)
+
         repository = GameSpaceRepository(applicationContext)
 
         checkPermissions()

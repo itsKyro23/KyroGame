@@ -46,6 +46,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -83,8 +84,24 @@ fun ResolutionChangerScreen(
     val scope = rememberCoroutineScope()
     val resState by repository.resolutionState.collectAsState()
 
+    var showInsufficientEnergyDialog by remember { mutableStateOf(false) }
+    var pendingApplyWidth by remember { mutableStateOf<Int?>(null) }
+
     var sliderWidth by remember(resState.currentWidth, resState.maxWidth) {
         mutableIntStateOf(resState.currentWidth.coerceIn(resState.minWidth, resState.maxWidth))
+    }
+
+    val tryApplyResolution: (Int) -> Unit = { targetWidth ->
+        val cost = com.kyro.game.space.data.energy.NoxEnergyManager.COST_RESOLUTION_CHANGER
+        if (!com.kyro.game.space.data.energy.NoxEnergyManager.hasEnergy(context, cost)) {
+            pendingApplyWidth = targetWidth
+            showInsufficientEnergyDialog = true
+        } else {
+            com.kyro.game.space.data.energy.NoxEnergyManager.consumeEnergy(context, cost)
+            scope.launch {
+                repository.applyResolutionWithSafetyCountdown(targetWidth)
+            }
+        }
     }
 
     val previewHeight = remember(sliderWidth, resState.nativeWidth, resState.nativeHeight) {
@@ -358,9 +375,7 @@ fun ResolutionChangerScreen(
                     ) {
                         Button(
                             onClick = {
-                                scope.launch {
-                                    repository.applyResolutionWithSafetyCountdown(sliderWidth)
-                                }
+                                tryApplyResolution(sliderWidth)
                             },
                             enabled = !resState.isApplying && !resState.isPendingConfirmation,
                             shape = RoundedCornerShape(12.dp),
@@ -381,7 +396,7 @@ fun ResolutionChangerScreen(
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
-                                text = "Apply ($sliderWidth×$previewHeight)",
+                                text = "Apply • 15⚡ ($sliderWidth×$previewHeight)",
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 12.sp,
                                 maxLines = 1,
@@ -481,12 +496,25 @@ fun ResolutionChangerScreen(
                 },
                 onApplyPreset = {
                     sliderWidth = preset.width
-                    scope.launch {
-                        repository.applyResolutionWithSafetyCountdown(preset.width)
-                    }
+                    tryApplyResolution(preset.width)
                 }
             )
         }
+    }
+
+    if (showInsufficientEnergyDialog) {
+        com.kyro.game.space.ui.components.NoxInsufficientEnergyDialog(
+            featureName = "Resolution Changer",
+            requiredCost = com.kyro.game.space.data.energy.NoxEnergyManager.COST_RESOLUTION_CHANGER,
+            onDismiss = {
+                showInsufficientEnergyDialog = false
+                pendingApplyWidth = null
+            },
+            onEnergyGranted = {
+                val target = pendingApplyWidth ?: sliderWidth
+                tryApplyResolution(target)
+            }
+        )
     }
 
     // 10-Second Non-Cancelable Safety Confirmation Dialog
@@ -633,7 +661,7 @@ private fun ResolutionPresetCard(
                     )
                 } else {
                     Text(
-                        text = "Apply",
+                        text = "Apply • 15⚡",
                         style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.Bold
                     )
