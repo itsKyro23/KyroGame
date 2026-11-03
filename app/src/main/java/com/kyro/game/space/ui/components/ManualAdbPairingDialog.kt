@@ -46,9 +46,13 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
@@ -108,8 +112,31 @@ fun ManualAdbPairingDialog(
         }
     }
 
+    var isAppeared by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        isAppeared = true
+    }
+
+    val enterScale by animateFloatAsState(
+        targetValue = if (isAppeared) 1f else 0.90f,
+        animationSpec = androidx.compose.animation.core.spring(
+            dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy,
+            stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow
+        ),
+        label = "manual_adb_scale"
+    )
+
+    val enterAlpha by animateFloatAsState(
+        targetValue = if (isAppeared) 1f else 0f,
+        animationSpec = tween(durationMillis = 220),
+        label = "manual_adb_alpha"
+    )
+
     AlertDialog(
         onDismissRequest = onDismiss,
+        modifier = Modifier
+            .scale(enterScale)
+            .alpha(enterAlpha),
         title = {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(

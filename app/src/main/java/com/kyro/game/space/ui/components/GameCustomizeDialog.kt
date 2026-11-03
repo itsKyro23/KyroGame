@@ -32,6 +32,8 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -40,6 +42,7 @@ import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -48,6 +51,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -132,6 +137,26 @@ fun GameCustomizeDialog(
         )
     }
 
+    var isAppeared by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        isAppeared = true
+    }
+
+    val enterScale by animateFloatAsState(
+        targetValue = if (isAppeared) 1f else 0.90f,
+        animationSpec = androidx.compose.animation.core.spring(
+            dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy,
+            stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow
+        ),
+        label = "custom_dialog_scale"
+    )
+
+    val enterAlpha by animateFloatAsState(
+        targetValue = if (isAppeared) 1f else 0f,
+        animationSpec = tween(durationMillis = 220),
+        label = "custom_dialog_alpha"
+    )
+
     AlertDialog(
         onDismissRequest = {
             // Non-cancelable outside click or back press per DialogProperties
@@ -140,6 +165,9 @@ fun GameCustomizeDialog(
             dismissOnBackPress = false,
             dismissOnClickOutside = false
         ),
+        modifier = Modifier
+            .scale(enterScale)
+            .alpha(enterAlpha),
         containerColor = MaterialTheme.colorScheme.surface,
         shape = RoundedCornerShape(22.dp),
         title = {

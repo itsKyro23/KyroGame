@@ -138,6 +138,8 @@ dependencies {
   // Shizuku API & Provider
   implementation(libs.shizuku.api)
   implementation(libs.shizuku.provider)
+  // Google Mobile Ads (AdMob)
+  implementation(libs.play.services.ads)
   // implementation(libs.coil.compose)
   // implementation(libs.converter.moshi)
   // implementation(libs.firebase.ai)

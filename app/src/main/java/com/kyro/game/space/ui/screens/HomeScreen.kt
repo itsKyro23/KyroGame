@@ -296,6 +296,7 @@ fun HomeScreen(
         } else {
             items(items = homeGames, key = { it.packageName }) { game ->
                 GameCard(
+                    modifier = Modifier.animateItem(),
                     game = game,
                     onPlayClick = {
                         if (!overview.isAnyPermissionActive) {
@@ -358,6 +359,15 @@ fun HomeScreen(
                     }
                 },
                 onRequestNotification = onRequestNotification
+            )
+        }
+
+        // Section E: Google AdMob Adaptive Banner (Official Test ID)
+        item {
+            com.kyro.game.space.ads.AdMobBanner(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 4.dp)
             )
         }
     }

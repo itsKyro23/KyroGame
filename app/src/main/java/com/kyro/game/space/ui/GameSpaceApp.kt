@@ -3,8 +3,12 @@ package com.kyro.game.space.ui
 import android.app.Activity
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -53,6 +57,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.kyro.game.space.ads.AdMobManager
 import com.kyro.game.space.data.repository.GameSpaceRepository
 import com.kyro.game.space.ui.screens.AppsScreen
 import com.kyro.game.space.ui.screens.HomeScreen
@@ -109,7 +114,15 @@ fun GameSpaceApp(
     if (showSplash) {
         SplashScreen(
             overview = overview,
-            onSplashFinished = { showSplash = false }
+            onSplashFinished = {
+                (context as? Activity)?.let { activity ->
+                    AdMobManager.showAppOpenAdIfAvailable(activity) {
+                        showSplash = false
+                    }
+                } ?: run {
+                    showSplash = false
+                }
+            }
         )
         return
     }
@@ -202,72 +215,119 @@ fun GameSpaceApp(
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
-            when (activeSubScreen) {
-                ToolSubScreen.RESOLUTION_CHANGER -> {
-                    ResolutionChangerScreen(
-                        repository = repository,
-                        onBack = { activeSubScreen = ToolSubScreen.NONE }
-                    )
-                }
-                ToolSubScreen.TEXTURE_TUNER -> {
-                    TextureTunerScreen(
-                        repository = repository,
-                        allApps = allApps,
-                        onBack = { activeSubScreen = ToolSubScreen.NONE }
-                    )
-                }
-                ToolSubScreen.NETWORK_OPTIMIZER -> {
-                    NetworkOptimizerScreen(
-                        repository = repository,
-                        stats = stats,
-                        onBack = { activeSubScreen = ToolSubScreen.NONE }
-                    )
-                }
-                ToolSubScreen.NONE -> {
-                    AnimatedContent(
-                        targetState = currentTab,
-                        transitionSpec = { fadeIn() togetherWith fadeOut() },
-                        label = "tab_crossfade"
-                    ) { targetTab ->
-                        when (targetTab) {
-                            GameSpaceTab.HOME -> HomeScreen(
-                                repository = repository,
-                                overview = overview,
-                                stats = stats,
-                                homeGames = homeGames,
-                                isUsageAccessGranted = isUsageAccessGranted,
-                                isOverlayGranted = isOverlayGranted,
-                                isNotificationGranted = isNotificationGranted,
-                                onRequestNotification = onRequestNotification,
-                                onNavigateToApps = { currentTab = GameSpaceTab.APPS },
-                                onNavigateToNetworkOptimizer = {
-                                    activeSubScreen = ToolSubScreen.NETWORK_OPTIMIZER
+            AnimatedContent(
+                targetState = activeSubScreen,
+                transitionSpec = {
+                    if (targetState != ToolSubScreen.NONE) {
+                        (slideInHorizontally(
+                            animationSpec = tween(340, easing = FastOutSlowInEasing)
+                        ) { width -> width } + fadeIn(animationSpec = tween(300)))
+                            .togetherWith(
+                                slideOutHorizontally(
+                                    animationSpec = tween(280, easing = FastOutSlowInEasing)
+                                ) { width -> -width / 3 } + fadeOut(animationSpec = tween(240))
+                            )
+                    } else {
+                        (slideInHorizontally(
+                            animationSpec = tween(320, easing = FastOutSlowInEasing)
+                        ) { width -> -width / 3 } + fadeIn(animationSpec = tween(300)))
+                            .togetherWith(
+                                slideOutHorizontally(
+                                    animationSpec = tween(300, easing = FastOutSlowInEasing)
+                                ) { width -> width } + fadeOut(animationSpec = tween(240))
+                            )
+                    }
+                },
+                label = "subscreen_animated_transition"
+            ) { subScreen ->
+                when (subScreen) {
+                    ToolSubScreen.RESOLUTION_CHANGER -> {
+                        ResolutionChangerScreen(
+                            repository = repository,
+                            onBack = { activeSubScreen = ToolSubScreen.NONE }
+                        )
+                    }
+                    ToolSubScreen.TEXTURE_TUNER -> {
+                        TextureTunerScreen(
+                            repository = repository,
+                            allApps = allApps,
+                            onBack = { activeSubScreen = ToolSubScreen.NONE }
+                        )
+                    }
+                    ToolSubScreen.NETWORK_OPTIMIZER -> {
+                        NetworkOptimizerScreen(
+                            repository = repository,
+                            stats = stats,
+                            onBack = { activeSubScreen = ToolSubScreen.NONE }
+                        )
+                    }
+                    ToolSubScreen.NONE -> {
+                        AnimatedContent(
+                            targetState = currentTab,
+                            transitionSpec = {
+                                val direction = targetState.ordinal.compareTo(initialState.ordinal)
+                                if (direction >= 0) {
+                                    (slideInHorizontally(
+                                        animationSpec = tween(300, easing = FastOutSlowInEasing)
+                                    ) { width -> width / 3 } + fadeIn(animationSpec = tween(280)))
+                                        .togetherWith(
+                                            slideOutHorizontally(
+                                                animationSpec = tween(280, easing = FastOutSlowInEasing)
+                                            ) { width -> -width / 3 } + fadeOut(animationSpec = tween(240))
+                                        )
+                                } else {
+                                    (slideInHorizontally(
+                                        animationSpec = tween(300, easing = FastOutSlowInEasing)
+                                    ) { width -> -width / 3 } + fadeIn(animationSpec = tween(280)))
+                                        .togetherWith(
+                                            slideOutHorizontally(
+                                                animationSpec = tween(280, easing = FastOutSlowInEasing)
+                                            ) { width -> width / 3 } + fadeOut(animationSpec = tween(240))
+                                        )
                                 }
-                            )
-                            GameSpaceTab.TOOLS -> ToolsScreen(
-                                repository = repository,
-                                onOpenResolutionChanger = {
-                                    activeSubScreen = ToolSubScreen.RESOLUTION_CHANGER
-                                },
-                                onOpenNetworkOptimizer = {
-                                    activeSubScreen = ToolSubScreen.NETWORK_OPTIMIZER
-                                },
-                                onOpenTextureTuner = {
-                                    activeSubScreen = ToolSubScreen.TEXTURE_TUNER
-                                }
-                            )
-                            GameSpaceTab.APPS -> AppsScreen(
-                                repository = repository,
-                                allApps = allApps,
-                                overview = overview
-                            )
-                            GameSpaceTab.SETTINGS -> SettingsScreen(
-                                repository = repository,
-                                overview = overview,
-                                refreshIntervalMs = refreshIntervalMs,
-                                floatingHudEnabled = floatingHudEnabled,
-                                isOverlayGranted = isOverlayGranted
-                            )
+                            },
+                            label = "tab_smooth_slide"
+                        ) { targetTab ->
+                            when (targetTab) {
+                                GameSpaceTab.HOME -> HomeScreen(
+                                    repository = repository,
+                                    overview = overview,
+                                    stats = stats,
+                                    homeGames = homeGames,
+                                    isUsageAccessGranted = isUsageAccessGranted,
+                                    isOverlayGranted = isOverlayGranted,
+                                    isNotificationGranted = isNotificationGranted,
+                                    onRequestNotification = onRequestNotification,
+                                    onNavigateToApps = { currentTab = GameSpaceTab.APPS },
+                                    onNavigateToNetworkOptimizer = {
+                                        activeSubScreen = ToolSubScreen.NETWORK_OPTIMIZER
+                                    }
+                                )
+                                GameSpaceTab.TOOLS -> ToolsScreen(
+                                    repository = repository,
+                                    onOpenResolutionChanger = {
+                                        activeSubScreen = ToolSubScreen.RESOLUTION_CHANGER
+                                    },
+                                    onOpenNetworkOptimizer = {
+                                        activeSubScreen = ToolSubScreen.NETWORK_OPTIMIZER
+                                    },
+                                    onOpenTextureTuner = {
+                                        activeSubScreen = ToolSubScreen.TEXTURE_TUNER
+                                    }
+                                )
+                                GameSpaceTab.APPS -> AppsScreen(
+                                    repository = repository,
+                                    allApps = allApps,
+                                    overview = overview
+                                )
+                                GameSpaceTab.SETTINGS -> SettingsScreen(
+                                    repository = repository,
+                                    overview = overview,
+                                    refreshIntervalMs = refreshIntervalMs,
+                                    floatingHudEnabled = floatingHudEnabled,
+                                    isOverlayGranted = isOverlayGranted
+                                )
+                            }
                         }
                     }
                 }

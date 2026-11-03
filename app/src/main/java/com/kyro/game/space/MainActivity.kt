@@ -15,6 +15,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.core.content.ContextCompat
+import com.kyro.game.space.ads.AdMobManager
 import com.kyro.game.space.data.repository.GameSpaceRepository
 import com.kyro.game.space.ui.GameSpaceApp
 import com.kyro.game.space.ui.theme.GameSpaceTheme
@@ -39,6 +40,9 @@ class MainActivity : ComponentActivity() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             window.decorView.isForceDarkAllowed = false
         }
+
+        // Initialize Google AdMob SDK
+        AdMobManager.initialize(applicationContext)
 
         repository = GameSpaceRepository(applicationContext)
 

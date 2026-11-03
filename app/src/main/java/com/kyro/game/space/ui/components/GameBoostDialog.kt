@@ -45,7 +45,9 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
@@ -79,6 +81,22 @@ fun GameBoostDialog(
     var progress by remember { mutableFloatStateOf(0.05f) }
     var statusText by remember { mutableStateOf("Preparing game environment...") }
     var isCompleted by remember { mutableStateOf(false) }
+    var isAppeared by remember { mutableStateOf(false) }
+
+    val enterScale by animateFloatAsState(
+        targetValue = if (isAppeared) 1f else 0.88f,
+        animationSpec = androidx.compose.animation.core.spring(
+            dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy,
+            stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow
+        ),
+        label = "boost_dialog_scale"
+    )
+
+    val enterAlpha by animateFloatAsState(
+        targetValue = if (isAppeared) 1f else 0f,
+        animationSpec = tween(durationMillis = 240, easing = FastOutSlowInEasing),
+        label = "boost_dialog_alpha"
+    )
 
     val animatedProgress by animateFloatAsState(
         targetValue = progress,
@@ -88,6 +106,10 @@ fun GameBoostDialog(
 
     val gameIcon = remember(game.packageName) {
         AppIconCache.getIcon(context, game.packageName)
+    }
+
+    LaunchedEffect(Unit) {
+        isAppeared = true
     }
 
     LaunchedEffect(game.packageName) {
@@ -115,6 +137,8 @@ fun GameBoostDialog(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .scale(enterScale)
+                    .alpha(enterAlpha)
                     .padding(top = 10.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(16.dp)
