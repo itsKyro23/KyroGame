@@ -370,7 +370,7 @@ fun GameSpaceApp(
                         tint = KyroAccent
                     )
                     Text(
-                        text = "Exit Kyro Game Space?",
+                        text = "Exit NOX - Game Space?",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )
@@ -378,7 +378,7 @@ fun GameSpaceApp(
             },
             text = {
                 Text(
-                    text = "Are you sure you want to exit Kyro Game Space? Active background optimizations and the In-Game Floating HUD will continue running if enabled.",
+                    text = "Are you sure you want to exit NOX - Game Space? Active background optimizations and the In-Game Floating HUD will continue running if enabled.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     lineHeight = 19.sp

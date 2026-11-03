@@ -187,7 +187,7 @@ class FloatingHudService : Service() {
         )
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("Kyro Game Space HUD")
+            .setContentTitle("NOX Game Space HUD")
             .setContentText("Live FPS, CPU & GPU overlay active")
             .setSmallIcon(android.R.drawable.ic_menu_compass)
             .setContentIntent(pendingIntent)

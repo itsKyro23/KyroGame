@@ -6,8 +6,11 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.ui.res.painterResource
+import com.kyro.game.space.R
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -62,7 +65,7 @@ fun SplashScreen(
     onSplashFinished: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var statusText by remember { mutableStateOf("Initializing Kyro Core Engine...") }
+    var statusText by remember { mutableStateOf("Initializing NOX Core Engine...") }
     var progressStep by remember { mutableStateOf(0.15f) }
 
     val infiniteTransition = rememberInfiniteTransition(label = "splash_glow")
@@ -87,7 +90,7 @@ fun SplashScreen(
 
     LaunchedEffect(Unit) {
         delay(600)
-        statusText = "Initializing Kyro Core Engine & Hardware HAL..."
+        statusText = "Initializing NOX Core Engine & Hardware HAL..."
         progressStep = 0.25f
         delay(750)
         statusText = "Checking Shizuku • Wireless ADB • Root..."
@@ -171,12 +174,13 @@ fun SplashScreen(
                         )
                 )
 
-                // Icon
-                Icon(
-                    imageVector = Icons.Default.SportsEsports,
-                    contentDescription = "Kyro Game Space",
-                    tint = KyroCyan,
-                    modifier = Modifier.size(54.dp)
+                // NOX Official Emblem Logo
+                Image(
+                    painter = painterResource(id = R.drawable.ic_nox_logo),
+                    contentDescription = "NOX - Game Space",
+                    modifier = Modifier
+                        .size(76.dp)
+                        .clip(CircleShape)
                 )
             }
 
@@ -184,7 +188,7 @@ fun SplashScreen(
 
             // App Title
             Text(
-                text = "KYRO GAME SPACE",
+                text = "NOX - GAME SPACE",
                 style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.Black,
                 letterSpacing = 2.sp,

@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Cable
@@ -68,6 +69,7 @@ import com.kyro.game.space.data.repository.GameSpaceRepository
 import com.kyro.game.space.service.FloatingHudService
 import com.kyro.game.space.ui.components.AdbCommandDialog
 import com.kyro.game.space.ui.components.ManualAdbPairingDialog
+import com.kyro.game.space.ui.components.PrivacyPolicyDialog
 import com.kyro.game.space.ui.theme.KyroAccent
 import com.kyro.game.space.ui.theme.KyroCyan
 import com.kyro.game.space.ui.theme.KyroGreen
@@ -88,6 +90,7 @@ fun SettingsScreen(
 
     var showPairingDialog by remember { mutableStateOf(false) }
     var showTerminalDialog by remember { mutableStateOf(false) }
+    var showPrivacyDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(overview.method) {
         repository.refreshActiveExecutionMethodStatus()
@@ -560,7 +563,7 @@ fun SettingsScreen(
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
                                 Text(
-                                    text = "Kyro Game Space",
+                                    text = "NOX - Game Space",
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Black
                                 )
@@ -588,11 +591,81 @@ fun SettingsScreen(
 
                     // Description
                     Text(
-                        text = "Kyro Game Space is a dedicated Android gaming performance hub engineered for competitive mobile gamers. It provides per-game hardware boosting, safe display resolution scaling with auto-revert protection, GPU mipmap/LOD lightweight texture tuning, multi-DNS stability benchmarking, and a live translucent in-game FPS, CPU, and GPU telemetry overlay.",
+                        text = "NOX - Game Space is a dedicated Android gaming performance hub engineered for competitive mobile gamers. It provides per-game hardware boosting, safe display resolution scaling with auto-revert protection, GPU mipmap/LOD lightweight texture tuning, multi-DNS stability benchmarking, and a live translucent in-game FPS, CPU, and GPU telemetry overlay.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         lineHeight = 18.sp
                     )
+
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.25f))
+
+                    // Privacy Policy & Compliance Action Card
+                    Surface(
+                        onClick = { showPrivacyDialog = true },
+                        shape = RoundedCornerShape(14.dp),
+                        color = Color(0xFF161A28),
+                        border = BorderStroke(1.dp, KyroCyan.copy(alpha = 0.35f)),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("privacy_policy_item_btn")
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(14.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Surface(
+                                    shape = CircleShape,
+                                    color = KyroCyan.copy(alpha = 0.16f),
+                                    modifier = Modifier.size(36.dp)
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(
+                                            imageVector = Icons.Default.Security,
+                                            contentDescription = "Privacy Policy",
+                                            tint = KyroCyan,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
+                                }
+                                Column {
+                                    Text(
+                                        text = "Privacy Policy & Compliance",
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color.White
+                                    )
+                                    Text(
+                                        text = "Contact: kyrostudios23@gmail.com • Tap to view & copy",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = Color(0xFF8E99B3),
+                                        fontSize = 11.sp
+                                    )
+                                }
+                            }
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = KyroCyan.copy(alpha = 0.16f),
+                                border = BorderStroke(1.dp, KyroCyan.copy(alpha = 0.45f))
+                            ) {
+                                Text(
+                                    text = "View & Copy",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = KyroCyan,
+                                    fontSize = 11.sp,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                )
+                            }
+                        }
+                    }
 
                     HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.25f))
 
@@ -605,6 +678,10 @@ fun SettingsScreen(
                         AppInfoDetailRow(
                             label = "Package Identifier",
                             value = BuildConfig.APPLICATION_ID
+                        )
+                        AppInfoDetailRow(
+                            label = "Privacy Contact",
+                            value = "kyrostudios23@gmail.com"
                         )
                         AppInfoDetailRow(
                             label = "Permission Engines",
@@ -641,6 +718,12 @@ fun SettingsScreen(
             onDismiss = { showTerminalDialog = false },
             onExecute = { cmd -> repository.executeCommand(cmd) },
             executorName = activeMethodDisplayName
+        )
+    }
+
+    if (showPrivacyDialog) {
+        PrivacyPolicyDialog(
+            onDismiss = { showPrivacyDialog = false }
         )
     }
 }
