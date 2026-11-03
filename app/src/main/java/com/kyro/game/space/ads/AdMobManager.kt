@@ -44,9 +44,9 @@ import com.google.android.gms.ads.appopen.AppOpenAd
  */
 object AdMobManager {
 
-    // Official Google AdMob Test Ad Unit IDs
-    const val TEST_APP_OPEN_AD_ID = "ca-app-pub-3940256099942544/9257396112"
-    const val TEST_BANNER_AD_ID = "ca-app-pub-3940256099942544/6300978111"
+    // AdMob Ad Unit IDs
+    const val APP_OPEN_AD_ID = "ca-app-pub-4611749728265191/6864245998"
+    const val BANNER_AD_ID = "ca-app-pub-4611749728265191/5534852458"
 
     private var isInitialized = false
     private var appOpenAd: AppOpenAd? = null
@@ -78,7 +78,7 @@ object AdMobManager {
             val request = AdRequest.Builder().build()
             AppOpenAd.load(
                 context.applicationContext,
-                TEST_APP_OPEN_AD_ID,
+                APP_OPEN_AD_ID,
                 request,
                 object : AppOpenAd.AppOpenAdLoadCallback() {
                     override fun onAdLoaded(ad: AppOpenAd) {
@@ -174,7 +174,7 @@ fun AdMobBanner(
                 modifier = Modifier.align(Alignment.Start)
             ) {
                 Text(
-                    text = "AD • TEST",
+                    text = "AD",
                     style = MaterialTheme.typography.labelSmall,
                     fontSize = 9.sp,
                     fontFamily = FontFamily.Monospace,
@@ -197,7 +197,7 @@ fun AdMobBanner(
                     factory = { ctx ->
                         AdView(ctx).apply {
                             setAdSize(AdSize.BANNER)
-                            adUnitId = AdMobManager.TEST_BANNER_AD_ID
+                            adUnitId = AdMobManager.BANNER_AD_ID
                             loadAd(AdRequest.Builder().build())
                         }
                     }
