@@ -22,8 +22,8 @@ import kotlinx.coroutines.launch
 class AdbPairingReceiver : BroadcastReceiver() {
 
     companion object {
-        const val ACTION_REPLY_PAIRING_CODE = "com.kyro.game.space.ACTION_REPLY_PAIRING_CODE"
-        const val ACTION_ADB_STATE_CHANGED = "com.kyro.game.space.ACTION_ADB_STATE_CHANGED"
+        const val ACTION_REPLY_PAIRING_CODE = "com.nox.gamespace.ACTION_REPLY_PAIRING_CODE"
+        const val ACTION_ADB_STATE_CHANGED = "com.nox.gamespace.ACTION_ADB_STATE_CHANGED"
         const val EXTRA_HOST = "extra_host"
         const val EXTRA_PAIRING_PORT = "extra_pairing_port"
         const val EXTRA_CONNECT_PORT = "extra_connect_port"

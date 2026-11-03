@@ -13,7 +13,7 @@ android {
   compileSdk { version = release(36) { minorApiLevel = 1 } }
 
   defaultConfig {
-    applicationId = "com.kyro.game.space"
+    applicationId = "com.nox.gamespace"
     minSdk = 24
     targetSdk = 36
     versionCode = 1
@@ -21,6 +21,9 @@ android {
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     androidResources.localeFilters.addAll(listOf("en", "in", "ms"))
+    ndk {
+      abiFilters.addAll(listOf("arm64-v8a"))
+    }
   }
 
   // Do not remove or modify these signingConfigs. They are necessary for building, installing,
@@ -87,7 +90,9 @@ android {
         "/META-INF/DEPENDENCIES",
         "/META-INF/LICENSE*",
         "/META-INF/NOTICE*",
-        "DebugProbesKt.bin"
+        "DebugProbesKt.bin",
+        "**/*.proto",
+        "**/*.version"
       )
     }
     jniLibs {
@@ -121,7 +126,7 @@ googleServices { missingGoogleServicesStrategy = MissingGoogleServicesStrategy.W
 // This makes it easy to add them back in the future if needed.
 dependencies {
   implementation(platform(libs.androidx.compose.bom))
-  implementation(libs.androidx.fragment.ktx)
+  // implementation(libs.androidx.fragment.ktx)
   // implementation(platform(libs.firebase.bom))
   // implementation(libs.accompanist.permissions)
   implementation(libs.androidx.activity.compose)
