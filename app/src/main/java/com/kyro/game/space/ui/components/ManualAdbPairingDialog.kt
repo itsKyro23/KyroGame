@@ -79,7 +79,6 @@ fun ManualAdbPairingDialog(
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
-    var clientDeviceName by remember { mutableStateOf(AdbKeyManager.getClientName(context)) }
     var host by remember { mutableStateOf(manualAdbInfo.host) }
     var pairingPortText by remember {
         mutableStateOf(if (manualAdbInfo.pairingPort > 0) manualAdbInfo.pairingPort.toString() else "37000")
@@ -165,6 +164,7 @@ fun ManualAdbPairingDialog(
                 modifier = Modifier
                     .fillMaxWidth()
                     .verticalScroll(rememberScrollState())
+                    .padding(bottom = 28.dp)
             ) {
                 // 1. Persistent Daemon Status Banner
                 val daemonColor = if (manualAdbInfo.isDaemonInjected) KyroGreen else KyroCyan
@@ -313,30 +313,51 @@ fun ManualAdbPairingDialog(
 
                 Spacer(modifier = Modifier.height(12.dp))
 
-                // Custom ADB Device Name (e.g. KYRO, ZAYON)
-                OutlinedTextField(
-                    value = clientDeviceName,
-                    onValueChange = { newName ->
-                        val clean = newName.filter { ch -> ch.isLetterOrDigit() || ch == '_' || ch == '-' }
-                        clientDeviceName = clean
-                        AdbNativeBridge.syncClientDeviceName(context, clean)
-                    },
-                    label = { Text("ADB Paired Device Name (In Settings)") },
-                    placeholder = { Text("e.g. KYRO or ZAYON") },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag("adb_client_name_input"),
+                // Paired Device Identifier: NOX (Fixed permanent identity)
+                Surface(
                     shape = RoundedCornerShape(12.dp),
-                    singleLine = true,
-                    supportingText = {
-                        Text(
-                            text = "Name displayed in Wireless Debugging > Paired devices. Reuses permanent RSA key to prevent duplicates.",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            fontSize = 11.sp
-                        )
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                    border = androidx.compose.foundation.BorderStroke(
+                        1.dp,
+                        MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Paired Device Name",
+                                style = MaterialTheme.typography.bodySmall,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = "Always identified as NOX in Developer Options",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = KyroCyan.copy(alpha = 0.16f),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, KyroCyan.copy(alpha = 0.45f))
+                        ) {
+                            Text(
+                                text = "NOX",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Black,
+                                fontFamily = FontFamily.Monospace,
+                                color = KyroCyan,
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                            )
+                        }
                     }
-                )
+                }
 
                 Spacer(modifier = Modifier.height(8.dp))
 
@@ -408,8 +429,8 @@ fun ManualAdbPairingDialog(
                         onClick = {
                             scope.launch {
                                 isProcessing = true
-                                AdbNativeBridge.syncClientDeviceName(context, clientDeviceName)
-                                feedbackMessage = "Running libadb.so pair $host:$pairingPortText as $clientDeviceName..."
+                                AdbNativeBridge.syncClientDeviceName(context, "NOX")
+                                feedbackMessage = "Running libadb.so pair $host:$pairingPortText as NOX..."
                                 val pPort = pairingPortText.toIntOrNull() ?: 0
                                 val result = onPair(host.trim(), pPort, pairingCode.trim())
                                 if (result.isSuccess) {
@@ -435,8 +456,8 @@ fun ManualAdbPairingDialog(
                         onClick = {
                             scope.launch {
                                 isProcessing = true
-                                AdbNativeBridge.syncClientDeviceName(context, clientDeviceName)
-                                feedbackMessage = "Connecting Wireless ADB & Injecting Daemon as $clientDeviceName..."
+                                AdbNativeBridge.syncClientDeviceName(context, "NOX")
+                                feedbackMessage = "Connecting Wireless ADB & Injecting Daemon as NOX..."
                                 val cPort = connectPortText.toIntOrNull() ?: 5555
                                 val result = onConnect(host.trim(), cPort)
                                 if (result.isSuccess) {

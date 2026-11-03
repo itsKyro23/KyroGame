@@ -236,11 +236,31 @@ class AdbWirelessScanner(
             statusText = summary
         )
 
-        if (isPairing && updateNotif && changed) {
-            updatePairingNotification(
-                title = "Pairing Port Found: $resolvedIp:$newPairingPort",
-                body = "Tap 'Enter Pairing Code' below and type the 6-digit code shown on screen."
-            )
+        // Save fresh discovery endpoints so notification receiver and repository always have latest data
+        val prefs = context.getSharedPreferences("kyro_game_space_prefs", Context.MODE_PRIVATE)
+        val editor = prefs.edit()
+        if (newConnectPort > 0) {
+            editor.putString("last_adb_host", resolvedIp)
+            editor.putInt("last_adb_port", newConnectPort)
+        }
+        if (newPairingPort > 0) {
+            editor.putInt("last_adb_pairing_port", newPairingPort)
+        }
+        editor.apply()
+
+        if (updateNotif && changed) {
+            val title = when {
+                newPairingPort > 0 && newConnectPort > 0 -> "Wireless ADB Ready: $resolvedIp:$newConnectPort"
+                newPairingPort > 0 -> "Pairing Port Found: $resolvedIp:$newPairingPort"
+                newConnectPort > 0 -> "Wireless ADB Discovered: $resolvedIp:$newConnectPort"
+                else -> "Auto-Scanning Wireless ADB..."
+            }
+            val body = if (newPairingPort > 0) {
+                "Tap 'Enter Pairing Code' below and type the 6-digit code shown on screen."
+            } else {
+                "Open Developer Options > Wireless Debugging > Pair device with pairing code."
+            }
+            updatePairingNotification(title, body)
         }
 
         if (!isPairing && newConnectPort > 0 && _state.value.autoConnectEnabled) {

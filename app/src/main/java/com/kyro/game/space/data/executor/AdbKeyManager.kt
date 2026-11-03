@@ -27,21 +27,14 @@ object AdbKeyManager {
 
     private const val PREFS_NAME = "kyro_game_space_prefs"
     private const val KEY_ADB_CLIENT_NAME = "adb_custom_client_name"
-    const val DEFAULT_CLIENT_NAME = "KYRO"
+    const val DEFAULT_CLIENT_NAME = "NOX"
 
     fun getClientName(context: Context): String {
-        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        return prefs.getString(KEY_ADB_CLIENT_NAME, DEFAULT_CLIENT_NAME)
-            ?.trim()
-            ?.ifEmpty { DEFAULT_CLIENT_NAME }
-            ?: DEFAULT_CLIENT_NAME
+        return DEFAULT_CLIENT_NAME
     }
 
     fun setClientName(context: Context, name: String): String {
-        val clean = name.trim().replace(Regex("[^a-zA-Z0-9_-]"), "").ifEmpty { DEFAULT_CLIENT_NAME }
-        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        prefs.edit().putString(KEY_ADB_CLIENT_NAME, clean).apply()
-        return clean
+        return DEFAULT_CLIENT_NAME
     }
 
     /**

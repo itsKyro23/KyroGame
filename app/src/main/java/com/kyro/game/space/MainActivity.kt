@@ -16,10 +16,12 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.lifecycleScope
 import com.kyro.game.space.ads.AdMobManager
 import com.kyro.game.space.data.repository.GameSpaceRepository
 import com.kyro.game.space.ui.GameSpaceApp
 import com.kyro.game.space.ui.theme.GameSpaceTheme
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
 
@@ -76,6 +78,12 @@ class MainActivity : ComponentActivity() {
         super.onResume()
         checkPermissions()
         repository.updateShizukuStatus()
+        lifecycleScope.launch {
+            try {
+                repository.checkDaemonAndSyncState()
+            } catch (_: Throwable) {
+            }
+        }
     }
 
     override fun onDestroy() {

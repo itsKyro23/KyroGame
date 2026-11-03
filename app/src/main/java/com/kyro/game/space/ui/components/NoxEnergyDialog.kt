@@ -189,7 +189,7 @@ fun NoxEnergyTopUpDialog(
         text = {
             Column(
                 modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(14.dp)
+                verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 if (isTampered || energy < 0) {
                     Surface(
@@ -237,9 +237,9 @@ fun NoxEnergyTopUpDialog(
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(16.dp),
+                                .padding(12.dp),
                             horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
@@ -293,15 +293,15 @@ fun NoxEnergyTopUpDialog(
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .height(14.dp)
-                                    .clip(RoundedCornerShape(7.dp))
+                                    .height(12.dp)
+                                    .clip(RoundedCornerShape(6.dp))
                                     .background(Color(0xFF1E2438))
                             ) {
                                 Box(
                                     modifier = Modifier
                                         .fillMaxWidth(animatedProgress)
-                                        .height(14.dp)
-                                        .clip(RoundedCornerShape(7.dp))
+                                        .height(12.dp)
+                                        .clip(RoundedCornerShape(6.dp))
                                         .background(
                                             Brush.horizontalGradient(
                                                 colors = listOf(KyroCyan, Color(0xFF00E676))
@@ -346,8 +346,8 @@ fun NoxEnergyTopUpDialog(
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(14.dp),
-                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                                .padding(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             Text(
                                 text = "FEATURE ENERGY COSTS (DEDUCTED ON APPLY ONLY)",
@@ -365,6 +365,9 @@ fun NoxEnergyTopUpDialog(
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
                                 Row(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .padding(end = 8.dp),
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
@@ -382,7 +385,7 @@ fun NoxEnergyTopUpDialog(
                                             color = Color.White
                                         )
                                         Text(
-                                            text = "Single Package: 20⚡ • All Added Games: 40⚡",
+                                            text = "Single: 20⚡ • All games: 40⚡",
                                             style = MaterialTheme.typography.labelSmall,
                                             color = Color(0xFF8E99B3),
                                             fontSize = 9.5.sp
@@ -414,6 +417,9 @@ fun NoxEnergyTopUpDialog(
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
                                 Row(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .padding(end = 8.dp),
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
@@ -463,6 +469,9 @@ fun NoxEnergyTopUpDialog(
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
                                 Row(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .padding(end = 8.dp),
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {

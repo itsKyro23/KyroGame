@@ -150,7 +150,33 @@ class GameSpaceRepository(
         pending
     }
 
+    private val adbStateReceiver = object : android.content.BroadcastReceiver() {
+        override fun onReceive(c: Context?, intent: Intent?) {
+            if (intent?.action == com.kyro.game.space.service.AdbPairingReceiver.ACTION_ADB_STATE_CHANGED) {
+                scope.launch {
+                    try {
+                        val host = prefs.getString("last_adb_host", "127.0.0.1") ?: "127.0.0.1"
+                        val port = prefs.getInt("last_adb_port", 5555)
+                        val wasInjected = prefs.getBoolean("daemon_was_injected", false)
+                        executorFactory.libAdbExecutor.restoreSavedEndpoint(host, port, wasInjected)
+                        checkDaemonAndSyncState()
+                    } catch (_: Throwable) {
+                    }
+                }
+            }
+        }
+    }
+
     init {
+        try {
+            val filter = IntentFilter(com.kyro.game.space.service.AdbPairingReceiver.ACTION_ADB_STATE_CHANGED)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                context.registerReceiver(adbStateReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+            } else {
+                context.registerReceiver(adbStateReceiver, filter)
+            }
+        } catch (_: Throwable) {
+        }
         try {
             val savedHost = prefs.getString("last_adb_host", "127.0.0.1") ?: "127.0.0.1"
             val savedPort = prefs.getInt("last_adb_port", 5555)
@@ -247,6 +273,10 @@ class GameSpaceRepository(
             Shizuku.removeBinderReceivedListener(binderReceivedListener)
             Shizuku.removeBinderDeadListener(binderDeadListener)
             Shizuku.removeRequestPermissionResultListener(permissionResultListener)
+            try {
+                context.unregisterReceiver(adbStateReceiver)
+            } catch (_: Throwable) {
+            }
         } catch (_: Throwable) {
         }
     }

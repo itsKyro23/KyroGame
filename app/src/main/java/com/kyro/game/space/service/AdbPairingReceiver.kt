@@ -23,6 +23,7 @@ class AdbPairingReceiver : BroadcastReceiver() {
 
     companion object {
         const val ACTION_REPLY_PAIRING_CODE = "com.kyro.game.space.ACTION_REPLY_PAIRING_CODE"
+        const val ACTION_ADB_STATE_CHANGED = "com.kyro.game.space.ACTION_ADB_STATE_CHANGED"
         const val EXTRA_HOST = "extra_host"
         const val EXTRA_PAIRING_PORT = "extra_pairing_port"
         const val EXTRA_CONNECT_PORT = "extra_connect_port"
@@ -34,11 +35,22 @@ class AdbPairingReceiver : BroadcastReceiver() {
         val remoteInput = RemoteInput.getResultsFromIntent(intent) ?: return
         val rawInput = remoteInput.getCharSequence(AdbWirelessScanner.KEY_TEXT_REPLY)?.toString()?.trim() ?: return
 
+        val prefs = context.getSharedPreferences("kyro_game_space_prefs", Context.MODE_PRIVATE)
+
         // Support either "123456" (when pairing port was auto-detected) or "37812 123456"
         val tokens = rawInput.split(Regex("[\\s:]+")).filter { it.isNotBlank() }
-        val host = intent.getStringExtra(EXTRA_HOST)?.takeIf { it.isNotBlank() } ?: "127.0.0.1"
+        val host = intent.getStringExtra(EXTRA_HOST)?.takeIf { it.isNotBlank() } 
+            ?: prefs.getString("last_adb_host", "127.0.0.1") ?: "127.0.0.1"
+
         var pairingPort = intent.getIntExtra(EXTRA_PAIRING_PORT, 0)
-        val connectPort = intent.getIntExtra(EXTRA_CONNECT_PORT, 0)
+        if (pairingPort <= 0) {
+            pairingPort = prefs.getInt("last_adb_pairing_port", 0)
+        }
+
+        var connectPort = intent.getIntExtra(EXTRA_CONNECT_PORT, 0)
+        if (connectPort <= 0) {
+            connectPort = prefs.getInt("last_adb_port", 0)
+        }
 
         val code = if (tokens.size >= 2) {
             pairingPort = tokens[0].filter { it.isDigit() }.toIntOrNull() ?: pairingPort
@@ -54,7 +66,7 @@ class AdbPairingReceiver : BroadcastReceiver() {
                 AdbNativeBridge.initialize(context)
                 val executor = LibAdbCommandExecutor()
 
-                // If pairingPort wasn't in the intent yet, check `libadb.so mdns services` right now
+                // If pairingPort wasn't known yet, check `libadb.so mdns services`
                 if (pairingPort <= 0 && AdbNativeBridge.isNativeLoaded) {
                     val mdns = AdbNativeBridge.runAdbBinary("mdns", "services", timeoutMs = 3000L)
                     val line = mdns.stdout.lines().firstOrNull { it.contains("_adb-tls-pairing") }
@@ -64,48 +76,87 @@ class AdbPairingReceiver : BroadcastReceiver() {
 
                 postStatusNotification(
                     context,
-                    "Pairing with $host:$pairingPort...",
+                    "Pairing with $host:$pairingPort as NOX...",
                     "Executing libadb.so pair $host:$pairingPort $code"
                 )
 
                 val pairRes = executor.pair(host, pairingPort, code)
                 if (pairRes.isSuccess) {
+                    // Give Wireless Debugging service time to transition from pairing to active connection
                     delay(800L)
-                    // Resolve connectPort via mDNS if not yet known
+
+                    // Multiple-pass resolution of connectPort via mDNS and devices table
                     var resolvedConnectPort = connectPort
                     if (resolvedConnectPort <= 0 && AdbNativeBridge.isNativeLoaded) {
-                        val mdns = AdbNativeBridge.runAdbBinary("mdns", "services", timeoutMs = 3000L)
-                        val line = mdns.stdout.lines().firstOrNull { it.contains("_adb-tls-connect") }
-                        val portStr = line?.split(Regex("\\s+"))?.lastOrNull()?.substringAfterLast(":")
-                        resolvedConnectPort = portStr?.toIntOrNull() ?: 0
+                        for (attempt in 1..4) {
+                            val mdns = AdbNativeBridge.runAdbBinary("mdns", "services", timeoutMs = 2500L)
+                            val line = mdns.stdout.lines().firstOrNull { it.contains("_adb-tls-connect") }
+                            val portStr = line?.split(Regex("\\s+"))?.lastOrNull()?.substringAfterLast(":")
+                            val parsed = portStr?.toIntOrNull() ?: 0
+                            if (parsed > 0) {
+                                resolvedConnectPort = parsed
+                                break
+                            }
+                            delay(500L)
+                        }
+
+                        if (resolvedConnectPort <= 0) {
+                            val devRes = AdbNativeBridge.runAdbBinary("devices", timeoutMs = 2000L)
+                            val devLine = devRes.stdout.lines().firstOrNull { it.contains(":") && it.contains("device") }
+                            val portStr = devLine?.substringBefore("\t")?.substringAfterLast(":")
+                            resolvedConnectPort = portStr?.toIntOrNull() ?: 0
+                        }
                     }
 
                     if (resolvedConnectPort > 0) {
-                        val connectRes = executor.connect(host, resolvedConnectPort)
-                        if (connectRes.isSuccess) {
-                            context.getSharedPreferences("kyro_game_space_prefs", Context.MODE_PRIVATE)
-                                .edit()
-                                .putString("last_adb_host", host)
-                                .putInt("last_adb_port", resolvedConnectPort)
-                                .putBoolean("daemon_was_injected", true)
-                                .apply()
-                            postStatusNotification(
-                                context,
-                                "Wireless ADB Paired & Daemon Injected!",
-                                connectRes.getOrNull() ?: "Persistent Daemon is now active on port 38555."
-                            )
-                        } else {
-                            postStatusNotification(
-                                context,
-                                "Paired Successfully!",
-                                "Return to Game Space to finish connecting ($host:$resolvedConnectPort)."
-                            )
-                        }
-                    } else {
                         postStatusNotification(
                             context,
-                            "Paired Successfully!",
-                            "Return to Game Space — auto-connecting & injecting persistent daemon..."
+                            "Connecting & Injecting Daemon...",
+                            "Target: $host:$resolvedConnectPort • Spawning persistent daemon on port 38555..."
+                        )
+
+                        val connectRes = executor.connect(host, resolvedConnectPort)
+                        // Make sure daemon script is definitely injected
+                        executor.injectPersistentDaemonViaAdb("$host:$resolvedConnectPort")
+
+                        // Save state to SharedPreferences
+                        prefs.edit()
+                            .putString("last_adb_host", host)
+                            .putInt("last_adb_port", resolvedConnectPort)
+                            .putBoolean("daemon_was_injected", true)
+                            .putLong("last_adb_update_time", System.currentTimeMillis())
+                            .apply()
+
+                        // Broadcast state change so repository updates immediately
+                        try {
+                            context.sendBroadcast(
+                                Intent(ACTION_ADB_STATE_CHANGED).setPackage(context.packageName)
+                            )
+                        } catch (_: Throwable) {
+                        }
+
+                        postStatusNotification(
+                            context,
+                            "✓ Wireless ADB Paired & Daemon Injected!",
+                            "Persistent Daemon is active on port 38555. Safe to turn OFF Wireless Debugging."
+                        )
+                    } else {
+                        // Pairing succeeded, save host and notify repository to auto-connect
+                        prefs.edit()
+                            .putString("last_adb_host", host)
+                            .apply()
+
+                        try {
+                            context.sendBroadcast(
+                                Intent(ACTION_ADB_STATE_CHANGED).setPackage(context.packageName)
+                            )
+                        } catch (_: Throwable) {
+                        }
+
+                        postStatusNotification(
+                            context,
+                            "Paired Successfully as NOX!",
+                            "Return to NOX - Game Space to auto-connect and activate persistent daemon."
                         )
                     }
                 } else {
