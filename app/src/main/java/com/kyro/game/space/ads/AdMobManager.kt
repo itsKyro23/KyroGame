@@ -39,14 +39,32 @@ import com.google.android.gms.ads.MobileAds
 import com.google.android.gms.ads.appopen.AppOpenAd
 
 /**
- * Manages Google AdMob Test Ads (App Open Ad & Adaptive Banner).
- * Uses official Google AdMob test IDs for safe development.
+ * Manages Google AdMob Ads (App Open Ad & Adaptive Banner).
+ * Includes toggle to switch between official Google Test IDs and Production IDs.
  */
 object AdMobManager {
 
-    // AdMob Ad Unit IDs
-    const val APP_OPEN_AD_ID = "ca-app-pub-4611749728265191/6864245998"
-    const val BANNER_AD_ID = "ca-app-pub-4611749728265191/5534852458"
+    /**
+     * Switch between Official Google Test IDs (true) and User Production IDs (false).
+     * Set to TRUE per user request for safe testing without policy violations.
+     */
+    var USE_TEST_ADS: Boolean = true
+
+    // Official Google AdMob Test Ad Unit IDs (100% safe for development)
+    const val TEST_APP_OPEN_AD_ID = "ca-app-pub-3940256099942544/9257396112"
+    const val TEST_BANNER_AD_ID = "ca-app-pub-3940256099942544/6300978111"
+    const val TEST_APP_ID = "ca-app-pub-3940256099942544~3347511713"
+
+    // Production AdMob IDs provided by user
+    const val PROD_APP_OPEN_AD_ID = "ca-app-pub-4611749728265191/6864245998"
+    const val PROD_BANNER_AD_ID = "ca-app-pub-4611749728265191/5534852458"
+    const val PROD_APP_ID = "ca-app-pub-4611749728265191~7055817688"
+
+    val currentAppOpenAdId: String
+        get() = if (USE_TEST_ADS) TEST_APP_OPEN_AD_ID else PROD_APP_OPEN_AD_ID
+
+    val currentBannerAdId: String
+        get() = if (USE_TEST_ADS) TEST_BANNER_AD_ID else PROD_BANNER_AD_ID
 
     private var isInitialized = false
     private var appOpenAd: AppOpenAd? = null
@@ -78,7 +96,7 @@ object AdMobManager {
             val request = AdRequest.Builder().build()
             AppOpenAd.load(
                 context.applicationContext,
-                APP_OPEN_AD_ID,
+                currentAppOpenAdId,
                 request,
                 object : AppOpenAd.AppOpenAdLoadCallback() {
                     override fun onAdLoaded(ad: AppOpenAd) {
@@ -143,18 +161,21 @@ object AdMobManager {
 
 /**
  * Clean Adaptive Banner Ad composable embedded with gaming card styling.
+ * Placed in a persistent, non-scrolling position so it never reloads on scroll.
  */
 @Composable
 fun AdMobBanner(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val currentUnitId = AdMobManager.currentBannerAdId
+    val isTestMode = AdMobManager.USE_TEST_ADS
 
     Card(
         modifier = modifier
             .fillMaxWidth()
             .testTag("admob_banner_card"),
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(
             containerColor = Color(0xFF10121C)
         ),
@@ -163,9 +184,9 @@ fun AdMobBanner(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(vertical = 8.dp, horizontal = 8.dp),
+                .padding(vertical = 4.dp, horizontal = 8.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(6.dp)
+            verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             // Subtle "Ad" tag badge
             Surface(
@@ -174,7 +195,7 @@ fun AdMobBanner(
                 modifier = Modifier.align(Alignment.Start)
             ) {
                 Text(
-                    text = "AD",
+                    text = if (isTestMode) "AD • TEST" else "AD",
                     style = MaterialTheme.typography.labelSmall,
                     fontSize = 9.sp,
                     fontFamily = FontFamily.Monospace,
@@ -197,7 +218,7 @@ fun AdMobBanner(
                     factory = { ctx ->
                         AdView(ctx).apply {
                             setAdSize(AdSize.BANNER)
-                            adUnitId = AdMobManager.BANNER_AD_ID
+                            adUnitId = currentUnitId
                             loadAd(AdRequest.Builder().build())
                         }
                     }

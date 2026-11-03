@@ -12,8 +12,10 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -174,11 +176,20 @@ fun GameSpaceApp(
             )
         },
         bottomBar = {
-            NavigationBar(
-                containerColor = MaterialTheme.colorScheme.surface,
-                tonalElevation = 6.dp,
-                modifier = Modifier.testTag("bottom_nav_bar")
-            ) {
+            androidx.compose.foundation.layout.Column {
+                if (activeSubScreen == ToolSubScreen.NONE) {
+                    com.kyro.game.space.ads.AdMobBanner(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp, vertical = 2.dp)
+                    )
+                }
+
+                NavigationBar(
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    tonalElevation = 6.dp,
+                    modifier = Modifier.testTag("bottom_nav_bar")
+                ) {
                 GameSpaceTab.entries.forEach { tab ->
                     val isSelected = currentTab == tab && activeSubScreen == ToolSubScreen.NONE
                     NavigationBarItem(
@@ -209,6 +220,7 @@ fun GameSpaceApp(
                 }
             }
         }
+    }
     ) { innerPadding ->
         Box(
             modifier = Modifier

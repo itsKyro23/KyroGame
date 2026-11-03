@@ -361,15 +361,6 @@ fun HomeScreen(
                 onRequestNotification = onRequestNotification
             )
         }
-
-        // Section E: Google AdMob Adaptive Banner (Official Test ID)
-        item {
-            com.kyro.game.space.ads.AdMobBanner(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 4.dp)
-            )
-        }
     }
 
     if (showPairingDialog) {
