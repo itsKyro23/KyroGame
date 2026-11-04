@@ -541,7 +541,7 @@ fun NoxEnergyTopUpDialog(
                                             color = Color.White
                                         )
                                         Text(
-                                            text = "Single: 15⚡ • All games: 30⚡",
+                                            text = "Native ARM64 ahead-of-time DEX compilation",
                                             style = MaterialTheme.typography.labelSmall,
                                             color = Color(0xFF8E99B3),
                                             fontSize = 9.5.sp
@@ -553,7 +553,7 @@ fun NoxEnergyTopUpDialog(
                                     color = KyroGreen.copy(alpha = 0.16f)
                                 ) {
                                     Text(
-                                        text = "15 / 30⚡",
+                                        text = "15⚡",
                                         style = MaterialTheme.typography.labelSmall,
                                         fontWeight = FontWeight.Bold,
                                         fontFamily = FontFamily.Monospace,

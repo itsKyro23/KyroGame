@@ -3,11 +3,10 @@ package com.kyro.game.space.ui.screens
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -19,37 +18,36 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Bolt
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Memory
-import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.SportsEsports
-import androidx.compose.material.icons.filled.Terminal
+import androidx.compose.material.icons.filled.SwapHoriz
+import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.RadioButtonDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -61,6 +59,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
@@ -77,10 +76,9 @@ import com.kyro.game.space.ui.theme.KyroAccent
 import com.kyro.game.space.ui.theme.KyroCyan
 import com.kyro.game.space.ui.theme.KyroGreen
 import com.kyro.game.space.ui.theme.KyroOrange
-import com.kyro.game.space.ui.theme.KyroPrimary
+import com.kyro.game.space.util.AppIconCache
 import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun AotCompilerScreen(
     repository: GameSpaceRepository,
@@ -95,28 +93,38 @@ fun AotCompilerScreen(
     val aotState by repository.aotCompilerState.collectAsState()
     val overview by repository.connectionState.collectAsState()
 
+    var showTargetPickerDialog by remember { mutableStateOf(false) }
     var showInsufficientEnergyDialog by remember { mutableStateOf(false) }
 
     val isAllGamesSelected = aotState.selectedTargetPackage.isBlank()
-    val requiredEnergy = when {
-        aotState.selectedMode.isReset -> 0
-        isAllGamesSelected -> NoxEnergyManager.COST_AOT_DEX_ALL
-        else -> NoxEnergyManager.COST_AOT_DEX_SINGLE
+    val requiredEnergy = if (aotState.selectedMode.isReset) {
+        0
+    } else {
+        NoxEnergyManager.COST_AOT_DEX_COMPILER // 15⚡
     }
 
-    val selectedGameTitle = remember(aotState.selectedTargetPackage, homeGames) {
+    val selectedGameItem = remember(aotState.selectedTargetPackage, homeGames) {
         if (aotState.selectedTargetPackage.isBlank()) {
-            "All Added Games (${homeGames.size} titles)"
+            null
         } else {
-            homeGames.firstOrNull { it.packageName == aotState.selectedTargetPackage }?.appName
-                ?: aotState.selectedTargetPackage
+            homeGames.firstOrNull { it.packageName == aotState.selectedTargetPackage }
         }
     }
 
-    val samplePkg = aotState.selectedTargetPackage.ifBlank {
-        homeGames.firstOrNull()?.packageName ?: "com.game.package"
+    val targetTitle = selectedGameItem?.appName
+        ?: if (aotState.selectedTargetPackage.isNotBlank()) {
+            aotState.selectedTargetPackage
+        } else {
+            "All Added Home Games (${homeGames.size})"
+        }
+
+    val targetSubtitle = if (selectedGameItem != null) {
+        "${selectedGameItem.packageName} • ART dex2oat AOT"
+    } else if (aotState.selectedTargetPackage.isNotBlank()) {
+        "${aotState.selectedTargetPackage} • ART dex2oat AOT"
+    } else {
+        "Compiles all games added to your Game Space Home"
     }
-    val previewCmd = aotState.selectedMode.buildCompileCommand(samplePkg)
 
     LazyColumn(
         modifier = modifier
@@ -125,59 +133,6 @@ fun AotCompilerScreen(
         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 96.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // Top Navigation & Title Header
-        item {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.weight(1f)
-                ) {
-                    IconButton(
-                        onClick = onBack,
-                        modifier = Modifier.testTag("aot_back_btn")
-                    ) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back to Tools"
-                        )
-                    }
-                    Column {
-                        Text(
-                            text = "AOT GAME DEX COMPILER",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Black,
-                            letterSpacing = 1.sp
-                        )
-                        Text(
-                            text = "Ahead-Of-Time Native ARM64 Bytecode Compiler",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-
-                Surface(
-                    shape = RoundedCornerShape(10.dp),
-                    color = KyroGreen.copy(alpha = 0.15f),
-                    border = BorderStroke(1.dp, KyroGreen.copy(alpha = 0.45f))
-                ) {
-                    Text(
-                        text = if (requiredEnergy == 0) "FREE (0⚡)" else "COST: ${requiredEnergy}⚡",
-                        style = MaterialTheme.typography.labelSmall,
-                        fontFamily = FontFamily.Monospace,
-                        fontWeight = FontWeight.Bold,
-                        color = KyroGreen,
-                        fontSize = 11.sp,
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
-                    )
-                }
-            }
-        }
-
         // Overview & Status Banner Card
         item {
             Card(
@@ -193,35 +148,58 @@ fun AotCompilerScreen(
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     Row(
+                        modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Surface(
-                            shape = CircleShape,
-                            color = KyroGreen.copy(alpha = 0.16f),
-                            modifier = Modifier.size(40.dp)
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            modifier = Modifier.weight(1f)
                         ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Icon(
-                                    imageVector = Icons.Default.Memory,
-                                    contentDescription = null,
-                                    tint = KyroGreen,
-                                    modifier = Modifier.size(22.dp)
+                            Surface(
+                                shape = CircleShape,
+                                color = KyroGreen.copy(alpha = 0.16f),
+                                modifier = Modifier.size(40.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = Icons.Default.Memory,
+                                        contentDescription = null,
+                                        tint = KyroGreen,
+                                        modifier = Modifier.size(22.dp)
+                                    )
+                                }
+                            }
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "Eliminate In-Game Skill & Map Micro-Stutter",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White
+                                )
+                                Text(
+                                    text = "Engine: Android ART dex2oat • Active Backend: ${overview.activePermissionName}",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = KyroCyan,
+                                    fontSize = 11.sp
                                 )
                             }
                         }
-                        Column(modifier = Modifier.weight(1f)) {
+
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = KyroGreen.copy(alpha = 0.15f),
+                            border = BorderStroke(1.dp, KyroGreen.copy(alpha = 0.45f))
+                        ) {
                             Text(
-                                text = "Eliminate In-Game Skill & Map Micro-Stutter",
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.Bold,
-                                color = Color.White
-                            )
-                            Text(
-                                text = "Engine: Android ART dex2oat • Active Backend: ${overview.activePermissionName}",
+                                text = if (requiredEnergy == 0) "FREE (0⚡)" else "${requiredEnergy}⚡",
                                 style = MaterialTheme.typography.labelSmall,
-                                color = KyroCyan,
-                                fontSize = 11.sp
+                                fontFamily = FontFamily.Monospace,
+                                fontWeight = FontWeight.Bold,
+                                color = KyroGreen,
+                                fontSize = 11.sp,
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
                             )
                         }
                     }
@@ -266,7 +244,7 @@ fun AotCompilerScreen(
             }
         }
 
-        // Section 1: Target Game Selection (Single Game 15⚡ vs All Games 30⚡)
+        // Section 1: Target Game Selector Card (Dialog Picker style like Lightweight Texture)
         item {
             Card(
                 modifier = Modifier.fillMaxWidth(),
@@ -298,99 +276,130 @@ fun AotCompilerScreen(
                                 modifier = Modifier.size(18.dp)
                             )
                             Text(
-                                text = "1. SELECT TARGET GAME SCOPE",
+                                text = "1. SELECT TARGET GAME",
                                 style = MaterialTheme.typography.titleSmall,
                                 fontWeight = FontWeight.Black,
                                 letterSpacing = 0.6.sp
                             )
                         }
                         Text(
-                            text = "Single: 15⚡ • All: 30⚡",
+                            text = "Cost: 15⚡",
                             style = MaterialTheme.typography.labelSmall,
                             fontFamily = FontFamily.Monospace,
                             fontWeight = FontWeight.Bold,
                             color = KyroCyan,
-                            fontSize = 10.5.sp
+                            fontSize = 11.sp
                         )
                     }
 
-                    FlowRow(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    // Target Game Selector Row (Matches Lightweight Texture Selector Bar)
+                    Surface(
+                        onClick = { showTargetPickerDialog = true },
+                        shape = RoundedCornerShape(14.dp),
+                        color = Color(0xFF0E0E15),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("aot_target_selector_bar")
                     ) {
-                        // All Added Games Chip (30⚡)
-                        FilterChip(
-                            selected = isAllGamesSelected,
-                            onClick = { repository.selectAotTargetPackage("") },
-                            label = {
-                                Text(
-                                    text = "All Added Games (${homeGames.size}) • 30⚡",
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 11.5.sp
-                                )
-                            },
-                            leadingIcon = if (isAllGamesSelected) {
-                                {
-                                    Icon(
-                                        imageVector = Icons.Default.Check,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(15.dp)
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 12.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            val iconBmp = remember(aotState.selectedTargetPackage) {
+                                aotState.selectedTargetPackage
+                                    .takeIf { it.isNotBlank() }
+                                    ?.let { pkg -> AppIconCache.getIcon(context, pkg)?.asImageBitmap() }
+                            }
+                            Surface(
+                                shape = RoundedCornerShape(10.dp),
+                                color = KyroCyan.copy(alpha = 0.16f),
+                                modifier = Modifier.size(40.dp)
+                            ) {
+                                if (iconBmp != null) {
+                                    Image(
+                                        bitmap = iconBmp,
+                                        contentDescription = targetTitle,
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .clip(RoundedCornerShape(10.dp))
                                     )
-                                }
-                            } else null,
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = KyroCyan.copy(alpha = 0.2f),
-                                selectedLabelColor = KyroCyan
-                            ),
-                            modifier = Modifier.testTag("aot_target_all_chip")
-                        )
-
-                        // Individual Added Home Games (15⚡ each)
-                        homeGames.forEach { game ->
-                            val isSelected = aotState.selectedTargetPackage == game.packageName
-                            FilterChip(
-                                selected = isSelected,
-                                onClick = { repository.selectAotTargetPackage(game.packageName) },
-                                label = {
-                                    Text(
-                                        text = "${game.appName} • 15⚡",
-                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                        fontSize = 11.5.sp,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                },
-                                leadingIcon = if (isSelected) {
-                                    {
+                                } else {
+                                    Box(contentAlignment = Alignment.Center) {
                                         Icon(
-                                            imageVector = Icons.Default.Check,
+                                            imageVector = if (aotState.selectedTargetPackage.isNotBlank()) {
+                                                Icons.Default.SportsEsports
+                                            } else {
+                                                Icons.Default.Public
+                                            },
                                             contentDescription = null,
-                                            modifier = Modifier.size(15.dp)
+                                            tint = KyroCyan,
+                                            modifier = Modifier.size(20.dp)
                                         )
                                     }
-                                } else null,
-                                colors = FilterChipDefaults.filterChipColors(
-                                    selectedContainerColor = KyroGreen.copy(alpha = 0.2f),
-                                    selectedLabelColor = KyroGreen
-                                ),
-                                modifier = Modifier.testTag("aot_target_game_${game.packageName}")
-                            )
+                                }
+                            }
+
+                            Column(
+                                modifier = Modifier.weight(1f),
+                                verticalArrangement = Arrangement.spacedBy(2.dp)
+                            ) {
+                                Text(
+                                    text = targetTitle,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Text(
+                                    text = targetSubtitle,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    fontSize = 11.sp,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis,
+                                    lineHeight = 14.sp
+                                )
+                            }
+
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = KyroCyan.copy(alpha = 0.16f),
+                                border = BorderStroke(1.dp, KyroCyan.copy(alpha = 0.45f))
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.SwapHoriz,
+                                        contentDescription = null,
+                                        tint = KyroCyan,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                    Text(
+                                        text = "Select Game",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = KyroCyan,
+                                        fontSize = 11.sp,
+                                        maxLines = 1,
+                                        softWrap = false
+                                    )
+                                }
+                            }
                         }
                     }
-
-                    Text(
-                        text = "Selected Target: $selectedGameTitle",
-                        style = MaterialTheme.typography.labelSmall,
-                        fontFamily = FontFamily.Monospace,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontSize = 11.sp
-                    )
                 }
             }
         }
 
-        // Section 2: Compilation Mode Selector
+        // Section 2: Compilation Mode Selector + Execute Action
         item {
             Card(
                 modifier = Modifier.fillMaxWidth(),
@@ -404,7 +413,7 @@ fun AotCompilerScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
@@ -472,71 +481,6 @@ fun AotCompilerScreen(
                                     )
                                 }
                             }
-                        }
-                    }
-                }
-            }
-        }
-
-        // Section 3: Command Preview & Execute Action
-        item {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant
-                ),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.35f))
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Terminal,
-                            contentDescription = null,
-                            tint = KyroCyan,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Text(
-                            text = "3. EXECUTE NATIVE COMPILATION",
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Black,
-                            letterSpacing = 0.6.sp
-                        )
-                    }
-
-                    // Shell Command Preview Box
-                    Surface(
-                        shape = RoundedCornerShape(12.dp),
-                        color = Color(0xFF0A0D16),
-                        border = BorderStroke(1.dp, Color(0xFF1F263B)),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(12.dp),
-                            verticalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            Text(
-                                text = "SHELL COMMAND PREVIEW:",
-                                style = MaterialTheme.typography.labelSmall,
-                                fontWeight = FontWeight.Bold,
-                                color = Color(0xFF7B86A2),
-                                fontSize = 9.5.sp
-                            )
-                            Text(
-                                text = previewCmd,
-                                style = MaterialTheme.typography.bodySmall,
-                                fontFamily = FontFamily.Monospace,
-                                color = KyroGreen,
-                                fontSize = 11.5.sp
-                            )
                         }
                     }
 
@@ -645,12 +589,14 @@ fun AotCompilerScreen(
                         val btnText = when {
                             aotState.isCompiling -> "Compiling DEX Bytecode..."
                             aotState.selectedMode.isReset -> "Reset Game Compilation (Free • 0⚡)"
-                            else -> "Compile ${if (isAllGamesSelected) "All Games" else "Selected Game"} (${requiredEnergy}⚡)"
+                            else -> "Compile ${if (isAllGamesSelected) "All Games" else targetTitle} (${requiredEnergy}⚡)"
                         }
                         Text(
                             text = btnText,
                             style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Black
+                            fontWeight = FontWeight.Black,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
 
@@ -701,14 +647,251 @@ fun AotCompilerScreen(
         }
     }
 
-    if (showInsufficientEnergyDialog) {
-        val featureDesc = if (isAllGamesSelected) {
-            "AOT Game DEX Compiler (All Games)"
-        } else {
-            "AOT Game DEX Compiler (Single Game)"
+    // Target Game Picker Dialog (Same style as Lightweight Texture)
+    if (showTargetPickerDialog) {
+        val gameCandidates = remember(homeGames) {
+            homeGames.sortedBy { it.appName.lowercase() }
         }
+
+        AlertDialog(
+            onDismissRequest = { showTargetPickerDialog = false },
+            containerColor = MaterialTheme.colorScheme.surface,
+            shape = RoundedCornerShape(22.dp),
+            title = {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Tune,
+                        contentDescription = null,
+                        tint = KyroCyan
+                    )
+                    Column {
+                        Text(
+                            text = "Select Target Game",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = "Showing games added to your Game Space Home",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            },
+            text = {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(340.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    item {
+                        val isGlobalSelected = aotState.selectedTargetPackage.isBlank()
+                        Surface(
+                            onClick = {
+                                repository.selectAotTargetPackage("")
+                                showTargetPickerDialog = false
+                            },
+                            shape = RoundedCornerShape(12.dp),
+                            color = if (isGlobalSelected) {
+                                KyroCyan.copy(alpha = 0.18f)
+                            } else {
+                                MaterialTheme.colorScheme.surfaceVariant
+                            },
+                            border = BorderStroke(
+                                1.dp,
+                                if (isGlobalSelected) KyroCyan else MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
+                            ),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Public,
+                                    contentDescription = null,
+                                    tint = KyroCyan,
+                                    modifier = Modifier.size(22.dp)
+                                )
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = "All Added Home Games (${homeGames.size})",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Text(
+                                        text = "Pre-compiles all games added to your Game Space Home (15⚡)",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                if (isGlobalSelected) {
+                                    Icon(
+                                        imageVector = Icons.Default.CheckCircle,
+                                        contentDescription = null,
+                                        tint = KyroCyan,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    if (gameCandidates.isEmpty()) {
+                        item {
+                            Surface(
+                                shape = RoundedCornerShape(12.dp),
+                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.25f)),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(14.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.SportsEsports,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = "No Games Added Yet",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                        Text(
+                                            text = "Add your games from the Apps tab first so they appear here.",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    items(items = gameCandidates, key = { it.packageName }) { game ->
+                        val isSelected = aotState.selectedTargetPackage == game.packageName
+                        val gameIconBitmap = remember(game.packageName) {
+                            AppIconCache.getIcon(context, game.packageName)?.asImageBitmap()
+                        }
+                        Surface(
+                            onClick = {
+                                repository.selectAotTargetPackage(game.packageName)
+                                showTargetPickerDialog = false
+                            },
+                            shape = RoundedCornerShape(12.dp),
+                            color = if (isSelected) {
+                                KyroCyan.copy(alpha = 0.18f)
+                            } else {
+                                MaterialTheme.colorScheme.surfaceVariant
+                            },
+                            border = BorderStroke(
+                                1.dp,
+                                if (isSelected) KyroCyan else MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
+                            ),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(10.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                Surface(
+                                    shape = RoundedCornerShape(10.dp),
+                                    color = KyroCyan.copy(alpha = 0.14f),
+                                    modifier = Modifier.size(40.dp)
+                                ) {
+                                    if (gameIconBitmap != null) {
+                                        Image(
+                                            bitmap = gameIconBitmap,
+                                            contentDescription = game.appName,
+                                            modifier = Modifier
+                                                .fillMaxSize()
+                                                .clip(RoundedCornerShape(10.dp))
+                                        )
+                                    } else {
+                                        Box(contentAlignment = Alignment.Center) {
+                                            Icon(
+                                                imageVector = Icons.Default.SportsEsports,
+                                                contentDescription = null,
+                                                tint = KyroCyan,
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                                Column(
+                                    modifier = Modifier.weight(1f),
+                                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        Text(
+                                            text = game.appName,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            fontWeight = FontWeight.Bold,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                            modifier = Modifier.weight(1f, fill = false)
+                                        )
+                                        Surface(
+                                            shape = RoundedCornerShape(5.dp),
+                                            color = KyroCyan.copy(alpha = 0.16f)
+                                        ) {
+                                            Text(
+                                                text = "15⚡",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                fontWeight = FontWeight.Bold,
+                                                color = KyroCyan,
+                                                fontSize = 8.sp,
+                                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
+                                            )
+                                        }
+                                    }
+                                    Text(
+                                        text = game.packageName,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                                if (isSelected) {
+                                    Icon(
+                                        imageVector = Icons.Default.CheckCircle,
+                                        contentDescription = null,
+                                        tint = KyroCyan,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showTargetPickerDialog = false }) {
+                    Text("Close")
+                }
+            }
+        )
+    }
+
+    if (showInsufficientEnergyDialog) {
         NoxInsufficientEnergyDialog(
-            featureName = featureDesc,
+            featureName = "AOT Game DEX Compiler ($targetTitle)",
             requiredCost = requiredEnergy,
             onDismiss = { showInsufficientEnergyDialog = false },
             onEnergyGranted = {

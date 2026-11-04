@@ -665,7 +665,7 @@ fun ToolsScreen(
                                     modifier = Modifier.size(12.dp)
                                 )
                                 Text(
-                                    text = "15 / 30⚡",
+                                    text = "15⚡",
                                     style = MaterialTheme.typography.labelSmall,
                                     fontFamily = FontFamily.Monospace,
                                     fontWeight = FontWeight.Bold,
@@ -705,7 +705,7 @@ fun ToolsScreen(
                                 text = if (aotState.lastCompiledCount > 0) {
                                     "Compiled: ${aotState.lastCompiledCount} pkg(s) • ${aotState.lastCompiledModeLabel}"
                                 } else {
-                                    "Single Game: 15⚡ • All Games: 30⚡ • Reset: Free"
+                                    "Compile Game DEX: 15⚡ • Reset: Free"
                                 },
                                 style = MaterialTheme.typography.labelSmall,
                                 color = KyroCyan,

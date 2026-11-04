@@ -37,8 +37,9 @@ object NoxEnergyManager {
     const val COST_LIGHTWEIGHT_TEXTURE_SINGLE = 20
     const val COST_LIGHTWEIGHT_TEXTURE_ALL = 40
     const val COST_GAME_TUNE = 10
+    const val COST_AOT_DEX_COMPILER = 15
     const val COST_AOT_DEX_SINGLE = 15
-    const val COST_AOT_DEX_ALL = 30
+    const val COST_AOT_DEX_ALL = 15
 
     private const val PREFS_NAME = "nox_secure_vault"
     private const val KEY_OBFUSCATED_VAL = "nox_k7_val"
