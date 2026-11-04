@@ -43,6 +43,7 @@ import com.kyro.game.space.data.model.ShizukuInfo
 import com.kyro.game.space.data.model.AngleDriverMode
 import com.kyro.game.space.data.model.AotCompileMode
 import com.kyro.game.space.data.model.AotCompilerState
+import com.kyro.game.space.data.model.GameAotStatus
 import com.kyro.game.space.data.model.PlayBoostConfig
 import com.kyro.game.space.data.model.PlayBoostTier
 import com.kyro.game.space.data.model.TextureConfig
@@ -1458,14 +1459,50 @@ class GameSpaceRepository(
         return checkRootStatus(triggerPrompt = true)
     }
 
-    suspend fun executeCommand(command: String): CommandResult {
-        val currentMethod = executionMethod.value
-        val executor = executorFactory.getExecutor(currentMethod)
-        val result = executor.execute(command)
+    private fun resolveActiveExecutionMethod(): ExecutionMethod {
+        val preferred = executionMethod.value
+        val overview = _connectionState.value
+        val isPreferredActive = when (preferred) {
+            ExecutionMethod.SHIZUKU -> overview.shizuku.isRunning && overview.shizuku.isPermissionGranted
+            ExecutionMethod.MANUAL_ADB -> overview.manualAdb.isDaemonInjected || overview.manualAdb.isConnected
+            ExecutionMethod.ROOT -> overview.root.isRootGranted
+        }
+        if (isPreferredActive) return preferred
+
+        return when {
+            overview.manualAdb.isDaemonInjected || overview.manualAdb.isConnected -> ExecutionMethod.MANUAL_ADB
+            overview.shizuku.isRunning && overview.shizuku.isPermissionGranted -> ExecutionMethod.SHIZUKU
+            overview.root.isRootGranted -> ExecutionMethod.ROOT
+            else -> preferred
+        }
+    }
+
+    suspend fun executeCommand(command: String, timeoutMs: Long = 10000L): CommandResult {
+        val activeMethod = resolveActiveExecutionMethod()
+        val executor = executorFactory.getExecutor(activeMethod)
+        var result = executor.execute(command, timeoutMs = timeoutMs)
+
+        // If preferred method failed, try any other active method automatically
+        if (!result.isSuccess) {
+            val overview = _connectionState.value
+            val fallbackMethods = buildList {
+                if (overview.manualAdb.isDaemonInjected || overview.manualAdb.isConnected) add(ExecutionMethod.MANUAL_ADB)
+                if (overview.shizuku.isRunning && overview.shizuku.isPermissionGranted) add(ExecutionMethod.SHIZUKU)
+                if (overview.root.isRootGranted) add(ExecutionMethod.ROOT)
+            }.filter { it != activeMethod }
+
+            for (fallback in fallbackMethods) {
+                val fbRes = executorFactory.getExecutor(fallback).execute(command, timeoutMs = timeoutMs)
+                if (fbRes.isSuccess) {
+                    result = fbRes
+                    break
+                }
+            }
+        }
 
         updateConnectionOverview()
         _connectionState.value = _connectionState.value.copy(
-            lastCommandLog = "[$currentMethod] \$ $command\n${if (result.isSuccess) result.stdout else result.stderr}"
+            lastCommandLog = "[$activeMethod] \$ $command\n${if (result.isSuccess) result.stdout else result.stderr}"
         )
         return result
     }
@@ -2331,6 +2368,22 @@ class GameSpaceRepository(
         }
     }
 
+    private fun loadSavedPackageAotStatuses(): Map<String, GameAotStatus> {
+        val map = mutableMapOf<String, GameAotStatus>()
+        try {
+            for ((key, value) in prefs.all) {
+                if (key.startsWith("aot_pkg_status_") && value is String) {
+                    val pkg = key.removePrefix("aot_pkg_status_")
+                    if (pkg.isNotBlank()) {
+                        map[pkg] = GameAotStatus.fromName(value)
+                    }
+                }
+            }
+        } catch (_: Throwable) {
+        }
+        return map
+    }
+
     private fun loadInitialAotCompilerState(): AotCompilerState {
         val lastPkg = prefs.getString("aot_selected_pkg", "").orEmpty()
         val lastModeName = prefs.getString("aot_selected_mode", AotCompileMode.SPEED_PROFILE.name)
@@ -2348,7 +2401,8 @@ class GameSpaceRepository(
             selectedMode = mode,
             lastCompiledCount = lastCount,
             lastCompileDurationMs = lastDur,
-            lastCompiledModeLabel = lastLabel
+            lastCompiledModeLabel = lastLabel,
+            packageAotStatuses = loadSavedPackageAotStatuses()
         )
     }
 
@@ -2388,62 +2442,63 @@ class GameSpaceRepository(
         }
 
         val startTime = System.currentTimeMillis()
-        val logs = mutableListOf<String>()
-        logs.add(">>> Starting AOT DEX Compiler [${mode.shortLabel}] via ${executionMethod.value.name}")
-        logs.add(">>> Targets (${targetList.size}): ${targetList.joinToString(", ")}")
+        val updatedStatuses = _aotCompilerState.value.packageAotStatuses.toMutableMap()
 
         _aotCompilerState.value = _aotCompilerState.value.copy(
             selectedTargetPackage = cleanPkg,
             selectedMode = mode,
             isCompiling = true,
-            progress = 0.05f,
+            progress = 0.08f,
             currentPackageBeingCompiled = targetList.first(),
-            lastStatusMessage = "Compiling ${targetList.size} game(s) with ${mode.shortLabel}...",
-            compiledLogLines = logs.toList()
+            lastStatusMessage = "Compiling ${targetList.size} game(s) with ${mode.shortLabel}..."
         )
 
         var successCount = 0
         for ((index, pkg) in targetList.withIndex()) {
-            val stepProgress = ((index.toFloat()) / targetList.size.toFloat()).coerceIn(0.08f, 0.92f)
-            val pkgStart = System.currentTimeMillis()
+            val stepProgress = ((index.toFloat() + 0.2f) / targetList.size.toFloat()).coerceIn(0.10f, 0.94f)
             val cmd = mode.buildCompileCommand(pkg)
-            logs.add("[$pkg] $ $cmd")
 
             _aotCompilerState.value = _aotCompilerState.value.copy(
                 progress = stepProgress,
                 currentPackageBeingCompiled = pkg,
-                lastStatusMessage = "Compiling (${index + 1}/${targetList.size}): $pkg...",
-                compiledLogLines = logs.toList()
+                lastStatusMessage = "Compiling (${index + 1}/${targetList.size}): $pkg..."
             )
 
             val res = try {
-                executeCommand(cmd)
+                executeCommand(cmd, timeoutMs = 60000L)
             } catch (e: Throwable) {
                 CommandResult(-1, "", e.message ?: "Execution error", false)
             }
-            val pkgDuration = (System.currentTimeMillis() - pkgStart).coerceAtLeast(1L)
-            val rawOut = (res.stdout + "\n" + res.stderr).trim().ifEmpty {
-                if (res.isSuccess) "Success" else "Failed (Exit ${res.exitCode})"
-            }
-            if (res.isSuccess || rawOut.contains("Success", ignoreCase = true)) {
+
+            val rawOut = (res.stdout + "\n" + res.stderr).trim()
+            val isPkgSuccess = res.isSuccess || rawOut.contains("Success", ignoreCase = true)
+
+            val newPkgStatus = if (isPkgSuccess) {
                 successCount++
-                logs.add("[$pkg] -> OK ($rawOut) in ${pkgDuration}ms")
+                when (mode) {
+                    AotCompileMode.SPEED_PROFILE -> GameAotStatus.SPEED_PROFILE
+                    AotCompileMode.FULL_SPEED -> GameAotStatus.FULL_SPEED
+                    AotCompileMode.RESET -> GameAotStatus.RESET_DEFAULT
+                }
             } else {
-                logs.add("[$pkg] -> ERROR: $rawOut")
+                GameAotStatus.FAILED
             }
+
+            updatedStatuses[pkg] = newPkgStatus
+            prefs.edit().putString("aot_pkg_status_$pkg", newPkgStatus.name).apply()
+
             _aotCompilerState.value = _aotCompilerState.value.copy(
-                compiledLogLines = logs.toList()
+                packageAotStatuses = updatedStatuses.toMap()
             )
         }
 
         val totalDuration = (System.currentTimeMillis() - startTime).coerceAtLeast(1L)
         val summaryMsg = if (successCount > 0) {
-            val actionWord = if (mode.isReset) "Reset compilation for" else "Compiled"
+            val actionWord = if (mode.isReset) "Reset AOT status for" else "AOT Compiled"
             "$actionWord $successCount/${targetList.size} game(s) [${mode.shortLabel}] in ${totalDuration}ms."
         } else {
-            "AOT Compilation failed. Ensure ${executionMethod.value.name} is connected and active."
+            "AOT Compilation failed for target game(s). Status updated to Failed."
         }
-        logs.add(">>> $summaryMsg")
 
         if (successCount > 0) {
             prefs.edit()
@@ -2458,7 +2513,7 @@ class GameSpaceRepository(
             progress = 1.0f,
             currentPackageBeingCompiled = "",
             lastStatusMessage = summaryMsg,
-            compiledLogLines = logs.toList(),
+            packageAotStatuses = updatedStatuses.toMap(),
             lastCompiledCount = if (successCount > 0) successCount else _aotCompilerState.value.lastCompiledCount,
             lastCompileDurationMs = if (successCount > 0) totalDuration else _aotCompilerState.value.lastCompileDurationMs,
             lastCompiledModeLabel = if (successCount > 0) mode.shortLabel else _aotCompilerState.value.lastCompiledModeLabel

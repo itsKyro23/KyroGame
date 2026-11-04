@@ -102,6 +102,15 @@ fun HomeScreen(
         repository.refreshActiveExecutionMethodStatus()
     }
 
+    androidx.compose.runtime.LaunchedEffect(homeGames) {
+        if (homeGames.isNotEmpty()) {
+            com.kyro.game.space.util.AppIconCache.preloadIconsAsync(
+                context,
+                homeGames.map { it.packageName }
+            )
+        }
+    }
+
     LazyColumn(
         modifier = modifier
             .fillMaxSize()
@@ -356,9 +365,12 @@ fun HomeScreen(
                 }
             }
         } else {
-            items(items = homeGames, key = { it.packageName }) { game ->
+            items(
+                items = homeGames,
+                key = { it.packageName },
+                contentType = { "home_game_card" }
+            ) { game ->
                 GameCard(
-                    modifier = Modifier.animateItem(),
                     game = game,
                     onPlayClick = {
                         if (!overview.isAnyPermissionActive) {

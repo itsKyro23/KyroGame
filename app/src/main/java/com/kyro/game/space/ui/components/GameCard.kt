@@ -1,6 +1,6 @@
 package com.kyro.game.space.ui.components
 
-import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -32,18 +32,17 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -55,6 +54,28 @@ import com.kyro.game.space.data.model.GameItem
 import com.kyro.game.space.ui.theme.KyroAccent
 import com.kyro.game.space.ui.theme.KyroCyan
 import com.kyro.game.space.ui.theme.KyroPrimary
+import com.kyro.game.space.util.AppIconCache
+
+// Pre-allocated static brushes & shapes to avoid per-frame allocations while scrolling
+private val CardShape = RoundedCornerShape(20.dp)
+private val IconShape = RoundedCornerShape(11.dp)
+private val ButtonShape = RoundedCornerShape(10.dp)
+
+private val VerticalScrimBrush = Brush.verticalGradient(
+    colors = listOf(
+        Color(0x700A0A0E),
+        Color(0xAA0E0E14),
+        Color(0xE6101015)
+    )
+)
+
+private val HorizontalScrimBrush = Brush.horizontalGradient(
+    colors = listOf(
+        Color(0xB30A0A0E),
+        Color(0x380A0A0E),
+        Color(0xB30A0A0E)
+    )
+)
 
 @Composable
 fun GameCard(
@@ -65,29 +86,30 @@ fun GameCard(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    var isPressed by remember { mutableStateOf(false) }
-    val playButtonScale by animateFloatAsState(
-        targetValue = if (isPressed) 0.94f else 1f,
-        label = "play_btn_anim"
-    )
 
-    // Load app icon bitmap from memory cache to prevent scrolling lag
-    val appIconBitmap = remember(game.packageName) {
-        com.kyro.game.space.util.AppIconCache.getIcon(context, game.packageName)
+    // Non-blocking instant cache lookup + background IO load if not yet in cache
+    var appIconImage by remember(game.packageName) {
+        mutableStateOf(AppIconCache.getCachedImageBitmap(game.packageName))
+    }
+    LaunchedEffect(game.packageName) {
+        if (appIconImage == null) {
+            appIconImage = AppIconCache.getOrLoadImageBitmap(context, game.packageName)
+        }
+    }
+
+    val cardBorder = remember {
+        BorderStroke(1.dp, Color(0x593A4256))
     }
 
     Card(
         modifier = modifier
             .fillMaxWidth()
             .testTag("game_card_${game.packageName}"),
-        shape = RoundedCornerShape(20.dp),
+        shape = CardShape,
         colors = CardDefaults.cardColors(
             containerColor = Color(0xFF141419)
         ),
-        border = androidx.compose.foundation.BorderStroke(
-            1.dp,
-            MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)
-        ),
+        border = cardBorder,
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
         Box(
@@ -95,45 +117,29 @@ fun GameCard(
                 .fillMaxWidth()
                 .height(118.dp)
         ) {
-            // Background Artwork at 0.4f alpha so the game logo is clearly visible in the background
-            if (appIconBitmap != null) {
+            // Background Artwork using direct draw alpha (no offscreen saveLayer allocation!)
+            val iconBitmap = appIconImage
+            if (iconBitmap != null) {
                 Image(
-                    bitmap = appIconBitmap.asImageBitmap(),
+                    bitmap = iconBitmap,
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .alpha(0.4f)
-                        .scale(1.4f)
+                    alpha = 0.36f,
+                    filterQuality = FilterQuality.Low,
+                    modifier = Modifier.fillMaxSize()
                 )
             }
 
-            // Balanced Dark & Vignette Scrim: keeps 0.4f background logo visible while keeping text crisp
+            // Balanced Dark & Vignette Scrim
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(
-                        Brush.verticalGradient(
-                            colors = listOf(
-                                Color(0x700A0A0E),
-                                Color(0xAA0E0E14),
-                                Color(0xE6101015)
-                            )
-                        )
-                    )
+                    .background(VerticalScrimBrush)
             )
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(
-                        Brush.horizontalGradient(
-                            colors = listOf(
-                                Color(0xB30A0A0E),
-                                Color(0x380A0A0E),
-                                Color(0xB30A0A0E)
-                            )
-                        )
-                    )
+                    .background(HorizontalScrimBrush)
             )
 
             // Content Foreground
@@ -152,13 +158,14 @@ fun GameCard(
                     Surface(
                         modifier = Modifier
                             .size(40.dp)
-                            .clip(RoundedCornerShape(11.dp)),
+                            .clip(IconShape),
                         color = Color(0xFF22222A)
                     ) {
-                        if (appIconBitmap != null) {
+                        if (iconBitmap != null) {
                             Image(
-                                bitmap = appIconBitmap.asImageBitmap(),
+                                bitmap = iconBitmap,
                                 contentDescription = game.appName,
+                                filterQuality = FilterQuality.Medium,
                                 modifier = Modifier.fillMaxSize()
                             )
                         } else {
@@ -237,7 +244,7 @@ fun GameCard(
                             modifier = Modifier
                                 .height(32.dp)
                                 .testTag("customize_button_${game.packageName}"),
-                            shape = RoundedCornerShape(10.dp),
+                            shape = ButtonShape,
                             colors = ButtonDefaults.filledTonalButtonColors(
                                 containerColor = Color(0xCC262632),
                                 contentColor = Color.White
@@ -260,15 +267,11 @@ fun GameCard(
 
                         // Compact Play Button
                         Button(
-                            onClick = {
-                                isPressed = true
-                                onPlayClick()
-                            },
+                            onClick = onPlayClick,
                             modifier = Modifier
                                 .height(32.dp)
-                                .scale(playButtonScale)
                                 .testTag("play_button_${game.packageName}"),
-                            shape = RoundedCornerShape(10.dp),
+                            shape = ButtonShape,
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = KyroPrimary,
                                 contentColor = Color.White

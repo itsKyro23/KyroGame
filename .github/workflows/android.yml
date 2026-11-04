@@ -14,14 +14,17 @@ on:
       - master
   workflow_dispatch:
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   build:
-    name: Build & Test Kyro Game Space
-    runs-on: ubuntu-latest
+    name: Build & Test NOX - Game Space
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
 
     steps:
@@ -33,6 +36,10 @@ jobs:
         with:
           distribution: 'temurin'
           java-version: '21'
+
+      - name: Suppress KSP Headless AWT False-Positive Matcher
+        run: |
+          echo "::remove-matcher owner=java::"
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
@@ -51,7 +58,7 @@ jobs:
           fi
           # Prepare release upload keystore if not present so release AAB builds cleanly in CI
           if [ ! -f "my-upload-key.jks" ]; then
-            keytool -genkey -v -keystore my-upload-key.jks -alias upload -storepass android -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Kyro Game Space,O=Kyro,C=US"
+            keytool -genkey -v -keystore my-upload-key.jks -alias upload -storepass android -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=NOX Game Space,O=NOX,C=US"
           fi
           # Ensure .env placeholder exists for buildConfig/secrets plugin
           if [ ! -f ".env" ] && [ -f ".env.example" ]; then
@@ -63,21 +70,21 @@ jobs:
           chmod +x gradlew
 
       - name: Run Unit Tests
-        run: ./gradlew testDebugUnitTest --stacktrace
+        run: ./gradlew testDebugUnitTest --stacktrace 2> >(grep -v -E "AWT-EventQueue-0|BinaryFileTypeDecompilers|FileDocumentManager\.getInstance" >&2)
 
       - name: Build Debug APK
-        run: ./gradlew assembleDebug --stacktrace
+        run: ./gradlew assembleDebug --stacktrace 2> >(grep -v -E "AWT-EventQueue-0|BinaryFileTypeDecompilers|FileDocumentManager\.getInstance" >&2)
 
       - name: Build Android App Bundle (AAB)
         env:
           STORE_PASSWORD: ${{ secrets.STORE_PASSWORD || 'android' }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD || 'android' }}
-        run: ./gradlew bundleDebug bundleRelease --stacktrace
+        run: ./gradlew bundleDebug bundleRelease --stacktrace 2> >(grep -v -E "AWT-EventQueue-0|BinaryFileTypeDecompilers|FileDocumentManager\.getInstance" >&2)
 
       - name: Upload Debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: KyroGameSpace-debug-apk
+          name: NoxGameSpace-debug-apk
           path: app/build/outputs/apk/debug/*.apk
           retention-days: 14
           if-no-files-found: error
@@ -85,7 +92,7 @@ jobs:
       - name: Upload Debug AAB
         uses: actions/upload-artifact@v4
         with:
-          name: KyroGameSpace-debug-aab
+          name: NoxGameSpace-debug-aab
           path: app/build/outputs/bundle/debug/*.aab
           retention-days: 14
           if-no-files-found: error
@@ -93,7 +100,7 @@ jobs:
       - name: Upload Release AAB
         uses: actions/upload-artifact@v4
         with:
-          name: KyroGameSpace-release-aab
+          name: NoxGameSpace-release-aab
           path: app/build/outputs/bundle/release/*.aab
           retention-days: 14
           if-no-files-found: warn

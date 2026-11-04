@@ -38,18 +38,56 @@ enum class AotCompileMode(
     }
 }
 
+enum class GameAotStatus(
+    val label: String,
+    val shortBadge: String
+) {
+    NOT_COMPILED(
+        label = "Not Compiled (Stock JIT)",
+        shortBadge = "AOT: Not Compiled"
+    ),
+    SPEED_PROFILE(
+        label = "Compiled • Speed-Profile ✓",
+        shortBadge = "AOT: Speed-Profile ✓"
+    ),
+    FULL_SPEED(
+        label = "Compiled • Full Speed ✓",
+        shortBadge = "AOT: Full Speed ✓"
+    ),
+    RESET_DEFAULT(
+        label = "Reset • System Default",
+        shortBadge = "AOT: Default"
+    ),
+    FAILED(
+        label = "Compilation Failed ✗",
+        shortBadge = "AOT: Failed ✗"
+    );
+
+    companion object {
+        fun fromName(name: String?): GameAotStatus {
+            if (name.isNullOrBlank()) return NOT_COMPILED
+            return entries.firstOrNull { it.name.equals(name, ignoreCase = true) } ?: NOT_COMPILED
+        }
+    }
+}
+
 data class AotCompilerState(
     val selectedTargetPackage: String = "", // "" means All Added Home Games
     val selectedMode: AotCompileMode = AotCompileMode.SPEED_PROFILE,
     val isCompiling: Boolean = false,
     val progress: Float = 0f,
     val currentPackageBeingCompiled: String = "",
-    val lastStatusMessage: String = "Select a target game (or All Added Games) and compile DEX bytecode into native ARM64 machine code.",
+    val lastStatusMessage: String = "Select a target game and compile DEX bytecode into native ARM64 machine code.",
     val compiledLogLines: List<String> = emptyList(),
     val lastCompiledCount: Int = 0,
     val lastCompileDurationMs: Long = 0L,
-    val lastCompiledModeLabel: String = "None"
-)
+    val lastCompiledModeLabel: String = "None",
+    val packageAotStatuses: Map<String, GameAotStatus> = emptyMap()
+) {
+    fun statusForPackage(packageName: String): GameAotStatus {
+        return packageAotStatuses[packageName.trim()] ?: GameAotStatus.NOT_COMPILED
+    }
+}
 
 enum class PlayBoostTier(
     val id: String,
