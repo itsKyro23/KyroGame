@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -76,7 +75,6 @@ fun PlayBoostSettingsDialog(
 
     var deepRamPurge by remember(initialConfig) { mutableStateOf(initialConfig.deepRamPurge) }
     var forceStopBackgroundApps by remember(initialConfig) { mutableStateOf(initialConfig.forceStopBackgroundApps) }
-    var fixedPerformanceLock by remember(initialConfig) { mutableStateOf(initialConfig.fixedPerformanceLock) }
     var surfaceFlingerZeroLag by remember(initialConfig) { mutableStateOf(initialConfig.surfaceFlingerZeroLag) }
     var ultraTouchResponse by remember(initialConfig) { mutableStateOf(initialConfig.ultraTouchResponse) }
     var blockHeadsUpNotifications by remember(initialConfig) { mutableStateOf(initialConfig.blockHeadsUpNotifications) }
@@ -84,7 +82,6 @@ fun PlayBoostSettingsDialog(
     val activeTier = remember(
         deepRamPurge,
         forceStopBackgroundApps,
-        fixedPerformanceLock,
         surfaceFlingerZeroLag,
         ultraTouchResponse,
         blockHeadsUpNotifications
@@ -92,7 +89,6 @@ fun PlayBoostSettingsDialog(
         PlayBoostConfig.resolveMatchingTier(
             deepRamPurge = deepRamPurge,
             forceStopBackgroundApps = forceStopBackgroundApps,
-            fixedPerformanceLock = fixedPerformanceLock,
             surfaceFlingerZeroLag = surfaceFlingerZeroLag,
             ultraTouchResponse = ultraTouchResponse,
             blockHeadsUpNotifications = blockHeadsUpNotifications
@@ -110,7 +106,6 @@ fun PlayBoostSettingsDialog(
         val preset = PlayBoostConfig.forTier(tier)
         deepRamPurge = preset.deepRamPurge
         forceStopBackgroundApps = preset.forceStopBackgroundApps
-        fixedPerformanceLock = preset.fixedPerformanceLock
         surfaceFlingerZeroLag = preset.surfaceFlingerZeroLag
         ultraTouchResponse = preset.ultraTouchResponse
         blockHeadsUpNotifications = preset.blockHeadsUpNotifications
@@ -186,13 +181,10 @@ fun PlayBoostSettingsDialog(
         },
         text = {
             Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(max = 430.dp)
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                // 1. Preset Tier Selector Row (Eco Pulse / Velocity Core / Nox Overdrive)
+                // 1. Pinned Preset Tier Selector Row (Eco Pulse / Velocity Core / Nox Overdrive)
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(
                         text = "AUTO-BOOST PRESET TIER",
@@ -256,8 +248,14 @@ fun PlayBoostSettingsDialog(
 
                 HorizontalDivider(color = Color(0xFF1F263B))
 
-                // 2. Individual Real System Execution Checklist
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                // 2. Scrollable 5-Stage Thermal-Safe Execution Checklist
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 310.dp)
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -274,13 +272,12 @@ fun PlayBoostSettingsDialog(
                         val count = listOf(
                             deepRamPurge,
                             forceStopBackgroundApps,
-                            fixedPerformanceLock,
                             surfaceFlingerZeroLag,
                             ultraTouchResponse,
                             blockHeadsUpNotifications
                         ).count { it }
                         Text(
-                            text = "$count/6 Active",
+                            text = "$count/${PlayBoostConfig.TOTAL_STAGES} Active",
                             style = MaterialTheme.typography.labelSmall,
                             fontFamily = FontFamily.Monospace,
                             fontWeight = FontWeight.Bold,
@@ -307,16 +304,6 @@ fun PlayBoostSettingsDialog(
                         checked = forceStopBackgroundApps,
                         onCheckedChange = { forceStopBackgroundApps = it },
                         testTag = "chk_force_stop_bg"
-                    )
-
-                    BoostChecklistItemRow(
-                        title = "Fixed CPU/GPU Performance Lock",
-                        subtitle = "Locks sustained processor frequency and removes background process throttling for stable frame rates.",
-                        icon = Icons.Default.Bolt,
-                        accentColor = KyroOrange,
-                        checked = fixedPerformanceLock,
-                        onCheckedChange = { fixedPerformanceLock = it },
-                        testTag = "chk_fixed_perf"
                     )
 
                     BoostChecklistItemRow(
@@ -348,31 +335,31 @@ fun PlayBoostSettingsDialog(
                         onCheckedChange = { blockHeadsUpNotifications = it },
                         testTag = "chk_block_headsup"
                     )
-                }
 
-                // Restore System Defaults Action
-                OutlinedButton(
-                    onClick = onRestoreDefaults,
-                    shape = RoundedCornerShape(10.dp),
-                    border = BorderStroke(1.dp, Color(0xFF2D354F)),
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag("restore_boost_defaults_btn")
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Refresh,
-                        contentDescription = null,
-                        tint = Color(0xFFA2AEC6),
-                        modifier = Modifier.size(15.dp)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = "Restore Stock System Defaults (CPU, Touch & Pop-Up)",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = Color(0xFFA2AEC6),
-                        fontSize = 10.5.sp
-                    )
+                    // Restore System Defaults Action
+                    OutlinedButton(
+                        onClick = onRestoreDefaults,
+                        shape = RoundedCornerShape(10.dp),
+                        border = BorderStroke(1.dp, Color(0xFF2D354F)),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("restore_boost_defaults_btn")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Refresh,
+                            contentDescription = null,
+                            tint = Color(0xFFA2AEC6),
+                            modifier = Modifier.size(15.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "Restore Stock System Defaults (Display, Touch & Pop-Up)",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Color(0xFFA2AEC6),
+                            fontSize = 10.5.sp
+                        )
+                    }
                 }
             }
         },
@@ -383,7 +370,6 @@ fun PlayBoostSettingsDialog(
                         tier = activeTier,
                         deepRamPurge = deepRamPurge,
                         forceStopBackgroundApps = forceStopBackgroundApps,
-                        fixedPerformanceLock = fixedPerformanceLock,
                         surfaceFlingerZeroLag = surfaceFlingerZeroLag,
                         ultraTouchResponse = ultraTouchResponse,
                         blockHeadsUpNotifications = blockHeadsUpNotifications
@@ -391,7 +377,7 @@ fun PlayBoostSettingsDialog(
                     onSaveConfig(newCfg)
                     Toast.makeText(
                         context,
-                        "Play Boost saved: ${activeTier.title} (${newCfg.activeStagesCount} stages active)",
+                        "Play Boost saved: ${activeTier.title} (${newCfg.activeStagesCount}/${PlayBoostConfig.TOTAL_STAGES} stages active)",
                         Toast.LENGTH_SHORT
                     ).show()
                     onDismiss()

@@ -488,9 +488,15 @@ class GameSpaceRepository(
             val cfg = _playBoostConfig.value
             val cleanTarget = packageName.trim()
 
+            // Always ensure overheating Fixed Performance Mode is turned OFF
+            try {
+                executeCommand("cmd power set-fixed-performance-mode-enabled false 2>/dev/null || true")
+            } catch (_: Throwable) {
+            }
+
             // Stage 1: Deep RAM & Cache Purge
             if (cfg.deepRamPurge) {
-                onProgress(0.16f, "[${cfg.tier.title}] Purging system RAM & trimming memory caches...")
+                onProgress(0.20f, "[${cfg.tier.title}] Purging system RAM & trimming memory caches...")
                 try {
                     executeCommand(
                         "am trim-memory system RUNNING_CRITICAL 2>/dev/null || true; " +
@@ -498,17 +504,34 @@ class GameSpaceRepository(
                     )
                 } catch (_: Throwable) {
                 }
-                delay(420)
+                delay(400)
             } else {
-                onProgress(0.16f, "[${cfg.tier.title}] Verifying game runtime environment...")
-                delay(300)
+                onProgress(0.20f, "[${cfg.tier.title}] Verifying game runtime environment...")
+                delay(280)
             }
 
-            // Stage 2: Force-Stop Non-Essential Background Apps
+            // Stage 2: Force-Stop Background Apps (All Background Apps & Active Music/Media)
             if (cfg.forceStopBackgroundApps) {
-                onProgress(0.34f, "[${cfg.tier.title}] Force-stopping background apps to free CPU & RAM...")
+                onProgress(0.45f, "[${cfg.tier.title}] Force-stopping all background apps...")
                 try {
-                    val protectedPackages = setOf(
+                    val pm = context.packageManager
+                    val am = context.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager
+
+                    val defaultLauncherPkg = try {
+                        val homeIntent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
+                        pm.resolveActivity(homeIntent, PackageManager.MATCH_DEFAULT_ONLY)
+                            ?.activityInfo?.packageName.orEmpty()
+                    } catch (_: Throwable) {
+                        ""
+                    }
+                    val defaultImePkg = try {
+                        Settings.Secure.getString(context.contentResolver, Settings.Secure.DEFAULT_INPUT_METHOD)
+                            ?.substringBefore("/").orEmpty()
+                    } catch (_: Throwable) {
+                        ""
+                    }
+
+                    val protectedSet = setOf(
                         cleanTarget,
                         context.packageName,
                         "com.nox.gamespace",
@@ -516,45 +539,161 @@ class GameSpaceRepository(
                         "moe.shizuku.privileged.api",
                         "moe.shizuku.manager",
                         "com.shizuku.manager",
+                        "com.android.systemui",
+                        "android",
+                        "com.android.phone",
+                        "com.android.server.telecom",
+                        "com.android.incallui",
+                        "com.google.android.dialer",
+                        "com.android.settings",
                         "com.google.android.gms",
+                        "com.google.android.gsf",
                         "com.android.vending",
-                        "com.android.systemui"
-                    )
-                    val userAppsToStop = try {
-                        dao.getAllGamesFlow().first()
-                            .filter { !it.isSystemApp && it.packageName !in protectedPackages }
-                            .map { it.packageName }
-                            .take(28)
+                        "com.android.providers.settings",
+                        "com.android.providers.media",
+                        "com.android.providers.downloads",
+                        "com.android.bluetooth",
+                        "com.android.nfc",
+                        "com.android.se",
+                        "com.google.android.webview",
+                        "com.android.webview",
+                        defaultLauncherPkg,
+                        defaultImePkg
+                    ).filter { it.isNotBlank() }.toSet()
+
+                    // 1. Gather recently active packages (last 12 hours) so they are force-stopped first
+                    val priorityPackages = linkedSetOf<String>()
+                    try {
+                        val usm = context.getSystemService(Context.USAGE_STATS_SERVICE) as? UsageStatsManager
+                        if (usm != null) {
+                            val now = System.currentTimeMillis()
+                            val recentStats = usm.queryUsageStats(
+                                UsageStatsManager.INTERVAL_DAILY,
+                                now - 12L * 60L * 60L * 1000L,
+                                now
+                            ).orEmpty()
+                            recentStats
+                                .filter { it.lastTimeUsed > 0L }
+                                .sortedByDescending { it.lastTimeUsed }
+                                .forEach { stat ->
+                                    val pkg = stat.packageName.orEmpty().trim()
+                                    if (pkg.isNotEmpty() && pkg !in protectedSet) {
+                                        priorityPackages.add(pkg)
+                                    }
+                                }
+                        }
                     } catch (_: Throwable) {
-                        emptyList()
                     }
-                    val forceStopBatch = if (userAppsToStop.isNotEmpty()) {
-                        userAppsToStop.joinToString("; ") { "am force-stop $it 2>/dev/null || true" } + "; "
-                    } else ""
-                    executeCommand("${forceStopBatch}am kill-all 2>/dev/null || true")
-                } catch (_: Throwable) {
-                }
-                delay(480)
-            }
 
-            // Stage 3: Fixed CPU/GPU Performance Lock & Phantom Process Unlimiter
-            if (cfg.fixedPerformanceLock) {
-                onProgress(0.52f, "[${cfg.tier.title}] Locking Fixed CPU/GPU Performance Mode & Phantom Bypass...")
-                try {
-                    executeCommand(
-                        "cmd power set-fixed-performance-mode-enabled true 2>/dev/null || true; " +
-                            "device_config put activity_manager max_phantom_processes 2147483647 2>/dev/null || true; " +
-                            "settings put global settings_enable_monitor_phantom_procs false 2>/dev/null || true; " +
-                            "cmd game loading-boost $cleanTarget 5000 2>/dev/null || true"
+                    // 2. Add known music, video, social, and streaming apps to high priority
+                    val knownMediaAndBgApps = listOf(
+                        "com.spotify.music",
+                        "com.google.android.apps.youtube.music",
+                        "com.google.android.youtube",
+                        "app.revanced.android.youtube",
+                        "app.revanced.android.apps.youtube.music",
+                        "com.miui.player",
+                        "com.sec.android.app.music",
+                        "com.heytap.music",
+                        "com.coloros.music",
+                        "com.oppo.music",
+                        "com.vivo.music",
+                        "com.transsion.music",
+                        "com.apple.android.music",
+                        "com.soundcloud.android",
+                        "deezer.android.app",
+                        "com.tencent.qqmusic",
+                        "com.netease.cloudmusic",
+                        "com.resso.app",
+                        "com.tiktok.android.music",
+                        "com.zhiliaoapp.musically",
+                        "com.ss.android.ugc.trill",
+                        "com.facebook.katana",
+                        "com.facebook.orca",
+                        "com.instagram.android",
+                        "com.whatsapp",
+                        "org.telegram.messenger",
+                        "com.discord",
+                        "com.android.chrome"
                     )
+                    for (pkg in knownMediaAndBgApps) {
+                        if (pkg !in protectedSet && isPackageInstalled(pkg)) {
+                            priorityPackages.add(pkg)
+                        }
+                    }
+
+                    // 3. Gather all installed user apps, updated system apps, and launchable apps
+                    val allTargetPackages = linkedSetOf<String>()
+                    allTargetPackages.addAll(priorityPackages)
+
+                    try {
+                        val launcherIntent = Intent(Intent.ACTION_MAIN, null).addCategory(Intent.CATEGORY_LAUNCHER)
+                        val resolveList = pm.queryIntentActivities(launcherIntent, 0)
+                        for (res in resolveList) {
+                            val pkg = res.activityInfo?.packageName?.trim().orEmpty()
+                            if (pkg.isNotEmpty() && pkg !in protectedSet) {
+                                allTargetPackages.add(pkg)
+                            }
+                        }
+                    } catch (_: Throwable) {
+                    }
+
+                    try {
+                        val installedApps = pm.getInstalledApplications(0)
+                        for (appInfo in installedApps) {
+                            val pkg = appInfo.packageName?.trim().orEmpty()
+                            if (pkg.isEmpty() || pkg in protectedSet) continue
+                            val isSystem = (appInfo.flags and ApplicationInfo.FLAG_SYSTEM) != 0
+                            val isUpdatedSystem = (appInfo.flags and ApplicationInfo.FLAG_UPDATED_SYSTEM_APP) != 0
+                            if (!isSystem || isUpdatedSystem) {
+                                allTargetPackages.add(pkg)
+                            }
+                        }
+                    } catch (_: Throwable) {
+                    }
+
+                    // 4. Immediately request Android ActivityManager to kill background processes
+                    if (am != null) {
+                        for (pkg in allTargetPackages) {
+                            try {
+                                am.killBackgroundProcesses(pkg)
+                            } catch (_: Throwable) {
+                            }
+                        }
+                    }
+
+                    // 5. Build clean privileged shell script to stop active media and am force-stop every background package
+                    val syncPriorityList = priorityPackages.take(35)
+                    val remainingList = allTargetPackages.filter { it !in syncPriorityList }
+
+                    val forceStopScript = buildString {
+                        // Stop active media playback first
+                        append("cmd media_session dispatch stop 2>/dev/null || true; ")
+                        append("input keyevent 86 2>/dev/null || true; ")
+                        // Synchronous am force-stop on priority/recent/media apps so they are guaranteed dead
+                        for (pkg in syncPriorityList) {
+                            append("am force-stop $pkg 2>/dev/null; ")
+                        }
+                        // Parallel batched am force-stop on all remaining apps for speed
+                        for (chunk in remainingList.chunked(20)) {
+                            for (pkg in chunk) {
+                                append("am force-stop $pkg 2>/dev/null & ")
+                            }
+                            append("wait; ")
+                        }
+                        append("am kill-all 2>/dev/null || true; ")
+                        append("cmd game mode performance $cleanTarget 2>/dev/null || true")
+                    }
+
+                    executeCommand(forceStopScript, timeoutMs = 15000L)
                 } catch (_: Throwable) {
                 }
-                delay(420)
+                delay(450)
             }
 
-            // Stage 4: SurfaceFlinger Zero-Lag Compositor
+            // Stage 3: SurfaceFlinger Zero-Lag Compositor
             if (cfg.surfaceFlingerZeroLag) {
-                onProgress(0.68f, "[${cfg.tier.title}] Enabling SurfaceFlinger Zero-Lag frame latch...")
+                onProgress(0.66f, "[${cfg.tier.title}] Enabling SurfaceFlinger Zero-Lag frame latch...")
                 try {
                     executeCommand(
                         "setprop debug.sf.disable_backpressure 1 2>/dev/null || true; " +
@@ -562,10 +701,10 @@ class GameSpaceRepository(
                     )
                 } catch (_: Throwable) {
                 }
-                delay(380)
+                delay(360)
             }
 
-            // Stage 5: Ultra Touch Polling & Sensitivity
+            // Stage 4: Ultra Touch Polling & Sensitivity
             if (cfg.ultraTouchResponse) {
                 onProgress(0.82f, "[${cfg.tier.title}] Boosting touch pointer speed & input response...")
                 try {
@@ -575,17 +714,17 @@ class GameSpaceRepository(
                     )
                 } catch (_: Throwable) {
                 }
-                delay(360)
+                delay(340)
             }
 
-            // Stage 6: Block In-Game Heads-Up Pop-Up Notifications
+            // Stage 5: Block In-Game Heads-Up Pop-Up Notifications
             if (cfg.blockHeadsUpNotifications) {
                 onProgress(0.93f, "[${cfg.tier.title}] Activating In-Game Anti Pop-Up Notification Guard...")
                 try {
                     executeCommand("settings put global heads_up_notifications_enabled 0 2>/dev/null || true")
                 } catch (_: Throwable) {
                 }
-                delay(340)
+                delay(320)
             }
 
             // Resolve game display name for persistent status notification
@@ -2305,7 +2444,6 @@ class GameSpaceRepository(
         val defaultCfg = PlayBoostConfig.forTier(tier)
         val deepRam = prefs.getBoolean("play_boost_deep_ram", defaultCfg.deepRamPurge)
         val forceStop = prefs.getBoolean("play_boost_force_stop", defaultCfg.forceStopBackgroundApps)
-        val fixedPerf = prefs.getBoolean("play_boost_fixed_perf", defaultCfg.fixedPerformanceLock)
         val sfZeroLag = prefs.getBoolean("play_boost_sf_zero_lag", defaultCfg.surfaceFlingerZeroLag)
         val ultraTouch = prefs.getBoolean("play_boost_ultra_touch", defaultCfg.ultraTouchResponse)
         val blockHeadsUp = prefs.getBoolean("play_boost_block_headsup", defaultCfg.blockHeadsUpNotifications)
@@ -2313,7 +2451,6 @@ class GameSpaceRepository(
         val resolvedTier = PlayBoostConfig.resolveMatchingTier(
             deepRamPurge = deepRam,
             forceStopBackgroundApps = forceStop,
-            fixedPerformanceLock = fixedPerf,
             surfaceFlingerZeroLag = sfZeroLag,
             ultraTouchResponse = ultraTouch,
             blockHeadsUpNotifications = blockHeadsUp
@@ -2323,7 +2460,6 @@ class GameSpaceRepository(
             tier = resolvedTier,
             deepRamPurge = deepRam,
             forceStopBackgroundApps = forceStop,
-            fixedPerformanceLock = fixedPerf,
             surfaceFlingerZeroLag = sfZeroLag,
             ultraTouchResponse = ultraTouch,
             blockHeadsUpNotifications = blockHeadsUp
@@ -2334,7 +2470,6 @@ class GameSpaceRepository(
         val resolvedTier = PlayBoostConfig.resolveMatchingTier(
             deepRamPurge = config.deepRamPurge,
             forceStopBackgroundApps = config.forceStopBackgroundApps,
-            fixedPerformanceLock = config.fixedPerformanceLock,
             surfaceFlingerZeroLag = config.surfaceFlingerZeroLag,
             ultraTouchResponse = config.ultraTouchResponse,
             blockHeadsUpNotifications = config.blockHeadsUpNotifications
@@ -2344,7 +2479,6 @@ class GameSpaceRepository(
             .putString("play_boost_tier", normalized.tier.id)
             .putBoolean("play_boost_deep_ram", normalized.deepRamPurge)
             .putBoolean("play_boost_force_stop", normalized.forceStopBackgroundApps)
-            .putBoolean("play_boost_fixed_perf", normalized.fixedPerformanceLock)
             .putBoolean("play_boost_sf_zero_lag", normalized.surfaceFlingerZeroLag)
             .putBoolean("play_boost_ultra_touch", normalized.ultraTouchResponse)
             .putBoolean("play_boost_block_headsup", normalized.blockHeadsUpNotifications)
@@ -2358,7 +2492,7 @@ class GameSpaceRepository(
             val res = executeCommand(cmd)
             com.kyro.game.space.service.PlayBoostNotificationManager.cancelBoostNotification(context)
             if (res.isSuccess) {
-                Result.success("System defaults restored (CPU Lock, SurfaceFlinger, Touch Speed & Heads-Up notifications reset).")
+                Result.success("System defaults restored (SurfaceFlinger, Touch Speed & Heads-Up notifications reset).")
             } else {
                 Result.failure(Exception(res.stderr.ifBlank { "Failed to restore defaults via ${executionMethod.value.name}" }))
             }

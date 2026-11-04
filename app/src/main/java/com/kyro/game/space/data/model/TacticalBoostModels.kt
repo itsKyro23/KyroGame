@@ -111,7 +111,7 @@ enum class PlayBoostTier(
         id = "NOX_OVERDRIVE",
         title = "Nox Overdrive",
         levelTag = "HIGH • MAX",
-        subtitle = "Full hardware & system overdrive: Force-stops background apps, locks Fixed CPU/GPU clocks, and enables Zero-Lag Touch."
+        subtitle = "Maximum boost: Force-stops background apps, purges RAM, and enables Zero-Lag Display & Touch."
     ),
     CUSTOM(
         id = "CUSTOM",
@@ -131,7 +131,6 @@ data class PlayBoostConfig(
     val tier: PlayBoostTier = PlayBoostTier.VELOCITY_CORE,
     val deepRamPurge: Boolean = true,
     val forceStopBackgroundApps: Boolean = false,
-    val fixedPerformanceLock: Boolean = false,
     val surfaceFlingerZeroLag: Boolean = true,
     val ultraTouchResponse: Boolean = true,
     val blockHeadsUpNotifications: Boolean = true
@@ -140,7 +139,6 @@ data class PlayBoostConfig(
         get() = listOf(
             deepRamPurge,
             forceStopBackgroundApps,
-            fixedPerformanceLock,
             surfaceFlingerZeroLag,
             ultraTouchResponse,
             blockHeadsUpNotifications
@@ -150,7 +148,6 @@ data class PlayBoostConfig(
         val list = mutableListOf<String>()
         if (deepRamPurge) list.add("Deep RAM & Cache Purge")
         if (forceStopBackgroundApps) list.add("Force-Stop Background Apps")
-        if (fixedPerformanceLock) list.add("Fixed CPU/GPU Clock & Phantom Bypass")
         if (surfaceFlingerZeroLag) list.add("SurfaceFlinger Zero-Lag Compositor")
         if (ultraTouchResponse) list.add("Ultra Touch Polling & Sensitivity")
         if (blockHeadsUpNotifications) list.add("In-Game Anti Pop-Up Notification Guard")
@@ -161,13 +158,14 @@ data class PlayBoostConfig(
     }
 
     companion object {
+        const val TOTAL_STAGES = 5
+
         fun forTier(tier: PlayBoostTier): PlayBoostConfig {
             return when (tier) {
                 PlayBoostTier.ECO_PULSE -> PlayBoostConfig(
                     tier = PlayBoostTier.ECO_PULSE,
                     deepRamPurge = true,
                     forceStopBackgroundApps = false,
-                    fixedPerformanceLock = false,
                     surfaceFlingerZeroLag = false,
                     ultraTouchResponse = false,
                     blockHeadsUpNotifications = false
@@ -176,7 +174,6 @@ data class PlayBoostConfig(
                     tier = PlayBoostTier.VELOCITY_CORE,
                     deepRamPurge = true,
                     forceStopBackgroundApps = false,
-                    fixedPerformanceLock = false,
                     surfaceFlingerZeroLag = true,
                     ultraTouchResponse = true,
                     blockHeadsUpNotifications = true
@@ -185,7 +182,6 @@ data class PlayBoostConfig(
                     tier = PlayBoostTier.NOX_OVERDRIVE,
                     deepRamPurge = true,
                     forceStopBackgroundApps = true,
-                    fixedPerformanceLock = true,
                     surfaceFlingerZeroLag = true,
                     ultraTouchResponse = true,
                     blockHeadsUpNotifications = true
@@ -199,7 +195,6 @@ data class PlayBoostConfig(
         fun resolveMatchingTier(
             deepRamPurge: Boolean,
             forceStopBackgroundApps: Boolean,
-            fixedPerformanceLock: Boolean,
             surfaceFlingerZeroLag: Boolean,
             ultraTouchResponse: Boolean,
             blockHeadsUpNotifications: Boolean
@@ -211,21 +206,18 @@ data class PlayBoostConfig(
             return when {
                 deepRamPurge == eco.deepRamPurge &&
                     forceStopBackgroundApps == eco.forceStopBackgroundApps &&
-                    fixedPerformanceLock == eco.fixedPerformanceLock &&
                     surfaceFlingerZeroLag == eco.surfaceFlingerZeroLag &&
                     ultraTouchResponse == eco.ultraTouchResponse &&
                     blockHeadsUpNotifications == eco.blockHeadsUpNotifications -> PlayBoostTier.ECO_PULSE
 
                 deepRamPurge == velocity.deepRamPurge &&
                     forceStopBackgroundApps == velocity.forceStopBackgroundApps &&
-                    fixedPerformanceLock == velocity.fixedPerformanceLock &&
                     surfaceFlingerZeroLag == velocity.surfaceFlingerZeroLag &&
                     ultraTouchResponse == velocity.ultraTouchResponse &&
                     blockHeadsUpNotifications == velocity.blockHeadsUpNotifications -> PlayBoostTier.VELOCITY_CORE
 
                 deepRamPurge == overdrive.deepRamPurge &&
                     forceStopBackgroundApps == overdrive.forceStopBackgroundApps &&
-                    fixedPerformanceLock == overdrive.fixedPerformanceLock &&
                     surfaceFlingerZeroLag == overdrive.surfaceFlingerZeroLag &&
                     ultraTouchResponse == overdrive.ultraTouchResponse &&
                     blockHeadsUpNotifications == overdrive.blockHeadsUpNotifications -> PlayBoostTier.NOX_OVERDRIVE

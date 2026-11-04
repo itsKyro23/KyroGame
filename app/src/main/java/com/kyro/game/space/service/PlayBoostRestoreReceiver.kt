@@ -83,7 +83,7 @@ object PlayBoostNotificationManager {
             )
 
             val activeStepsSummary = config.activeStepLabels().joinToString(" • ")
-            val shortText = "${config.tier.title} (${config.activeStagesCount}/6 stages) active for $gameName"
+            val shortText = "${config.tier.title} (${config.activeStagesCount}/${PlayBoostConfig.TOTAL_STAGES} stages) active for $gameName"
             val expandedText = "Mode: ${config.tier.title} (${config.tier.levelTag})\n" +
                 "Active Optimizations: $activeStepsSummary\n" +
                 "Tap 'Restore & Stop Boost' below to reset system settings after gaming."

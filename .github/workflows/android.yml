@@ -37,14 +37,15 @@ jobs:
           distribution: 'temurin'
           java-version: '21'
 
-      - name: Suppress KSP Headless AWT False-Positive Matcher
-        run: |
-          echo "::remove-matcher owner=java::"
-
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
+      - name: Cache Gradle Packages
+        uses: actions/cache@v4
         with:
-          cache-read-only: false
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties', 'gradle/libs.versions.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
 
       - name: Prepare Keystore & Environment
         run: |
@@ -70,16 +71,16 @@ jobs:
           chmod +x gradlew
 
       - name: Run Unit Tests
-        run: ./gradlew testDebugUnitTest --stacktrace 2> >(grep -v -E "AWT-EventQueue-0|BinaryFileTypeDecompilers|FileDocumentManager\.getInstance" >&2)
+        run: ./gradlew testDebugUnitTest -Pkotlin.compiler.execution.strategy=daemon --no-configuration-cache
 
       - name: Build Debug APK
-        run: ./gradlew assembleDebug --stacktrace 2> >(grep -v -E "AWT-EventQueue-0|BinaryFileTypeDecompilers|FileDocumentManager\.getInstance" >&2)
+        run: ./gradlew assembleDebug -Pkotlin.compiler.execution.strategy=daemon --no-configuration-cache
 
       - name: Build Android App Bundle (AAB)
         env:
           STORE_PASSWORD: ${{ secrets.STORE_PASSWORD || 'android' }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD || 'android' }}
-        run: ./gradlew bundleDebug bundleRelease --stacktrace 2> >(grep -v -E "AWT-EventQueue-0|BinaryFileTypeDecompilers|FileDocumentManager\.getInstance" >&2)
+        run: ./gradlew bundleDebug bundleRelease -Pkotlin.compiler.execution.strategy=daemon --no-configuration-cache
 
       - name: Upload Debug APK
         uses: actions/upload-artifact@v4
