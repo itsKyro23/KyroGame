@@ -16,8 +16,8 @@ android {
     applicationId = "com.nox.gamespace"
     minSdk = 24
     targetSdk = 36
-    versionCode = 1
-    versionName = "1.0.0"
+    versionCode = 2
+    versionName = "1.0.1"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     androidResources.localeFilters.addAll(listOf("en", "in", "ms"))
@@ -122,11 +122,18 @@ secrets {
 
 googleServices { missingGoogleServicesStrategy = MissingGoogleServicesStrategy.WARN }
 
+configurations.all {
+  resolutionStrategy {
+    force("androidx.fragment:fragment:${libs.versions.fragment.get()}")
+    force("androidx.fragment:fragment-ktx:${libs.versions.fragment.get()}")
+  }
+}
+
 // Some unused dependencies are commented out below instead of being removed.
 // This makes it easy to add them back in the future if needed.
 dependencies {
   implementation(platform(libs.androidx.compose.bom))
-  // implementation(libs.androidx.fragment.ktx)
+  implementation(libs.androidx.fragment.ktx)
   // implementation(platform(libs.firebase.bom))
   // implementation(libs.accompanist.permissions)
   implementation(libs.androidx.activity.compose)
