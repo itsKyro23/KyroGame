@@ -1,148 +1,112 @@
-# Lightweight Texture & GPU Texture Filter Tuner
+# Rencana Implementasi: AOT Game DEX Compiler (Tools) & Play Auto-Boost Settings (Home)
 
-Delivers a dedicated **Lightweight Texture Tuner** (inspired by the reference screenshot) that adjusts **GPU Texture Sampling, Mipmap LOD Bias, and Anisotropic/Bilinear Filtering**—independent of display resolution scaling (`wm size`) or `cmd game` downscaling—complete with a real **Device & GPU Hardware Compatibility Scanner**, an interactive **Before / After Split-Screen Preview**, and **per-game or global** profile targeting.
+Dokumen ini merancang penambahan dua fitur nyata ke dalam **NOX - Game Space**:
+1. **AOT Game DEX Compiler** di halaman **Tools** (dengan integrasi biaya **NOX Energy Cell** `15⚡` untuk 1 game / `30⚡` untuk semua game).
+2. **Play Boost Settings Button & Dialog** di halaman **Home** (untuk mengatur tier **Auto-Boost** dan *checklist* tahapan optimasi nyata—termasuk penutupan paksa aplikasi latar belakang—yang otomatis dijalankan setiap kali tombol **Play** pada kartu game ditekan).
+
+---
 
 ## User Review & Critical Decisions
 
 > [!IMPORTANT]
-> The following product and design choices have been confirmed from your responses and incorporated into this plan:
-
-- **Confirmed Entry Points**: Accessible **both** from the **Tools Hub** (as a 3rd tactical card alongside Resolution Changer and Network Optimizer) **and** directly from each game's **Customize Game Profile** dialog (with a quick preset selector and a shortcut to launch the full Texture Tuner pre-targeted to that game).
-- **Confirmed Interactive Preview**: Includes an interactive **Before / After Split-Screen Preview Canvas** with a draggable vertical divider handle (`↔`) and a press-and-hold **"Hold: Before"** comparison button that renders brick wall and ground terrain textures in real time with the exact pixelation, blockiness, bilinear blur, or nearest-neighbor filtering selected.
-- **Confirmed Target Scope**: Supports **Per-Game Selection** (e.g., *Free Fire MAX*, *Call of Duty Mobile*, *Mobile Legends*, or any installed game) as well as a **Global GPU Profile** option.
-- **Universal ANGLE Vulkan Driver Mode**: All texture tuning presets automatically enforce ANGLE Vulkan translation without manual selector confusion.
-- **Permission Access Gate (Shizuku / Wireless ADB / Root)**: All tools, features, game customization, and app additions require at least 1 verified active execution permission.
-- **Cyber Gaming Splash Screen**: High-octane initial loading screen with live hardware and execution checks.
-- **Pre-Launch Game Boost Animation**: Tactical 5-stage pre-launch optimization triggered upon tapping Play.
-
----
-
-## 1. Overview & Core Concept
-
-- **What It Does**: Modifies how 3D game textures are sampled and filtered by the GPU without shrinking the UI or screen resolution. Users can make 3D surface textures ultra-smooth (high-LOD blurred mipmaps), retro/pixelated (`GL_NEAREST` sharp point sampling), or total blocky (high mipmap LOD bias + nearest-neighbor cutoff) to drastically reduce GPU texture memory bandwidth and frame-time spikes on heavy 3D games.
-- **Target Audience / Persona**: Mobile gamers playing 3D titles (such as *Free Fire MAX*, *PUBG Mobile*, *CODM*, *Genshin Impact*, or *Roblox*) who want smoother framerates, lower GPU heat, or a high-visibility "Minecraft/Potato Graphics" competitive look while keeping their HUD, crosshair, and text razor-sharp.
-- **Key Value**:
-  - **Independent of Resolution Scaling**: Keeps 2D HUD elements and touch coordinates native while reducing 3D texture fill-rate load.
-  - **Real Device & GPU Compatibility Verification**: Inspects the phone's actual OpenGL ES / Vulkan GPU hardware (`Adreno`, `Mali`, `PowerVR`, `Xclipse`), driver extensions (`GL_EXT_texture_filter_anisotropic`, `GL_KHR_debug`, ANGLE / GPU debug layer support), and active execution engine (`Shizuku`, `Wireless ADB Daemon`, or `Root`) to report supported texture tuning capabilities.
+> - **Biaya Energi AOT Game DEX Compiler**:
+>   - **Single Game (`15⚡`)**: Mengompilasi 1 game yang dipilih (`speed-profile` atau `speed`).
+>   - **All Added Games (`30⚡`)**: Mengompilasi seluruh game yang ada di daftar Home sekaligus.
+>   - **Reset Compile (`0⚡` / Gratis)**: Mengembalikan status kompilasi paket ke standar.
+> - **3 Tier Preset Auto-Boost (Saat Klik Play di Game Card)**:
+>   1. **`ECO PULSE` (Light / Safe Boost)**: Bersih-bersih cache RAM ringan tanpa menutup aplikasi latar belakang.
+>   2. **`VELOCITY CORE` (Balanced / Competitive)**: Optimasi RAM + Touch Sensitivity + SurfaceFlinger Zero-Lag + Anti Pop-Up Notifikasi.
+>   3. **`NOX OVERDRIVE` (Extreme / Max Performance)**: Semua fitur di atas + **Force-Stop Aplikasi Latar Belakang (`am force-stop` & `am kill-all`)** + **Fixed Performance Mode (`cmd power`)** + **Phantom Process Bypass**.
 
 ---
 
-## 2. User Experience & Visual Design
+## 1. Penjelasan Detail Fitur yang Ditambahkan
 
-- **Key User Flows**:
-  1. **Checking Device & GPU Compatibility**:
-     - At the top of the Lightweight Texture screen, a **GPU & Texture Compatibility Banner** displays the detected GPU Renderer (e.g., *Qualcomm Adreno 740* or *ARM Mali-G610*), OpenGL ES / Vulkan version, driver hook support, and active execution privilege status (`Supported — Hardware + System GPU Driver Tuning` or `Root Enhanced`).
-  2. **Interactive Before / After Split Preview**:
-     - The preview card renders a 3D-perspective brick wall and grassy ground scene split vertically by a draggable divider (`↔`):
-       - **Left Side (`BEFORE`)**: Native original game texture detail.
-       - **Right Side (`AFTER`)**: Live-rendered result reflecting the chosen **Texture Detail** step, **Sharp Pixels** toggle, and **Hard Distance Cutoff** toggle.
-       - **Hold: Before Button**: Pressing and holding temporarily reveals the full `BEFORE` view across the entire card for instant visual comparison.
-  3. **Quick Presets & Fine-Grained Controls**:
-     - **Quick Presets Bar**:
-       - `Smooth` (*Halus*): Bilinear/smooth mipmap filtering with reduced texture detail for clean, low-noise surfaces.
-       - `Retro`: Balanced mipmap reduction with **Sharp Pixels** enabled for crisp retro pixel art edges.
-       - `Total Blocky` (*Kotak Total*): Maximum mipmap LOD reduction + **Sharp Pixels** + **Hard Distance Cutoff** for ultra-lightweight blocky competitive graphics.
-       - `Custom` (*Kustom*): Automatically activates whenever the user manually adjusts the slider or toggles.
-     - **Texture Detail Slider (5 Steps)**:
-       - `Original` → `Light` → `Retro` → `Blocky` → `Extreme` (controls Mipmap LOD Bias from `0.0` to `+3.5`).
-     - **Two Independent Filter Toggles**:
-       - **Sharp Pixels (`GL_NEAREST`)**: Sharp, blocky pixel edges when enabled; smooth bilinear blur (`GL_LINEAR`) when disabled.
-       - **Hard Distance Cutoff (Mipmap Snap)**: Snaps near-to-far texture LOD transitions sharply (`GL_NEAREST_MIPMAP_NEAREST`) instead of trilinear blending.
-  4. **Target Selector & Apply Action**:
-     - Bottom bar lets the user pick a **Target Game** (with app icon and package name, or *Global System Default*) and tap **Apply & Save** (plus a **Reset to Original** action).
-     - Informative tips remind the user to restart the game if it is currently running and note that the effect is most pronounced when in-game graphics are set to Low/Smooth.
+### A. Fitur 1: **AOT Game DEX Compiler** (Di Menu **Tools**)
+- **Apa Fungsinya?**
+  Menggunakan mesin kompilator internal Android (`dex2oat` via `cmd package compile`) untuk menerjemahkan kode DEX game menjadi **instruksi mesin ARM64 asli (Ahead-Of-Time / AOT)** sebelum game dibuka. Ini menghilangkan *stutter/patah-patah* saat efek *skill* baru keluar dan mempercepat *loading* masuk ke dalam *match*.
+- **Pilihan Mode Kompilasi Nyata:**
+  1. **`Speed-Profile (Fast & Recommended)`**: Mengompilasi jalur kode utama game secara cerdas (`cmd package compile -m speed-profile -f <package>`).
+  2. **`Full Speed AOT (Maximum Zero-JIT)`**: Mengompilasi 100% seluruh metode di dalam game menjadi kode mesin (`cmd package compile -m speed -f <package>`).
+- **Integrasi NOX Energy:**
+  - Membutuhkan **`15⚡`** untuk 1 game, atau **`30⚡`** untuk semua game di Home.
+  - Juga ditampilkan secara rapi di dalam dialog **NOX Energy Cell (`NoxEnergyTopUpDialog`)**.
 
-- **Visual Identity & Theme**:
-  - **Aesthetic Direction**: Tactical OLED Dark gaming dashboard matching Kyro Game Space's signature aesthetic, enhanced with cyan/sky-blue accent highlights for active texture presets and emerald green badges for hardware compatibility.
-  - **Color Palette & Mood**: Pure OLED black background (`#07070B`), elevated carbon cards (`#13131C`), electric cyan/blue interactive controls (`#38BDF8` / `#6C5CE7`), and semantic status badges (`#00E676` Compatible, `#FFAB00` Partial/Restart Required).
-  - **Typography & Hierarchy**: Bold uppercase section headers with wide tracking, monospace technical readouts for GPU renderer and LOD bias values, and concise English descriptions throughout.
-  - **Adaptive Layout**: Supports both portrait single-column scrolling and landscape/tablet side-by-side split layout (Preview & Target Game on the left, Presets & Sliders on the right, matching the reference screenshot layout).
+### B. Fitur 2: **Play Boost Settings Button & Dialog** (Di Halaman **Home**)
+- **Lokasi Tombol:**
+  Terletak di baris judul **`MY GAMES`** pada halaman **Home** (di sebelah kanan badge jumlah game), berupa tombol kapsul **`Boost Settings`** yang menampilkan nama Tier aktif saat ini (`Eco Pulse` / `Velocity Core` / `Nox Overdrive`).
+- **3 Pilihan Tier Auto-Boost (Otomatis Mengatur Checklist):**
 
----
+| Nama Tier Boost | Level | Tahapan yang Dijalankan Saat Klik Tombol "Play" |
+| :--- | :--- | :--- |
+| **`ECO PULSE`** | **Ringan (Low)** | **Tahap 1–2:** Hanya membersihkan memori cache (`am trim-memory RUNNING_MODERATE` & `pm trim-caches`) dan menerapkan profil FPS game. Aplikasi chat/musik di latar belakang **tidak** ditutup. |
+| **`VELOCITY CORE`** | **Menengah (Mid)** | **Tahap 1–4:** Mencakup *Eco Pulse* + **Zero-Lag SurfaceFlinger** (`disable_backpressure 1`) + **Ultra Touch Response** (`pointer_speed 7`) + **Anti Pop-Up Notifikasi** (`heads_up_notifications_enabled 0`). |
+| **`NOX OVERDRIVE`** | **Ekstrem (High)** | **Tahap 1–6 (Maksimal):** Mencakup *Velocity Core* + **Force-Stop Background Apps** (menghentikan paksa aplikasi pihak ketiga yang berjalan di latar belakang dengan `am force-stop` & `am kill-all`) + **Fixed Performance Mode** (`cmd power set-fixed-performance-mode-enabled true` & ` max_phantom_processes` bypass). |
 
-## 3. Key Product Decisions & Trade-Offs
-
-- **Decision 1: Multi-Layer GPU Texture Application (Non-Root Shizuku/ADB + Root Support)**
-  - *Chosen Approach*: Apply texture tuning through a layered command pipeline that combines:
-    1. Per-app Android GPU Driver & ANGLE/Game Driver settings (`settings put global gpu_debug_app`, `updatable_driver_production_opt_in_apps`, `angle_gl_driver_selection_pkgs` / `values`).
-    2. System/GPU HWUI & OpenGL ES texture filtering/LOD properties (`setprop debug.hwui.texture_lod_bias`, `debug.egl.force_msaa`, `persist.sys.gpu.texture_filter`, vendor Adreno/Mali LOD properties).
-    3. Per-game Unity/Unreal engine quality/mipmap preference overrides when accessible via `Shizuku` or `Root`.
-  - *Why*: Works safely on non-rooted devices via Shizuku or Wireless ADB Daemon while automatically unlocking deeper vendor driver & engine config overrides when Root (`su`) is enabled.
-  - *Alternatives Considered*: Modifying APK assets or injecting `.so` hooks into game processes—rejected because modifying game files triggers anti-cheat bans in online games like *Free Fire MAX* and *CODM*.
-
-- **Decision 2: Real Hardware OpenGL ES / EGL Context Inspection for Device Compatibility**
-  - *Chosen Approach*: Query the device's real GPU hardware using an offscreen `EGL14` / `GLES20` context (`GL_VENDOR`, `GL_RENDERER`, `GL_VERSION`, `GL_EXTENSIONS`) combined with system property inspection (`ro.hardware.egl`, `ro.board.platform`, Vulkan feature flags).
-  - *Why*: Gives the user accurate, real hardware telemetry about their exact GPU chip and driver capabilities rather than static text.
+- **6 Checklist Kustomisasi Nyata (Bisa Dicentang/Diubah Manual):**
+  Di dalam dialog, pengguna juga bisa mencentang atau mematikan setiap tahapan secara bebas:
+  1. **RAM & Cache Trim** (`am trim-memory system RUNNING_CRITICAL` + `pm trim-caches 4G`)
+  2. **Force-Stop Background Apps** (`am kill-all` + iterasi `am force-stop <pkg>` pada aplikasi non-esensial di latar belakang)
+  3. **Fixed CPU/GPU Performance Lock** (`cmd power set-fixed-performance-mode-enabled true` + `max_phantom_processes 2147483647`)
+  4. **SurfaceFlinger Zero-Lag Compositor** (`setprop debug.sf.disable_backpressure 1` + `setprop debug.sf.latch_unsignaled 1`)
+  5. **Ultra Touch Response & Polling** (`settings put system pointer_speed 7` + `settings put global block_untrusted_touches 0`)
+  6. **Block In-Game Heads-Up Notifications** (`settings put global heads_up_notifications_enabled 0` saat main, dan tombol *Restore Defaults* untuk mengembalikan semua pengaturan sistem ke standar kapan saja).
 
 ---
 
-## 4. Technical Architecture & Data Strategy *(Technical Reference)*
-
-### Architecture & Component Diagram
+## 2. Desain UI & Alur Interaksi (Responsive & Tersusun Rapi)
 
 ```
-┌──────────────────────────────────────────────────────────────────────────────┐
-│                                UI Layer (Compose)                            │
-│                                                                              │
-│  ┌─────────────────────────┐          ┌───────────────────────────────────┐  │
-│  │       ToolsScreen       │          │        GameCustomizeDialog        │  │
-│  │  (3rd Card: Lightweight │          │  (Quick Texture Preset Chip +     │  │
-│  │     Texture Tuner)      │          │   "Open Texture Tuner" Shortcut)  │  │
-│  └────────────┬────────────┘          └─────────────────┬─────────────────┘  │
-│               │                                         │                    │
-│               └────────────────────┬────────────────────┘                    │
-│                                    ▼                                         │
-│               ┌─────────────────────────────────────────┐                    │
-│               │          TextureTunerScreen             │                    │
-│               │  • GPU Compatibility Banner & Details   │                    │
-│               │  • Split Before/After Canvas + Hold Btn │                    │
-│               │  • Quick Presets (Smooth/Retro/Blocky)  │                    │
-│               │  • 5-Step Texture Detail Slider         │                    │
-│               │  • Sharp Pixels & Hard Distance Toggles │                    │
-│               │  • Game Target Picker + Apply / Reset   │                    │
-│               └────────────────────┬────────────────────┘                    │
-└────────────────────────────────────┼─────────────────────────────────────────┘
-                                     ▼
-┌──────────────────────────────────────────────────────────────────────────────┐
-│                       Repository & GPU Hardware Layer                        │
-│                                                                              │
-│  ┌─────────────────────────────────┐  ┌───────────────────────────────────┐  │
-│  │   GpuTextureCompatibilityProbe  │  │        GameSpaceRepository        │  │
-│  │  • Offscreen EGL14/GLES20 query │  │  • textureTunerState: StateFlow   │  │
-│  │  • Detects Adreno/Mali/PowerVR  │  │  • Per-game & global persistence  │  │
-│  │  • Checks GL extensions & ANGLE │  │  • Auto-applies on launchGame()   │  │
-│  └─────────────────────────────────┘  └─────────────────┬─────────────────┘  │
-│                                                         ▼                    │
-│                                       ┌───────────────────────────────────┐  │
-│                                       │         ExecutorFactory           │  │
-│                                       │ (Shizuku / Wireless ADB / Root)   │  │
-│                                       └───────────────────────────────────┘  │
-└──────────────────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────┐
+│                              HOME SCREEN                                │
+│  🎮 MY GAMES                               [⚡ Boost: Nox Overdrive ⚙️] │
+├─────────────────────────────────────────────────────────────────────────┤
+│                     (Klik Tombol Boost Settings)                        │
+│                                  ▼                                      │
+│  ┌───────────────────────────────────────────────────────────────────┐  │
+│  │ ⚡ PLAY AUTO-BOOST SETTINGS                                       │  │
+│  │ Pilih preset tier atau centang fitur yang dijalankan saat Play    │  │
+│  ├───────────────────────────────────────────────────────────────────┤  │
+│  │ [ 🟢 Eco Pulse ]   [ 🔵 Velocity Core ]   [ 🔴 Nox Overdrive ]    │  │
+│  ├───────────────────────────────────────────────────────────────────┤  │
+│  │ CHECKLIST TAHAPAN EKSEKUSI NYATA:                                 │  │
+│  │ [✓] 1. Deep RAM & Cache Purge (am trim-memory)                    │  │
+│  │ [✓] 2. Force-Stop Background Apps (Tutup aplikasi latar belakang) │  │
+│  │ [✓] 3. Fixed CPU/GPU Performance Lock (cmd power fixed-perf)      │  │
+│  │ [✓] 4. SurfaceFlinger Zero-Lag (Pangkas delay frame buffer)       │  │
+│  │ [✓] 5. Ultra Touch Polling & Sensitivity (Licinkan respon layar)  │  │
+│  │ [✓] 6. Block Heads-Up Pop-Up Notifications (Anti gangguan war)    │  │
+│  ├───────────────────────────────────────────────────────────────────┤  │
+│  │ [ Restore System Defaults ]                     [ Save Settings ] │  │
+│  └───────────────────────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────────────────┘
 ```
 
-### Data Model & State
-- **`TextureQuickPreset`**: `SMOOTH`, `RETRO`, `TOTAL_BLOCKY`, `CUSTOM`.
-- **`TextureDetailLevel`** (5 steps):
-  - `ORIGINAL` (Step 0 — LOD Bias `0.0`, Native Mipmaps)
-  - `LIGHT` (Step 1 — LOD Bias `+0.75`, Mild Mipmap Reduction)
-  - `RETRO` (Step 2 — LOD Bias `+1.5`, 1/4 Texture Mipmap Resolution)
-  - `BLOCKY` (Step 3 — LOD Bias `+2.5`, 1/16 Blocky Mipmap Level)
-  - `EXTREME` (Step 4 — LOD Bias `+3.5`, Ultra-Low 4x4/8x8 Mipmap Level)
-- **`TextureConfig`**:
-  - `preset: TextureQuickPreset`
-  - `detailLevel: TextureDetailLevel`
-  - `sharpPixels: Boolean` (`true` = Nearest-Neighbor `GL_NEAREST`, `false` = Smooth Bilinear `GL_LINEAR`)
-  - `hardDistanceCutoff: Boolean` (`true` = `GL_NEAREST_MIPMAP_NEAREST`, `false` = Smooth Mipmap Transition)
-  - `targetPackage: String` (`""` for Global or specific game package name)
-- **`DeviceTextureCompatibility`**:
-  - `isSupported: Boolean`
-  - `gpuVendor: String`, `gpuRenderer: String`, `glVersion: String`
-  - `supportsLodBias: Boolean`, `supportsAnisotropicFilter: Boolean`, `supportsGameDriverHook: Boolean`
-  - `compatibilityLevel: String` (e.g., `"Full Support (Adreno GPU + Driver LOD)"`)
-  - `summaryNote: String`
+- **Tata Letak Responsif:**
+  - Menggunakan *Scrollable Container* dengan batas tinggi proporsional agar seluruh *chip* Tier dan 6 baris *Checklist* tampil rapi di semua ukuran layar tanpa bertumpuk.
+  - Saat pengguna menekan tombol **Play** pada kartu game mana pun, dialog **Pre-Launch Tactical Boost (`GameBoostDialog`)** akan menampilkan progres *real-time* sesuai daftar fitur yang dicentang oleh pengguna (termasuk jumlah aplikasi latar belakang yang di-*force-stop* jika opsi tersebut aktif).
 
-### Interactive Component & State Mapping
-- **Preset Selection**: Clicking `Smooth`, `Retro`, or `Total Blocky` immediately updates `detailLevel`, `sharpPixels`, and `hardDistanceCutoff` to the preset's signature values and updates the live `AFTER` preview canvas.
-- **Manual Slider / Toggle Change**: Moving the 5-step **Texture Detail** slider or toggling **Sharp Pixels** / **Hard Distance Cutoff** automatically switches the active preset pill to `Custom` if the combination does not match a standard preset.
-- **Interactive Split Slider & Hold-to-Compare**: Dragging the horizontal split handle adjusts `splitFraction` (`0.0f..1.0f`) on the procedural brick/ground canvas; holding the **Hold: Before** button temporarily sets the preview to 100% `BEFORE` until released.
-- **Game Launch Integration**: Launching a game from Home or Apps automatically applies its saved `TextureConfig` alongside its `GameCustomConfig`.
+---
+
+## 3. Arsitektur Teknis & Alur Data
+
+```
+┌───────────────────────────┐       ┌────────────────────────────────────┐
+│   PlayBoostSettingsDialog │──────▶│       GameSpaceRepository          │
+│ (Tier + 6 Checklists)     │       │ • Simpan PlayBoostConfig di Prefs  │
+└───────────────────────────┘       │ • boostAndLaunchGame() menjalankan │
+                                    │   perintah shell nyata per tahap   │
+┌───────────────────────────┐       │ • runAotGameCompile() menjalankan  │
+│   AotCompilerScreen       │──────▶│   cmd package compile -m speed     │
+│ (Tools Card + Full Screen)│       └────────────────────────────────────┘
+└───────────────────────────┘
+```
+
+- **Penyimpanan Konfigurasi (`PlayBoostConfig`)**:
+  - Disimpan secara persisten di `SharedPreferences` (`kyro_game_space_prefs`) sehingga pilihan pengguna tetap tersimpan meskipun aplikasi ditutup.
+- **Perlindungan Aplikasi Penting Saat Force-Stop**:
+  - Saat tahap **Force-Stop Background Apps** berjalan, sistem otomatis mengecualikan:
+    1. Game yang sedang akan diluncurkan,
+    2. Aplikasi **NOX - Game Space** sendiri (`com.nox.gamespace`),
+    3. Layanan **Shizuku** (`moe.shizuku.privileged.api`), dan
+    4. Aplikasi sistem inti Android (`FLAG_SYSTEM`), sehingga koneksi Shizuku/ADB dan sistem HP tetap 100% aman.

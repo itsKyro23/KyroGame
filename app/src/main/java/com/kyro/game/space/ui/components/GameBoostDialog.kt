@@ -37,6 +37,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -60,10 +61,12 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.kyro.game.space.data.model.GameItem
+import com.kyro.game.space.data.model.PlayBoostTier
 import com.kyro.game.space.data.repository.GameSpaceRepository
 import com.kyro.game.space.ui.theme.KyroAccent
 import com.kyro.game.space.ui.theme.KyroCyan
 import com.kyro.game.space.ui.theme.KyroGreen
+import com.kyro.game.space.ui.theme.KyroOrange
 import com.kyro.game.space.ui.theme.KyroPrimary
 import com.kyro.game.space.util.AppIconCache
 import kotlinx.coroutines.launch
@@ -77,11 +80,19 @@ fun GameBoostDialog(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val boostConfig by repository.playBoostConfig.collectAsState()
 
     var progress by remember { mutableFloatStateOf(0.05f) }
     var statusText by remember { mutableStateOf("Preparing game environment...") }
     var isCompleted by remember { mutableStateOf(false) }
     var isAppeared by remember { mutableStateOf(false) }
+
+    val tierColor = when (boostConfig.tier) {
+        PlayBoostTier.ECO_PULSE -> KyroGreen
+        PlayBoostTier.VELOCITY_CORE -> KyroCyan
+        PlayBoostTier.NOX_OVERDRIVE -> KyroAccent
+        PlayBoostTier.CUSTOM -> KyroOrange
+    }
 
     val enterScale by animateFloatAsState(
         targetValue = if (isAppeared) 1f else 0.88f,
@@ -141,13 +152,13 @@ fun GameBoostDialog(
                     .alpha(enterAlpha)
                     .padding(top = 10.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
                 // Header Badge
                 Surface(
                     shape = RoundedCornerShape(10.dp),
-                    color = KyroCyan.copy(alpha = 0.15f),
-                    border = BorderStroke(1.dp, KyroCyan.copy(alpha = 0.45f))
+                    color = tierColor.copy(alpha = 0.15f),
+                    border = BorderStroke(1.dp, tierColor.copy(alpha = 0.45f))
                 ) {
                     Row(
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp),
@@ -157,33 +168,33 @@ fun GameBoostDialog(
                         Icon(
                             imageVector = Icons.Default.Bolt,
                             contentDescription = null,
-                            tint = KyroCyan,
+                            tint = tierColor,
                             modifier = Modifier.size(15.dp)
                         )
                         Text(
-                            text = "PRE-LAUNCH TACTICAL BOOST",
+                            text = "${boostConfig.tier.title.uppercase()} • PRE-LAUNCH BOOST",
                             style = MaterialTheme.typography.labelSmall,
                             fontWeight = FontWeight.Black,
                             letterSpacing = 1.sp,
-                            color = KyroCyan,
+                            color = tierColor,
                             fontSize = 10.sp
                         )
                     }
                 }
 
                 // App Icon with pulsing circular glow
-                Box(contentAlignment = Alignment.Center, modifier = Modifier.size(90.dp)) {
+                Box(contentAlignment = Alignment.Center, modifier = Modifier.size(86.dp)) {
                     CircularProgressIndicator(
                         progress = { animatedProgress },
-                        modifier = Modifier.size(90.dp),
+                        modifier = Modifier.size(86.dp),
                         strokeWidth = 4.dp,
-                        color = KyroCyan,
+                        color = tierColor,
                         trackColor = Color(0xFF1E2235)
                     )
 
                     Surface(
                         modifier = Modifier
-                            .size(62.dp)
+                            .size(58.dp)
                             .clip(RoundedCornerShape(16.dp)),
                         color = Color(0xFF181C29)
                     ) {
@@ -197,7 +208,7 @@ fun GameBoostDialog(
                             Icon(
                                 imageVector = Icons.Default.SportsEsports,
                                 contentDescription = null,
-                                tint = KyroCyan,
+                                tint = tierColor,
                                 modifier = Modifier.padding(14.dp)
                             )
                         }
@@ -220,7 +231,7 @@ fun GameBoostDialog(
                         style = MaterialTheme.typography.titleMedium,
                         fontFamily = FontFamily.Monospace,
                         fontWeight = FontWeight.Bold,
-                        color = if (isCompleted) KyroGreen else KyroCyan,
+                        color = if (isCompleted) KyroGreen else tierColor,
                         fontSize = 14.sp
                     )
                 }
@@ -232,7 +243,7 @@ fun GameBoostDialog(
                         .fillMaxWidth()
                         .height(6.dp)
                         .clip(RoundedCornerShape(3.dp)),
-                    color = KyroCyan,
+                    color = tierColor,
                     trackColor = Color(0xFF1A1F30)
                 )
 
@@ -259,7 +270,7 @@ fun GameBoostDialog(
                             CircularProgressIndicator(
                                 modifier = Modifier.size(16.dp),
                                 strokeWidth = 2.dp,
-                                color = KyroCyan
+                                color = tierColor
                             )
                         }
                         Text(
@@ -274,23 +285,19 @@ fun GameBoostDialog(
                     }
                 }
 
-                // Optimization feature checklist
+                // Dynamic Optimization feature checklist based on PlayBoostConfig
+                val activeSteps = remember(boostConfig) { boostConfig.activeStepLabels() }
                 Column(
                     modifier = Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                    verticalArrangement = Arrangement.spacedBy(5.dp)
                 ) {
-                    BoostStepIndicator(
-                        label = "RAM Trim & Cache Purge",
-                        isPassed = animatedProgress >= 0.30f
-                    )
-                    BoostStepIndicator(
-                        label = "Gaming Network Low-Latency Route",
-                        isPassed = animatedProgress >= 0.70f
-                    )
-                    BoostStepIndicator(
-                        label = "Game Environment Ready",
-                        isPassed = animatedProgress >= 0.95f
-                    )
+                    activeSteps.forEachIndexed { idx, stepLabel ->
+                        val threshold = ((idx + 1).toFloat() / activeSteps.size.toFloat()) * 0.94f
+                        BoostStepIndicator(
+                            label = stepLabel,
+                            isPassed = animatedProgress >= threshold
+                        )
+                    }
                 }
             }
         },

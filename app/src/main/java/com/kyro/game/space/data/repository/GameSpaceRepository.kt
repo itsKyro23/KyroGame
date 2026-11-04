@@ -41,6 +41,10 @@ import com.kyro.game.space.data.model.ResolutionState
 import com.kyro.game.space.data.model.RootInfo
 import com.kyro.game.space.data.model.ShizukuInfo
 import com.kyro.game.space.data.model.AngleDriverMode
+import com.kyro.game.space.data.model.AotCompileMode
+import com.kyro.game.space.data.model.AotCompilerState
+import com.kyro.game.space.data.model.PlayBoostConfig
+import com.kyro.game.space.data.model.PlayBoostTier
 import com.kyro.game.space.data.model.TextureConfig
 import com.kyro.game.space.data.model.TextureDetailLevel
 import com.kyro.game.space.data.model.TextureQuickPreset
@@ -111,6 +115,12 @@ class GameSpaceRepository(
     private val _textureTunerState = MutableStateFlow(loadInitialTextureTunerState())
     val textureTunerState: StateFlow<TextureTunerState> = _textureTunerState.asStateFlow()
     val eglTextureSession = com.kyro.game.space.data.model.EglTextureSessionController()
+
+    private val _playBoostConfig = MutableStateFlow(loadInitialPlayBoostConfig())
+    val playBoostConfig: StateFlow<PlayBoostConfig> = _playBoostConfig.asStateFlow()
+
+    private val _aotCompilerState = MutableStateFlow(loadInitialAotCompilerState())
+    val aotCompilerState: StateFlow<AotCompilerState> = _aotCompilerState.asStateFlow()
 
     @Volatile
     private var isProbingDaemon: Boolean = true
@@ -474,28 +484,140 @@ class GameSpaceRepository(
         onProgress: (progress: Float, status: String) -> Unit
     ): Boolean = withContext(Dispatchers.IO) {
         try {
-            // Stage 1: Process and buffer analysis
-            onProgress(0.18f, "Scanning background processes & memory buffers...")
-            kotlinx.coroutines.delay(550)
+            val cfg = _playBoostConfig.value
+            val cleanTarget = packageName.trim()
 
-            // Stage 2: Memory optimization & cache clearing
-            onProgress(0.42f, "Trimming background memory & releasing cached RAM...")
+            // Stage 1: Deep RAM & Cache Purge
+            if (cfg.deepRamPurge) {
+                onProgress(0.16f, "[${cfg.tier.title}] Purging system RAM & trimming memory caches...")
+                try {
+                    executeCommand(
+                        "am trim-memory system RUNNING_CRITICAL 2>/dev/null || true; " +
+                            "pm trim-caches 4G 2>/dev/null || true"
+                    )
+                } catch (_: Throwable) {
+                }
+                delay(420)
+            } else {
+                onProgress(0.16f, "[${cfg.tier.title}] Verifying game runtime environment...")
+                delay(300)
+            }
+
+            // Stage 2: Force-Stop Non-Essential Background Apps
+            if (cfg.forceStopBackgroundApps) {
+                onProgress(0.34f, "[${cfg.tier.title}] Force-stopping background apps to free CPU & RAM...")
+                try {
+                    val protectedPackages = setOf(
+                        cleanTarget,
+                        context.packageName,
+                        "com.nox.gamespace",
+                        "com.kyro.game.space",
+                        "moe.shizuku.privileged.api",
+                        "moe.shizuku.manager",
+                        "com.shizuku.manager",
+                        "com.google.android.gms",
+                        "com.android.vending",
+                        "com.android.systemui"
+                    )
+                    val userAppsToStop = try {
+                        dao.getAllGamesFlow().first()
+                            .filter { !it.isSystemApp && it.packageName !in protectedPackages }
+                            .map { it.packageName }
+                            .take(28)
+                    } catch (_: Throwable) {
+                        emptyList()
+                    }
+                    val forceStopBatch = if (userAppsToStop.isNotEmpty()) {
+                        userAppsToStop.joinToString("; ") { "am force-stop $it 2>/dev/null || true" } + "; "
+                    } else ""
+                    executeCommand("${forceStopBatch}am kill-all 2>/dev/null || true")
+                } catch (_: Throwable) {
+                }
+                delay(480)
+            }
+
+            // Stage 3: Fixed CPU/GPU Performance Lock & Phantom Process Unlimiter
+            if (cfg.fixedPerformanceLock) {
+                onProgress(0.52f, "[${cfg.tier.title}] Locking Fixed CPU/GPU Performance Mode & Phantom Bypass...")
+                try {
+                    executeCommand(
+                        "cmd power set-fixed-performance-mode-enabled true 2>/dev/null || true; " +
+                            "device_config put activity_manager max_phantom_processes 2147483647 2>/dev/null || true; " +
+                            "settings put global settings_enable_monitor_phantom_procs false 2>/dev/null || true; " +
+                            "cmd game loading-boost $cleanTarget 5000 2>/dev/null || true"
+                    )
+                } catch (_: Throwable) {
+                }
+                delay(420)
+            }
+
+            // Stage 4: SurfaceFlinger Zero-Lag Compositor
+            if (cfg.surfaceFlingerZeroLag) {
+                onProgress(0.68f, "[${cfg.tier.title}] Enabling SurfaceFlinger Zero-Lag frame latch...")
+                try {
+                    executeCommand(
+                        "setprop debug.sf.disable_backpressure 1 2>/dev/null || true; " +
+                            "setprop debug.sf.latch_unsignaled 1 2>/dev/null || true"
+                    )
+                } catch (_: Throwable) {
+                }
+                delay(380)
+            }
+
+            // Stage 5: Ultra Touch Polling & Sensitivity
+            if (cfg.ultraTouchResponse) {
+                onProgress(0.82f, "[${cfg.tier.title}] Boosting touch pointer speed & input response...")
+                try {
+                    executeCommand(
+                        "settings put system pointer_speed 7 2>/dev/null || true; " +
+                            "settings put global block_untrusted_touches 0 2>/dev/null || true"
+                    )
+                } catch (_: Throwable) {
+                }
+                delay(360)
+            }
+
+            // Stage 6: Block In-Game Heads-Up Pop-Up Notifications
+            if (cfg.blockHeadsUpNotifications) {
+                onProgress(0.93f, "[${cfg.tier.title}] Activating In-Game Anti Pop-Up Notification Guard...")
+                try {
+                    executeCommand("settings put global heads_up_notifications_enabled 0 2>/dev/null || true")
+                } catch (_: Throwable) {
+                }
+                delay(340)
+            }
+
+            // Resolve game display name for persistent status notification
+            val gameDisplayName = try {
+                dao.getGameByPackage(cleanTarget)?.appName?.takeIf { it.isNotBlank() }
+                    ?: run {
+                        val pm = context.packageManager
+                        val info = pm.getApplicationInfo(cleanTarget, 0)
+                        pm.getApplicationLabel(info).toString()
+                    }
+            } catch (_: Throwable) {
+                cleanTarget.substringAfterLast(".")
+            }
+
+            // Ensure notification permission is active so the persistent Restore notification always appears
             try {
-                executeCommand("am trim-memory system RUNNING_MODERATE 2>/dev/null || true")
+                executeCommand(
+                    "pm grant ${context.packageName} android.permission.POST_NOTIFICATIONS 2>/dev/null || true; " +
+                        "cmd appops set ${context.packageName} POST_NOTIFICATION allow 2>/dev/null || true"
+                )
             } catch (_: Throwable) {
             }
-            kotlinx.coroutines.delay(750)
 
-            // Stage 3: Network socket low-latency preparation
-            onProgress(0.72f, "Optimizing gaming network sockets & packet routing...")
-            kotlinx.coroutines.delay(700)
+            // Show persistent notification indicating NOX Boost is active (stays even if NOX is swiped away)
+            com.kyro.game.space.service.PlayBoostNotificationManager.showBoostActiveNotification(
+                context = context,
+                gameName = gameDisplayName,
+                packageName = cleanTarget,
+                config = cfg
+            )
 
-            // Stage 4: Environment stabilization
-            onProgress(0.92f, "Securing low-latency priority queue & stabilizing environment...")
-            kotlinx.coroutines.delay(650)
-
-            // Stage 5: Launch game cleanly
-            onProgress(1.0f, "Optimization Complete! Launching game...")
+            // Final Stage: Launch game cleanly
+            onProgress(1.0f, "${cfg.tier.title} Boost Complete! Launching game...")
             withContext(Dispatchers.Main) {
                 launchGame(packageName)
             }
@@ -2138,6 +2260,215 @@ class GameSpaceRepository(
             driverMode = AngleDriverMode.DEFAULT
         )
         return saveAndApplyTextureConfig(packageName = packageName, config = orig)
+    }
+
+    private fun loadInitialPlayBoostConfig(): PlayBoostConfig {
+        val tierId = prefs.getString("play_boost_tier", PlayBoostTier.VELOCITY_CORE.id) ?: PlayBoostTier.VELOCITY_CORE.id
+        val tier = PlayBoostTier.fromId(tierId)
+        val defaultCfg = PlayBoostConfig.forTier(tier)
+        val deepRam = prefs.getBoolean("play_boost_deep_ram", defaultCfg.deepRamPurge)
+        val forceStop = prefs.getBoolean("play_boost_force_stop", defaultCfg.forceStopBackgroundApps)
+        val fixedPerf = prefs.getBoolean("play_boost_fixed_perf", defaultCfg.fixedPerformanceLock)
+        val sfZeroLag = prefs.getBoolean("play_boost_sf_zero_lag", defaultCfg.surfaceFlingerZeroLag)
+        val ultraTouch = prefs.getBoolean("play_boost_ultra_touch", defaultCfg.ultraTouchResponse)
+        val blockHeadsUp = prefs.getBoolean("play_boost_block_headsup", defaultCfg.blockHeadsUpNotifications)
+
+        val resolvedTier = PlayBoostConfig.resolveMatchingTier(
+            deepRamPurge = deepRam,
+            forceStopBackgroundApps = forceStop,
+            fixedPerformanceLock = fixedPerf,
+            surfaceFlingerZeroLag = sfZeroLag,
+            ultraTouchResponse = ultraTouch,
+            blockHeadsUpNotifications = blockHeadsUp
+        )
+
+        return PlayBoostConfig(
+            tier = resolvedTier,
+            deepRamPurge = deepRam,
+            forceStopBackgroundApps = forceStop,
+            fixedPerformanceLock = fixedPerf,
+            surfaceFlingerZeroLag = sfZeroLag,
+            ultraTouchResponse = ultraTouch,
+            blockHeadsUpNotifications = blockHeadsUp
+        )
+    }
+
+    fun savePlayBoostConfig(config: PlayBoostConfig) {
+        val resolvedTier = PlayBoostConfig.resolveMatchingTier(
+            deepRamPurge = config.deepRamPurge,
+            forceStopBackgroundApps = config.forceStopBackgroundApps,
+            fixedPerformanceLock = config.fixedPerformanceLock,
+            surfaceFlingerZeroLag = config.surfaceFlingerZeroLag,
+            ultraTouchResponse = config.ultraTouchResponse,
+            blockHeadsUpNotifications = config.blockHeadsUpNotifications
+        )
+        val normalized = config.copy(tier = resolvedTier)
+        prefs.edit()
+            .putString("play_boost_tier", normalized.tier.id)
+            .putBoolean("play_boost_deep_ram", normalized.deepRamPurge)
+            .putBoolean("play_boost_force_stop", normalized.forceStopBackgroundApps)
+            .putBoolean("play_boost_fixed_perf", normalized.fixedPerformanceLock)
+            .putBoolean("play_boost_sf_zero_lag", normalized.surfaceFlingerZeroLag)
+            .putBoolean("play_boost_ultra_touch", normalized.ultraTouchResponse)
+            .putBoolean("play_boost_block_headsup", normalized.blockHeadsUpNotifications)
+            .apply()
+        _playBoostConfig.value = normalized
+    }
+
+    suspend fun restorePlayBoostSystemDefaults(): Result<String> = withContext(Dispatchers.IO) {
+        try {
+            val cmd = PlayBoostConfig.buildRestoreSystemDefaultsCommand()
+            val res = executeCommand(cmd)
+            com.kyro.game.space.service.PlayBoostNotificationManager.cancelBoostNotification(context)
+            if (res.isSuccess) {
+                Result.success("System defaults restored (CPU Lock, SurfaceFlinger, Touch Speed & Heads-Up notifications reset).")
+            } else {
+                Result.failure(Exception(res.stderr.ifBlank { "Failed to restore defaults via ${executionMethod.value.name}" }))
+            }
+        } catch (e: Throwable) {
+            com.kyro.game.space.service.PlayBoostNotificationManager.cancelBoostNotification(context)
+            Result.failure(e)
+        }
+    }
+
+    private fun loadInitialAotCompilerState(): AotCompilerState {
+        val lastPkg = prefs.getString("aot_selected_pkg", "").orEmpty()
+        val lastModeName = prefs.getString("aot_selected_mode", AotCompileMode.SPEED_PROFILE.name)
+            ?: AotCompileMode.SPEED_PROFILE.name
+        val mode = try {
+            AotCompileMode.valueOf(lastModeName)
+        } catch (_: Throwable) {
+            AotCompileMode.SPEED_PROFILE
+        }
+        val lastCount = prefs.getInt("aot_last_compiled_count", 0)
+        val lastDur = prefs.getLong("aot_last_duration_ms", 0L)
+        val lastLabel = prefs.getString("aot_last_mode_label", "None") ?: "None"
+        return AotCompilerState(
+            selectedTargetPackage = lastPkg,
+            selectedMode = mode,
+            lastCompiledCount = lastCount,
+            lastCompileDurationMs = lastDur,
+            lastCompiledModeLabel = lastLabel
+        )
+    }
+
+    fun selectAotTargetPackage(packageName: String) {
+        val clean = packageName.trim()
+        prefs.edit().putString("aot_selected_pkg", clean).apply()
+        _aotCompilerState.value = _aotCompilerState.value.copy(selectedTargetPackage = clean)
+    }
+
+    fun selectAotCompileMode(mode: AotCompileMode) {
+        prefs.edit().putString("aot_selected_mode", mode.name).apply()
+        _aotCompilerState.value = _aotCompilerState.value.copy(selectedMode = mode)
+    }
+
+    suspend fun runAotGameCompile(
+        targetPackage: String = _aotCompilerState.value.selectedTargetPackage,
+        mode: AotCompileMode = _aotCompilerState.value.selectedMode
+    ): Result<String> = withContext(Dispatchers.IO) {
+        val cleanPkg = targetPackage.trim()
+        val targetList: List<String> = if (cleanPkg.isNotEmpty()) {
+            listOf(cleanPkg)
+        } else {
+            try {
+                dao.getHomeGamesFlow().first().map { it.packageName }.filter { it.isNotBlank() }
+            } catch (_: Throwable) {
+                emptyList()
+            }
+        }
+
+        if (targetList.isEmpty()) {
+            val msg = "No games found in Home Hub. Add a game first or select a specific package."
+            _aotCompilerState.value = _aotCompilerState.value.copy(
+                isCompiling = false,
+                lastStatusMessage = msg
+            )
+            return@withContext Result.failure(Exception(msg))
+        }
+
+        val startTime = System.currentTimeMillis()
+        val logs = mutableListOf<String>()
+        logs.add(">>> Starting AOT DEX Compiler [${mode.shortLabel}] via ${executionMethod.value.name}")
+        logs.add(">>> Targets (${targetList.size}): ${targetList.joinToString(", ")}")
+
+        _aotCompilerState.value = _aotCompilerState.value.copy(
+            selectedTargetPackage = cleanPkg,
+            selectedMode = mode,
+            isCompiling = true,
+            progress = 0.05f,
+            currentPackageBeingCompiled = targetList.first(),
+            lastStatusMessage = "Compiling ${targetList.size} game(s) with ${mode.shortLabel}...",
+            compiledLogLines = logs.toList()
+        )
+
+        var successCount = 0
+        for ((index, pkg) in targetList.withIndex()) {
+            val stepProgress = ((index.toFloat()) / targetList.size.toFloat()).coerceIn(0.08f, 0.92f)
+            val pkgStart = System.currentTimeMillis()
+            val cmd = mode.buildCompileCommand(pkg)
+            logs.add("[$pkg] $ $cmd")
+
+            _aotCompilerState.value = _aotCompilerState.value.copy(
+                progress = stepProgress,
+                currentPackageBeingCompiled = pkg,
+                lastStatusMessage = "Compiling (${index + 1}/${targetList.size}): $pkg...",
+                compiledLogLines = logs.toList()
+            )
+
+            val res = try {
+                executeCommand(cmd)
+            } catch (e: Throwable) {
+                CommandResult(-1, "", e.message ?: "Execution error", false)
+            }
+            val pkgDuration = (System.currentTimeMillis() - pkgStart).coerceAtLeast(1L)
+            val rawOut = (res.stdout + "\n" + res.stderr).trim().ifEmpty {
+                if (res.isSuccess) "Success" else "Failed (Exit ${res.exitCode})"
+            }
+            if (res.isSuccess || rawOut.contains("Success", ignoreCase = true)) {
+                successCount++
+                logs.add("[$pkg] -> OK ($rawOut) in ${pkgDuration}ms")
+            } else {
+                logs.add("[$pkg] -> ERROR: $rawOut")
+            }
+            _aotCompilerState.value = _aotCompilerState.value.copy(
+                compiledLogLines = logs.toList()
+            )
+        }
+
+        val totalDuration = (System.currentTimeMillis() - startTime).coerceAtLeast(1L)
+        val summaryMsg = if (successCount > 0) {
+            val actionWord = if (mode.isReset) "Reset compilation for" else "Compiled"
+            "$actionWord $successCount/${targetList.size} game(s) [${mode.shortLabel}] in ${totalDuration}ms."
+        } else {
+            "AOT Compilation failed. Ensure ${executionMethod.value.name} is connected and active."
+        }
+        logs.add(">>> $summaryMsg")
+
+        if (successCount > 0) {
+            prefs.edit()
+                .putInt("aot_last_compiled_count", successCount)
+                .putLong("aot_last_duration_ms", totalDuration)
+                .putString("aot_last_mode_label", mode.shortLabel)
+                .apply()
+        }
+
+        _aotCompilerState.value = _aotCompilerState.value.copy(
+            isCompiling = false,
+            progress = 1.0f,
+            currentPackageBeingCompiled = "",
+            lastStatusMessage = summaryMsg,
+            compiledLogLines = logs.toList(),
+            lastCompiledCount = if (successCount > 0) successCount else _aotCompilerState.value.lastCompiledCount,
+            lastCompileDurationMs = if (successCount > 0) totalDuration else _aotCompilerState.value.lastCompileDurationMs,
+            lastCompiledModeLabel = if (successCount > 0) mode.shortLabel else _aotCompilerState.value.lastCompiledModeLabel
+        )
+
+        if (successCount > 0) {
+            Result.success(summaryMsg)
+        } else {
+            Result.failure(Exception(summaryMsg))
+        }
     }
 
     private fun isPackageInstalled(packageName: String): Boolean {

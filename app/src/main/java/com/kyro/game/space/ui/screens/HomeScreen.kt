@@ -54,15 +54,22 @@ import com.kyro.game.space.ui.components.RequiredPermissionsCard
 import kotlinx.coroutines.launch
 
 import com.kyro.game.space.data.model.ExecutionMethod
+import com.kyro.game.space.data.model.PlayBoostTier
 import com.kyro.game.space.ui.components.ManualAdbPairingDialog
 import com.kyro.game.space.ui.components.GameBoostDialog
 import com.kyro.game.space.ui.components.PermissionRequiredBanner
+import com.kyro.game.space.ui.components.PlayBoostSettingsDialog
+import com.kyro.game.space.ui.theme.KyroAccent
 import com.kyro.game.space.ui.theme.KyroCyan
+import com.kyro.game.space.ui.theme.KyroGreen
 import com.kyro.game.space.ui.theme.KyroOrange
 import androidx.compose.ui.graphics.Color
+import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.TextButton
+import androidx.compose.runtime.collectAsState
 import com.kyro.game.space.data.energy.NoxEnergyManager
 import com.kyro.game.space.ui.components.NoxInsufficientEnergyDialog
 
@@ -82,8 +89,10 @@ fun HomeScreen(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val playBoostConfig by repository.playBoostConfig.collectAsState()
     var showTerminalDialog by remember { mutableStateOf(false) }
     var showPairingDialog by remember { mutableStateOf(false) }
+    var showPlayBoostSettingsDialog by remember { mutableStateOf(false) }
     var customizingGame by remember { mutableStateOf<GameItem?>(null) }
     var boostingGame by remember { mutableStateOf<GameItem?>(null) }
     var showPermissionBlockedDialog by remember { mutableStateOf<String?>(null) }
@@ -194,6 +203,13 @@ fun HomeScreen(
 
         // Section C: My Games
         item {
+            val tierBadgeColor = when (playBoostConfig.tier) {
+                PlayBoostTier.ECO_PULSE -> KyroGreen
+                PlayBoostTier.VELOCITY_CORE -> KyroCyan
+                PlayBoostTier.NOX_OVERDRIVE -> KyroAccent
+                PlayBoostTier.CUSTOM -> KyroOrange
+            }
+
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -217,17 +233,60 @@ fun HomeScreen(
                     )
                 }
 
-                Surface(
-                    shape = RoundedCornerShape(12.dp),
-                    color = MaterialTheme.colorScheme.surfaceVariant
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Text(
-                        text = "${homeGames.size} Titles",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                        fontWeight = FontWeight.Bold
-                    )
+                    // Play Auto-Boost Settings Button
+                    Surface(
+                        onClick = { showPlayBoostSettingsDialog = true },
+                        shape = RoundedCornerShape(12.dp),
+                        color = tierBadgeColor.copy(alpha = 0.14f),
+                        border = androidx.compose.foundation.BorderStroke(
+                            1.dp,
+                            tierBadgeColor.copy(alpha = 0.45f)
+                        ),
+                        modifier = Modifier.testTag("open_play_boost_settings_btn")
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(5.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Bolt,
+                                contentDescription = "Boost Settings",
+                                tint = tierBadgeColor,
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Text(
+                                text = "Boost: ${playBoostConfig.tier.title}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 11.sp
+                            )
+                            Icon(
+                                imageVector = Icons.Default.Tune,
+                                contentDescription = null,
+                                tint = tierBadgeColor,
+                                modifier = Modifier.size(13.dp)
+                            )
+                        }
+                    }
+
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant
+                    ) {
+                        Text(
+                            text = "${homeGames.size} Titles",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
                 }
             }
         }
@@ -480,6 +539,23 @@ fun HomeScreen(
                     Text("Close", color = Color(0xFFA0A7BD))
                 }
             }
+        )
+    }
+
+    if (showPlayBoostSettingsDialog) {
+        PlayBoostSettingsDialog(
+            initialConfig = playBoostConfig,
+            onSaveConfig = { newCfg ->
+                repository.savePlayBoostConfig(newCfg)
+            },
+            onRestoreDefaults = {
+                scope.launch {
+                    val res = repository.restorePlayBoostSystemDefaults()
+                    val msg = res.getOrElse { it.message ?: "Failed to restore defaults" }
+                    Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                }
+            },
+            onDismiss = { showPlayBoostSettingsDialog = false }
         )
     }
 

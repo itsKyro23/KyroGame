@@ -61,6 +61,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.kyro.game.space.ads.AdMobManager
 import com.kyro.game.space.data.repository.GameSpaceRepository
+import com.kyro.game.space.ui.screens.AotCompilerScreen
 import com.kyro.game.space.ui.screens.AppsScreen
 import com.kyro.game.space.ui.screens.HomeScreen
 import com.kyro.game.space.ui.screens.NetworkOptimizerScreen
@@ -87,7 +88,8 @@ enum class ToolSubScreen {
     NONE,
     RESOLUTION_CHANGER,
     TEXTURE_TUNER,
-    NETWORK_OPTIMIZER
+    NETWORK_OPTIMIZER,
+    AOT_COMPILER
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -158,6 +160,7 @@ fun GameSpaceApp(
                             ToolSubScreen.RESOLUTION_CHANGER -> "RESOLUTION CHANGER"
                             ToolSubScreen.TEXTURE_TUNER -> "LIGHTWEIGHT TEXTURE"
                             ToolSubScreen.NETWORK_OPTIMIZER -> "NETWORK OPTIMIZER"
+                            ToolSubScreen.AOT_COMPILER -> "AOT GAME DEX COMPILER"
                             ToolSubScreen.NONE -> when (currentTab) {
                                 GameSpaceTab.HOME -> "NOX - GAME SPACE"
                                 GameSpaceTab.TOOLS -> "TACTICAL TOOLS"
@@ -280,6 +283,13 @@ fun GameSpaceApp(
                             onBack = { activeSubScreen = ToolSubScreen.NONE }
                         )
                     }
+                    ToolSubScreen.AOT_COMPILER -> {
+                        AotCompilerScreen(
+                            repository = repository,
+                            homeGames = homeGames,
+                            onBack = { activeSubScreen = ToolSubScreen.NONE }
+                        )
+                    }
                     ToolSubScreen.NONE -> {
                         AnimatedContent(
                             targetState = currentTab,
@@ -332,6 +342,9 @@ fun GameSpaceApp(
                                     },
                                     onOpenTextureTuner = {
                                         activeSubScreen = ToolSubScreen.TEXTURE_TUNER
+                                    },
+                                    onOpenAotCompiler = {
+                                        activeSubScreen = ToolSubScreen.AOT_COMPILER
                                     }
                                 )
                                 GameSpaceTab.APPS -> AppsScreen(

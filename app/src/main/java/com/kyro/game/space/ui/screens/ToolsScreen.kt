@@ -19,6 +19,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.AspectRatio
 import androidx.compose.material.icons.filled.AutoAwesomeMosaic
+import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.NetworkCheck
@@ -69,6 +70,7 @@ fun ToolsScreen(
     onOpenResolutionChanger: () -> Unit = {},
     onOpenNetworkOptimizer: () -> Unit = {},
     onOpenTextureTuner: () -> Unit = {},
+    onOpenAotCompiler: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -77,6 +79,7 @@ fun ToolsScreen(
     val resState by repository.resolutionState.collectAsState()
     val netState by repository.networkOptimizerState.collectAsState()
     val texState by repository.textureTunerState.collectAsState()
+    val aotState by repository.aotCompilerState.collectAsState()
     val stats by repository.deviceStats.collectAsState()
 
     var showPermissionBlockedDialog by remember { mutableStateOf<String?>(null) }
@@ -566,6 +569,166 @@ fun ToolsScreen(
                             modifier = Modifier
                                 .height(34.dp)
                                 .testTag("open_network_optimizer_btn")
+                        ) {
+                            Text(
+                                text = "Open",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                                contentDescription = null,
+                                modifier = Modifier.size(14.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // 4. AOT Game DEX Compiler Tool Card
+        item {
+            Card(
+                onClick = { openToolSafely(onOpenAotCompiler, "AOT Game DEX Compiler") },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("tools_aot_compiler_card"),
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant
+                ),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)),
+                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(18.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(
+                            modifier = Modifier.weight(1f),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Surface(
+                                shape = RoundedCornerShape(14.dp),
+                                color = KyroOrange.copy(alpha = 0.16f),
+                                modifier = Modifier.size(48.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = Icons.Default.Memory,
+                                        contentDescription = null,
+                                        tint = KyroOrange,
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                }
+                            }
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "AOT Game DEX Compiler",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Black,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    text = "Pre-Compile DEX to Native ARM64 • Mode: ${aotState.selectedMode.shortLabel}",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = KyroOrange.copy(alpha = 0.15f),
+                            border = BorderStroke(1.dp, KyroOrange.copy(alpha = 0.45f))
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(3.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Bolt,
+                                    contentDescription = null,
+                                    tint = KyroOrange,
+                                    modifier = Modifier.size(12.dp)
+                                )
+                                Text(
+                                    text = "15 / 30⚡",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontFamily = FontFamily.Monospace,
+                                    fontWeight = FontWeight.Bold,
+                                    color = KyroOrange,
+                                    fontSize = 11.sp
+                                )
+                            }
+                        }
+                    }
+
+                    Text(
+                        text = "Pre-compile game DEX bytecode ahead-of-time via cmd package compile (-m speed-profile or -m speed -f) to eliminate runtime JIT compilation stutters during intense teamfights and map loads.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        lineHeight = 17.sp
+                    )
+
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.25f))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Memory,
+                                contentDescription = null,
+                                tint = KyroCyan,
+                                modifier = Modifier.size(15.dp)
+                            )
+                            Text(
+                                text = if (aotState.lastCompiledCount > 0) {
+                                    "Compiled: ${aotState.lastCompiledCount} pkg(s) • ${aotState.lastCompiledModeLabel}"
+                                } else {
+                                    "Single Game: 15⚡ • All Games: 30⚡ • Reset: Free"
+                                },
+                                style = MaterialTheme.typography.labelSmall,
+                                color = KyroCyan,
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 11.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.width(8.dp))
+
+                        Button(
+                            onClick = { openToolSafely(onOpenAotCompiler, "AOT Game DEX Compiler") },
+                            shape = RoundedCornerShape(10.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.primary,
+                                contentColor = Color.White
+                            ),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
+                            modifier = Modifier
+                                .height(34.dp)
+                                .testTag("open_aot_compiler_btn")
                         ) {
                             Text(
                                 text = "Open",

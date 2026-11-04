@@ -1,0 +1,207 @@
+package com.kyro.game.space.data.model
+
+enum class AotCompileMode(
+    val cliFlag: String,
+    val title: String,
+    val shortLabel: String,
+    val description: String,
+    val isReset: Boolean = false
+) {
+    SPEED_PROFILE(
+        cliFlag = "-m speed-profile -f",
+        title = "Speed-Profile (Recommended)",
+        shortLabel = "Speed-Profile",
+        description = "Compiles hot-path game methods & primary classes into native ARM64 machine code for fast loading and smooth frame pacing."
+    ),
+    FULL_SPEED(
+        cliFlag = "-m speed -f",
+        title = "Full Speed AOT (Max Zero-JIT)",
+        shortLabel = "Full Speed",
+        description = "Compiles 100% of all game DEX bytecode into native ARM64 instructions ahead-of-time to eliminate skill-cast & teamfight micro-stutter."
+    ),
+    RESET(
+        cliFlag = "--reset",
+        title = "Reset to System Default (Free)",
+        shortLabel = "Reset",
+        description = "Clears custom AOT compiled OAT/ART profiles for the target game and restores stock Android runtime behavior.",
+        isReset = true
+    );
+
+    fun buildCompileCommand(packageName: String): String {
+        val cleanPkg = packageName.trim()
+        if (cleanPkg.isEmpty()) return "true"
+        return if (isReset) {
+            "cmd package compile --reset $cleanPkg 2>&1"
+        } else {
+            "cmd package compile $cliFlag $cleanPkg 2>&1"
+        }
+    }
+}
+
+data class AotCompilerState(
+    val selectedTargetPackage: String = "", // "" means All Added Home Games
+    val selectedMode: AotCompileMode = AotCompileMode.SPEED_PROFILE,
+    val isCompiling: Boolean = false,
+    val progress: Float = 0f,
+    val currentPackageBeingCompiled: String = "",
+    val lastStatusMessage: String = "Select a target game (or All Added Games) and compile DEX bytecode into native ARM64 machine code.",
+    val compiledLogLines: List<String> = emptyList(),
+    val lastCompiledCount: Int = 0,
+    val lastCompileDurationMs: Long = 0L,
+    val lastCompiledModeLabel: String = "None"
+)
+
+enum class PlayBoostTier(
+    val id: String,
+    val title: String,
+    val levelTag: String,
+    val subtitle: String
+) {
+    ECO_PULSE(
+        id = "ECO_PULSE",
+        title = "Eco Pulse",
+        levelTag = "LOW • SAFE",
+        subtitle = "Gentle RAM cache trim & game profile sync without closing background chat or music apps."
+    ),
+    VELOCITY_CORE(
+        id = "VELOCITY_CORE",
+        title = "Velocity Core",
+        levelTag = "MID • PRO",
+        subtitle = "Deep RAM purge + SurfaceFlinger Zero-Lag + Ultra Touch Polling + Anti Pop-Up Notification block."
+    ),
+    NOX_OVERDRIVE(
+        id = "NOX_OVERDRIVE",
+        title = "Nox Overdrive",
+        levelTag = "HIGH • MAX",
+        subtitle = "Full hardware & system overdrive: Force-stops background apps, locks Fixed CPU/GPU clocks, and enables Zero-Lag Touch."
+    ),
+    CUSTOM(
+        id = "CUSTOM",
+        title = "Custom Tactical",
+        levelTag = "CUSTOM",
+        subtitle = "User-defined checklist of pre-launch hardware and system optimization stages."
+    );
+
+    companion object {
+        fun fromId(id: String): PlayBoostTier {
+            return entries.firstOrNull { it.id.equals(id, ignoreCase = true) } ?: VELOCITY_CORE
+        }
+    }
+}
+
+data class PlayBoostConfig(
+    val tier: PlayBoostTier = PlayBoostTier.VELOCITY_CORE,
+    val deepRamPurge: Boolean = true,
+    val forceStopBackgroundApps: Boolean = false,
+    val fixedPerformanceLock: Boolean = false,
+    val surfaceFlingerZeroLag: Boolean = true,
+    val ultraTouchResponse: Boolean = true,
+    val blockHeadsUpNotifications: Boolean = true
+) {
+    val activeStagesCount: Int
+        get() = listOf(
+            deepRamPurge,
+            forceStopBackgroundApps,
+            fixedPerformanceLock,
+            surfaceFlingerZeroLag,
+            ultraTouchResponse,
+            blockHeadsUpNotifications
+        ).count { it }
+
+    fun activeStepLabels(): List<String> {
+        val list = mutableListOf<String>()
+        if (deepRamPurge) list.add("Deep RAM & Cache Purge")
+        if (forceStopBackgroundApps) list.add("Force-Stop Background Apps")
+        if (fixedPerformanceLock) list.add("Fixed CPU/GPU Clock & Phantom Bypass")
+        if (surfaceFlingerZeroLag) list.add("SurfaceFlinger Zero-Lag Compositor")
+        if (ultraTouchResponse) list.add("Ultra Touch Polling & Sensitivity")
+        if (blockHeadsUpNotifications) list.add("In-Game Anti Pop-Up Notification Guard")
+        if (list.isEmpty()) {
+            list.add("Standard Game Environment Launch")
+        }
+        return list
+    }
+
+    companion object {
+        fun forTier(tier: PlayBoostTier): PlayBoostConfig {
+            return when (tier) {
+                PlayBoostTier.ECO_PULSE -> PlayBoostConfig(
+                    tier = PlayBoostTier.ECO_PULSE,
+                    deepRamPurge = true,
+                    forceStopBackgroundApps = false,
+                    fixedPerformanceLock = false,
+                    surfaceFlingerZeroLag = false,
+                    ultraTouchResponse = false,
+                    blockHeadsUpNotifications = false
+                )
+                PlayBoostTier.VELOCITY_CORE -> PlayBoostConfig(
+                    tier = PlayBoostTier.VELOCITY_CORE,
+                    deepRamPurge = true,
+                    forceStopBackgroundApps = false,
+                    fixedPerformanceLock = false,
+                    surfaceFlingerZeroLag = true,
+                    ultraTouchResponse = true,
+                    blockHeadsUpNotifications = true
+                )
+                PlayBoostTier.NOX_OVERDRIVE -> PlayBoostConfig(
+                    tier = PlayBoostTier.NOX_OVERDRIVE,
+                    deepRamPurge = true,
+                    forceStopBackgroundApps = true,
+                    fixedPerformanceLock = true,
+                    surfaceFlingerZeroLag = true,
+                    ultraTouchResponse = true,
+                    blockHeadsUpNotifications = true
+                )
+                PlayBoostTier.CUSTOM -> PlayBoostConfig(
+                    tier = PlayBoostTier.CUSTOM
+                )
+            }
+        }
+
+        fun resolveMatchingTier(
+            deepRamPurge: Boolean,
+            forceStopBackgroundApps: Boolean,
+            fixedPerformanceLock: Boolean,
+            surfaceFlingerZeroLag: Boolean,
+            ultraTouchResponse: Boolean,
+            blockHeadsUpNotifications: Boolean
+        ): PlayBoostTier {
+            val eco = forTier(PlayBoostTier.ECO_PULSE)
+            val velocity = forTier(PlayBoostTier.VELOCITY_CORE)
+            val overdrive = forTier(PlayBoostTier.NOX_OVERDRIVE)
+
+            return when {
+                deepRamPurge == eco.deepRamPurge &&
+                    forceStopBackgroundApps == eco.forceStopBackgroundApps &&
+                    fixedPerformanceLock == eco.fixedPerformanceLock &&
+                    surfaceFlingerZeroLag == eco.surfaceFlingerZeroLag &&
+                    ultraTouchResponse == eco.ultraTouchResponse &&
+                    blockHeadsUpNotifications == eco.blockHeadsUpNotifications -> PlayBoostTier.ECO_PULSE
+
+                deepRamPurge == velocity.deepRamPurge &&
+                    forceStopBackgroundApps == velocity.forceStopBackgroundApps &&
+                    fixedPerformanceLock == velocity.fixedPerformanceLock &&
+                    surfaceFlingerZeroLag == velocity.surfaceFlingerZeroLag &&
+                    ultraTouchResponse == velocity.ultraTouchResponse &&
+                    blockHeadsUpNotifications == velocity.blockHeadsUpNotifications -> PlayBoostTier.VELOCITY_CORE
+
+                deepRamPurge == overdrive.deepRamPurge &&
+                    forceStopBackgroundApps == overdrive.forceStopBackgroundApps &&
+                    fixedPerformanceLock == overdrive.fixedPerformanceLock &&
+                    surfaceFlingerZeroLag == overdrive.surfaceFlingerZeroLag &&
+                    ultraTouchResponse == overdrive.ultraTouchResponse &&
+                    blockHeadsUpNotifications == overdrive.blockHeadsUpNotifications -> PlayBoostTier.NOX_OVERDRIVE
+
+                else -> PlayBoostTier.CUSTOM
+            }
+        }
+
+        fun buildRestoreSystemDefaultsCommand(): String {
+            return "cmd power set-fixed-performance-mode-enabled false 2>/dev/null || true; " +
+                "setprop debug.sf.disable_backpressure 0 2>/dev/null || true; " +
+                "setprop debug.sf.latch_unsignaled 0 2>/dev/null || true; " +
+                "settings put system pointer_speed 0 2>/dev/null || true; " +
+                "settings put global heads_up_notifications_enabled 1 2>/dev/null || true"
+        }
+    }
+}
