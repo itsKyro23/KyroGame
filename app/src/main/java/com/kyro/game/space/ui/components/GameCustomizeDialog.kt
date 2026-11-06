@@ -13,8 +13,10 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -66,6 +68,7 @@ import com.kyro.game.space.data.model.GameCustomConfig
 import com.kyro.game.space.data.model.GameItem
 import com.kyro.game.space.data.model.GameOptimizationMode
 import com.kyro.game.space.data.model.formatDownscaleClean
+import com.kyro.game.space.ui.theme.rememberResponsiveMetrics
 import kotlin.math.roundToInt
 
 /**
@@ -106,6 +109,7 @@ fun GameCustomizeDialog(
     onSaveConfig: (GameCustomConfig) -> Unit
 ) {
     val context = LocalContext.current
+    val responsive = rememberResponsiveMetrics()
     val (maxDeviceFps, fpsOptions) = remember(context) { getDeviceSupportedFpsLimits(context) }
     val autoDetectedTarget = remember { GameApiTarget.detectDefaultForDevice() }
 
@@ -163,9 +167,12 @@ fun GameCustomizeDialog(
         },
         properties = DialogProperties(
             dismissOnBackPress = false,
-            dismissOnClickOutside = false
+            dismissOnClickOutside = false,
+            usePlatformDefaultWidth = false
         ),
         modifier = Modifier
+            .fillMaxWidth(0.94f)
+            .widthIn(max = responsive.dialogMaxWidth)
             .scale(enterScale)
             .alpha(enterAlpha),
         containerColor = MaterialTheme.colorScheme.surface,
@@ -209,6 +216,7 @@ fun GameCustomizeDialog(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .heightIn(max = responsive.dialogMaxHeight * 0.68f)
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {

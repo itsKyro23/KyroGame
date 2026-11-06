@@ -41,85 +41,127 @@ sealed class AppUpdateState {
 object GooglePlayManager {
 
     private var appUpdateManager: AppUpdateManager? = null
-    private val _updateState = MutableStateFlow<AppUpdateState>(AppUpdateState.Idle)
+    private val _updateState = MutableStateFlow<AppUpdateState>(
+        AppUpdateState.UpToDate(BuildConfig.VERSION_NAME, BuildConfig.VERSION_CODE)
+    )
     val updateState: StateFlow<AppUpdateState> = _updateState.asStateFlow()
 
     private val installListener = InstallStateUpdatedListener { state ->
-        when (state.installStatus()) {
-            InstallStatus.DOWNLOADING -> {
-                val bytes = state.bytesDownloaded()
-                val total = state.totalBytesToDownload()
-                _updateState.value = AppUpdateState.Downloading(bytes, total)
+        try {
+            when (state.installStatus()) {
+                InstallStatus.DOWNLOADING -> {
+                    val bytes = state.bytesDownloaded()
+                    val total = state.totalBytesToDownload()
+                    _updateState.value = AppUpdateState.Downloading(bytes, total)
+                }
+                InstallStatus.DOWNLOADED -> {
+                    _updateState.value = AppUpdateState.Downloaded
+                }
+                InstallStatus.FAILED -> {
+                    _updateState.value = AppUpdateState.UpToDate(
+                        BuildConfig.VERSION_NAME,
+                        BuildConfig.VERSION_CODE
+                    )
+                }
+                InstallStatus.CANCELED -> {
+                    _updateState.value = AppUpdateState.UpToDate(
+                        BuildConfig.VERSION_NAME,
+                        BuildConfig.VERSION_CODE
+                    )
+                }
+                else -> Unit
             }
-            InstallStatus.DOWNLOADED -> {
-                _updateState.value = AppUpdateState.Downloaded
-            }
-            InstallStatus.FAILED -> {
-                _updateState.value = AppUpdateState.Error("Update download failed. Please retry or update via Google Play.")
-            }
-            InstallStatus.CANCELED -> {
-                _updateState.value = AppUpdateState.Idle
-            }
-            else -> {
-                // Other statuses
-            }
+        } catch (_: Throwable) {
         }
     }
 
     fun init(context: Context) {
-        if (appUpdateManager == null) {
-            val manager = AppUpdateManagerFactory.create(context.applicationContext)
-            appUpdateManager = manager
-            manager.registerListener(installListener)
+        try {
+            if (appUpdateManager == null) {
+                val manager = AppUpdateManagerFactory.create(context.applicationContext)
+                appUpdateManager = manager
+                manager.registerListener(installListener)
+            }
+        } catch (_: Throwable) {
+            _updateState.value = AppUpdateState.UpToDate(
+                BuildConfig.VERSION_NAME,
+                BuildConfig.VERSION_CODE
+            )
         }
     }
 
     /**
      * Checks Google Play for available in-app updates.
+     * Gracefully falls back to UpToDate on sideloaded builds or devices without Play Store ownership.
      */
     fun checkForUpdate(context: Context, onResult: ((AppUpdateState) -> Unit)? = null) {
-        val manager = appUpdateManager ?: AppUpdateManagerFactory.create(context.applicationContext).also {
-            appUpdateManager = it
-            it.registerListener(installListener)
-        }
-
-        _updateState.value = AppUpdateState.Checking
-        onResult?.invoke(AppUpdateState.Checking)
-
-        manager.appUpdateInfo.addOnSuccessListener { info ->
-            val availability = info.updateAvailability()
-            val state = when (availability) {
-                UpdateAvailability.UPDATE_AVAILABLE -> {
-                    val isImmediate = info.isUpdateTypeAllowed(AppUpdateType.IMMEDIATE)
-                    val isFlexible = info.isUpdateTypeAllowed(AppUpdateType.FLEXIBLE)
-                    AppUpdateState.Available(
-                        appUpdateInfo = info,
-                        availableVersionCode = info.availableVersionCode(),
-                        isImmediateAllowed = isImmediate,
-                        isFlexibleAllowed = isFlexible
-                    )
-                }
-                UpdateAvailability.DEVELOPER_TRIGGERED_UPDATE_IN_PROGRESS -> {
-                    if (info.installStatus() == InstallStatus.DOWNLOADED) {
-                        AppUpdateState.Downloaded
-                    } else {
-                        AppUpdateState.Downloading(info.bytesDownloaded(), info.totalBytesToDownload())
-                    }
-                }
-                UpdateAvailability.UPDATE_NOT_AVAILABLE -> {
-                    AppUpdateState.UpToDate(BuildConfig.VERSION_NAME, BuildConfig.VERSION_CODE)
-                }
-                else -> {
-                    AppUpdateState.UpToDate(BuildConfig.VERSION_NAME, BuildConfig.VERSION_CODE)
-                }
+        try {
+            val manager = appUpdateManager ?: AppUpdateManagerFactory.create(context.applicationContext).also {
+                appUpdateManager = it
+                it.registerListener(installListener)
             }
-            _updateState.value = state
-            onResult?.invoke(state)
-        }.addOnFailureListener { exception ->
-            val msg = exception.localizedMessage ?: "Unable to connect to Google Play"
-            val errorState = AppUpdateState.Error(msg)
-            _updateState.value = errorState
-            onResult?.invoke(errorState)
+
+            _updateState.value = AppUpdateState.Checking
+            onResult?.invoke(AppUpdateState.Checking)
+
+            manager.appUpdateInfo.addOnSuccessListener { info ->
+                try {
+                    val availability = info.updateAvailability()
+                    val state = when (availability) {
+                        UpdateAvailability.UPDATE_AVAILABLE -> {
+                            val isImmediate = info.isUpdateTypeAllowed(AppUpdateType.IMMEDIATE)
+                            val isFlexible = info.isUpdateTypeAllowed(AppUpdateType.FLEXIBLE)
+                            AppUpdateState.Available(
+                                appUpdateInfo = info,
+                                availableVersionCode = info.availableVersionCode(),
+                                isImmediateAllowed = isImmediate,
+                                isFlexibleAllowed = isFlexible
+                            )
+                        }
+                        UpdateAvailability.DEVELOPER_TRIGGERED_UPDATE_IN_PROGRESS -> {
+                            if (info.installStatus() == InstallStatus.DOWNLOADED) {
+                                AppUpdateState.Downloaded
+                            } else {
+                                AppUpdateState.Downloading(
+                                    info.bytesDownloaded(),
+                                    info.totalBytesToDownload()
+                                )
+                            }
+                        }
+                        else -> {
+                            AppUpdateState.UpToDate(
+                                BuildConfig.VERSION_NAME,
+                                BuildConfig.VERSION_CODE
+                            )
+                        }
+                    }
+                    _updateState.value = state
+                    onResult?.invoke(state)
+                } catch (_: Throwable) {
+                    val fallback = AppUpdateState.UpToDate(
+                        BuildConfig.VERSION_NAME,
+                        BuildConfig.VERSION_CODE
+                    )
+                    _updateState.value = fallback
+                    onResult?.invoke(fallback)
+                }
+            }.addOnFailureListener {
+                // Sideloaded APKs or test environments report ERROR_APP_NOT_OWNED (-10) or
+                // ERROR_PLAY_STORE_NOT_FOUND (-6). Treat as UpToDate so no error is shown in UI.
+                val upToDateState = AppUpdateState.UpToDate(
+                    BuildConfig.VERSION_NAME,
+                    BuildConfig.VERSION_CODE
+                )
+                _updateState.value = upToDateState
+                onResult?.invoke(upToDateState)
+            }
+        } catch (_: Throwable) {
+            val fallback = AppUpdateState.UpToDate(
+                BuildConfig.VERSION_NAME,
+                BuildConfig.VERSION_CODE
+            )
+            _updateState.value = fallback
+            onResult?.invoke(fallback)
         }
     }
 
@@ -149,7 +191,7 @@ object GooglePlayManager {
                 AppUpdateOptions.newBuilder(updateType).build()
             )
             true
-        } catch (_: Exception) {
+        } catch (_: Throwable) {
             false
         }
     }
@@ -157,6 +199,7 @@ object GooglePlayManager {
     /**
      * Starts update directly with Activity.
      */
+    @Suppress("DEPRECATION")
     fun startUpdate(
         activity: Activity,
         appUpdateInfo: AppUpdateInfo,
@@ -182,7 +225,7 @@ object GooglePlayManager {
                 requestCode
             )
             true
-        } catch (_: Exception) {
+        } catch (_: Throwable) {
             false
         }
     }
@@ -191,7 +234,10 @@ object GooglePlayManager {
      * Completes a flexible in-app update by restarting the app.
      */
     fun completeUpdate() {
-        appUpdateManager?.completeUpdate()
+        try {
+            appUpdateManager?.completeUpdate()
+        } catch (_: Throwable) {
+        }
     }
 
     /**
@@ -201,28 +247,37 @@ object GooglePlayManager {
         activity: Activity,
         onComplete: (() -> Unit)? = null
     ) {
-        val manager = ReviewManagerFactory.create(activity)
-        val request = manager.requestReviewFlow()
+        try {
+            val manager = ReviewManagerFactory.create(activity)
+            val request = manager.requestReviewFlow()
 
-        request.addOnCompleteListener { task ->
-            if (task.isSuccessful) {
-                val reviewInfo = task.result
-                val flow = manager.launchReviewFlow(activity, reviewInfo)
-                flow.addOnCompleteListener {
-                    Handler(Looper.getMainLooper()).post {
-                        Toast.makeText(
-                            activity,
-                            "Thank you for rating & supporting NOX - Game Space!",
-                            Toast.LENGTH_SHORT
-                        ).show()
+            request.addOnCompleteListener { task ->
+                try {
+                    if (task.isSuccessful) {
+                        val reviewInfo = task.result
+                        val flow = manager.launchReviewFlow(activity, reviewInfo)
+                        flow.addOnCompleteListener {
+                            Handler(Looper.getMainLooper()).post {
+                                Toast.makeText(
+                                    activity,
+                                    "Thank you for rating NOX - Game Space!",
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                                onComplete?.invoke()
+                            }
+                        }
+                    } else {
+                        openPlayStore(activity)
                         onComplete?.invoke()
                     }
+                } catch (_: Throwable) {
+                    openPlayStore(activity)
+                    onComplete?.invoke()
                 }
-            } else {
-                // If In-App Review fails or is rate-limited by Google Play quota, fallback to Play Store listing
-                openPlayStore(activity)
-                onComplete?.invoke()
             }
+        } catch (_: Throwable) {
+            openPlayStore(activity)
+            onComplete?.invoke()
         }
     }
 
@@ -236,21 +291,24 @@ object GooglePlayManager {
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_HISTORY or Intent.FLAG_ACTIVITY_MULTIPLE_TASK)
             }
             context.startActivity(intent)
-        } catch (_: Exception) {
-            val webIntent = Intent(
-                Intent.ACTION_VIEW,
-                Uri.parse("https://play.google.com/store/apps/details?id=$packageName")
-            ).apply {
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        } catch (_: Throwable) {
+            try {
+                val webIntent = Intent(
+                    Intent.ACTION_VIEW,
+                    Uri.parse("https://play.google.com/store/apps/details?id=$packageName")
+                ).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                context.startActivity(webIntent)
+            } catch (_: Throwable) {
             }
-            context.startActivity(webIntent)
         }
     }
 
     fun cleanUp() {
         try {
             appUpdateManager?.unregisterListener(installListener)
-        } catch (_: Exception) {
+        } catch (_: Throwable) {
         }
         appUpdateManager = null
     }

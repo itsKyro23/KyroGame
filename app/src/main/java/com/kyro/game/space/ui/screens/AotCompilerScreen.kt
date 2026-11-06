@@ -87,6 +87,7 @@ fun AotCompilerScreen(
     BackHandler { onBack() }
 
     val context = LocalContext.current
+    val responsive = com.kyro.game.space.ui.theme.rememberResponsiveMetrics()
     val scope = rememberCoroutineScope()
     val aotState by repository.aotCompilerState.collectAsState()
     val overview by repository.connectionState.collectAsState()
@@ -144,8 +145,13 @@ fun AotCompilerScreen(
         modifier = modifier
             .fillMaxSize()
             .testTag("aot_compiler_screen"),
-        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 96.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+        contentPadding = PaddingValues(
+            start = responsive.screenHorizontalPadding,
+            end = responsive.screenHorizontalPadding,
+            top = 8.dp,
+            bottom = 96.dp
+        ),
+        verticalArrangement = Arrangement.spacedBy(responsive.sectionSpacing)
     ) {
         // Overview & Status Banner Card
         item {

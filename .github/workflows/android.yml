@@ -71,16 +71,16 @@ jobs:
           chmod +x gradlew
 
       - name: Run Unit Tests
-        run: ./gradlew testDebugUnitTest -Pkotlin.compiler.execution.strategy=daemon --no-configuration-cache
+        run: ./gradlew testDebugUnitTest --no-configuration-cache
 
       - name: Build Debug APK
-        run: ./gradlew assembleDebug -Pkotlin.compiler.execution.strategy=daemon --no-configuration-cache
+        run: ./gradlew assembleDebug --no-configuration-cache
 
       - name: Build Android App Bundle (AAB)
         env:
           STORE_PASSWORD: ${{ secrets.STORE_PASSWORD || 'android' }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD || 'android' }}
-        run: ./gradlew bundleDebug bundleRelease -Pkotlin.compiler.execution.strategy=daemon --no-configuration-cache
+        run: ./gradlew bundleDebug bundleRelease --no-configuration-cache
 
       - name: Upload Debug APK
         uses: actions/upload-artifact@v4

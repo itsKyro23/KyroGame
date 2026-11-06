@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -63,6 +64,7 @@ import com.kyro.game.space.ui.theme.KyroCyan
 import com.kyro.game.space.ui.theme.KyroGreen
 import com.kyro.game.space.ui.theme.KyroOrange
 import com.kyro.game.space.ui.theme.KyroPrimary
+import com.kyro.game.space.ui.theme.rememberResponsiveMetrics
 
 @Composable
 fun PlayBoostSettingsDialog(
@@ -72,6 +74,7 @@ fun PlayBoostSettingsDialog(
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
+    val responsive = rememberResponsiveMetrics()
 
     var deepRamPurge by remember(initialConfig) { mutableStateOf(initialConfig.deepRamPurge) }
     var forceStopBackgroundApps by remember(initialConfig) { mutableStateOf(initialConfig.forceStopBackgroundApps) }
@@ -118,6 +121,7 @@ fun PlayBoostSettingsDialog(
         shape = RoundedCornerShape(24.dp),
         modifier = Modifier
             .fillMaxWidth(0.94f)
+            .widthIn(max = responsive.dialogMaxWidth)
             .testTag("play_boost_settings_dialog"),
         title = {
             Row(
@@ -128,7 +132,9 @@ fun PlayBoostSettingsDialog(
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(end = 6.dp)
                 ) {
                     Surface(
                         shape = CircleShape,
@@ -145,13 +151,15 @@ fun PlayBoostSettingsDialog(
                             )
                         }
                     }
-                    Column {
+                    Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = "PLAY AUTO-BOOST SETTINGS",
                             style = MaterialTheme.typography.titleSmall,
                             fontWeight = FontWeight.Black,
                             letterSpacing = 0.9.sp,
-                            color = Color.White
+                            color = Color.White,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                         Text(
                             text = "Auto-executed when tapping Play on any game",

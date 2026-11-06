@@ -18,11 +18,15 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AspectRatio
 import androidx.compose.material.icons.filled.AutoAwesomeMosaic
@@ -56,11 +60,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.DialogProperties
 import com.kyro.game.space.ads.AdMobManager
 import com.kyro.game.space.data.energy.NoxEnergyManager
 import com.kyro.game.space.ui.theme.KyroCyan
 import com.kyro.game.space.ui.theme.KyroGreen
 import com.kyro.game.space.ui.theme.KyroOrange
+import com.kyro.game.space.ui.theme.rememberResponsiveMetrics
 
 /**
  * Clickable Energy Badge for TopAppBar.
@@ -104,7 +110,8 @@ fun NoxEnergyBadge(
                 fontWeight = FontWeight.Bold,
                 fontFamily = FontFamily.Monospace,
                 color = badgeColor,
-                fontSize = 11.sp
+                fontSize = 11.sp,
+                maxLines = 1
             )
         }
     }
@@ -118,6 +125,7 @@ fun NoxEnergyTopUpDialog(
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
+    val responsive = rememberResponsiveMetrics()
     val energy by NoxEnergyManager.energyState
     val isTampered by NoxEnergyManager.isTampered
 
@@ -141,6 +149,10 @@ fun NoxEnergyTopUpDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false),
+        modifier = Modifier
+            .fillMaxWidth(0.94f)
+            .widthIn(max = responsive.dialogMaxWidth),
         containerColor = Color(0xFF0C0E17),
         shape = RoundedCornerShape(26.dp),
         title = {
@@ -169,7 +181,7 @@ fun NoxEnergyTopUpDialog(
                     }
                 }
 
-                Column {
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = if (isTampered || energy < 0) "SECURITY INTEGRITY ALERT" else "NOX ENERGY CELL",
                         style = MaterialTheme.typography.titleMedium,
@@ -188,7 +200,10 @@ fun NoxEnergyTopUpDialog(
         },
         text = {
             Column(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = responsive.dialogMaxHeight * 0.68f)
+                    .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 if (isTampered || energy < 0) {
@@ -634,6 +649,7 @@ fun NoxInsufficientEnergyDialog(
     onEnergyGranted: () -> Unit
 ) {
     val context = LocalContext.current
+    val responsive = rememberResponsiveMetrics()
     val energy by NoxEnergyManager.energyState
     val isTampered by NoxEnergyManager.isTampered
 
@@ -641,6 +657,10 @@ fun NoxInsufficientEnergyDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false),
+        modifier = Modifier
+            .fillMaxWidth(0.94f)
+            .widthIn(max = responsive.dialogMaxWidth),
         containerColor = Color(0xFF0C0E17),
         shape = RoundedCornerShape(26.dp),
         title = {
@@ -663,7 +683,7 @@ fun NoxInsufficientEnergyDialog(
                         )
                     }
                 }
-                Column {
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = "INSUFFICIENT ENERGY",
                         style = MaterialTheme.typography.titleMedium,
@@ -682,7 +702,10 @@ fun NoxInsufficientEnergyDialog(
         },
         text = {
             Column(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = responsive.dialogMaxHeight * 0.68f)
+                    .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 if (isTampered || energy < 0) {

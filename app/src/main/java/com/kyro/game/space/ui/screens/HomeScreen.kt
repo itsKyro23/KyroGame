@@ -39,6 +39,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.kyro.game.space.data.model.ConnectionOverview
@@ -63,6 +64,7 @@ import com.kyro.game.space.ui.theme.KyroAccent
 import com.kyro.game.space.ui.theme.KyroCyan
 import com.kyro.game.space.ui.theme.KyroGreen
 import com.kyro.game.space.ui.theme.KyroOrange
+import com.kyro.game.space.ui.theme.rememberResponsiveMetrics
 import androidx.compose.ui.graphics.Color
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Lock
@@ -88,6 +90,7 @@ fun HomeScreen(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val responsive = rememberResponsiveMetrics()
     val scope = rememberCoroutineScope()
     val playBoostConfig by repository.playBoostConfig.collectAsState()
     var showTerminalDialog by remember { mutableStateOf(false) }
@@ -115,8 +118,13 @@ fun HomeScreen(
         modifier = modifier
             .fillMaxSize()
             .testTag("home_screen"),
-        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 96.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+        contentPadding = PaddingValues(
+            start = responsive.screenHorizontalPadding,
+            end = responsive.screenHorizontalPadding,
+            top = 8.dp,
+            bottom = 96.dp
+        ),
+        verticalArrangement = Arrangement.spacedBy(responsive.sectionSpacing)
     ) {
         // Section A: Connection Status Card
         item {
@@ -226,25 +234,29 @@ fun HomeScreen(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(end = 6.dp)
+                ) {
                     Icon(
                         imageVector = Icons.Default.SportsEsports,
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(22.dp)
+                        modifier = Modifier.size(if (responsive.isCompactWidth) 19.dp else 22.dp)
                     )
-                    Spacer(modifier = Modifier.size(8.dp))
+                    Spacer(modifier = Modifier.size(6.dp))
                     Text(
                         text = "MY GAMES",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
-                        letterSpacing = 1.sp
+                        letterSpacing = if (responsive.isCompactWidth) 0.5.sp else 1.sp,
+                        maxLines = 1
                     )
                 }
 
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     // Play Auto-Boost Settings Button
                     Surface(
@@ -255,12 +267,17 @@ fun HomeScreen(
                             1.dp,
                             tierBadgeColor.copy(alpha = 0.45f)
                         ),
-                        modifier = Modifier.testTag("open_play_boost_settings_btn")
+                        modifier = Modifier
+                            .weight(1f, fill = false)
+                            .testTag("open_play_boost_settings_btn")
                     ) {
                         Row(
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                            modifier = Modifier.padding(
+                                horizontal = if (responsive.isCompactWidth) 8.dp else 10.dp,
+                                vertical = 5.dp
+                            ),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(5.dp)
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Bolt,
@@ -269,11 +286,13 @@ fun HomeScreen(
                                 modifier = Modifier.size(14.dp)
                             )
                             Text(
-                                text = "Boost: ${playBoostConfig.tier.title}",
+                                text = if (responsive.isCompactWidth) playBoostConfig.tier.title else "Boost: ${playBoostConfig.tier.title}",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = Color.White,
                                 fontWeight = FontWeight.Bold,
-                                fontSize = 11.sp
+                                fontSize = if (responsive.isCompactWidth) 10.sp else 11.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                             Icon(
                                 imageVector = Icons.Default.Tune,
@@ -292,8 +311,12 @@ fun HomeScreen(
                             text = "${homeGames.size} Titles",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
-                            fontWeight = FontWeight.Bold
+                            modifier = Modifier.padding(
+                                horizontal = if (responsive.isCompactWidth) 8.dp else 10.dp,
+                                vertical = 5.dp
+                            ),
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1
                         )
                     }
                 }

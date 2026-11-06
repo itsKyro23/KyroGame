@@ -86,6 +86,7 @@ fun NetworkOptimizerScreen(
     BackHandler(onBack = onBack)
 
     val context = LocalContext.current
+    val responsive = com.kyro.game.space.ui.theme.rememberResponsiveMetrics()
     val scope = rememberCoroutineScope()
     val netState by repository.networkOptimizerState.collectAsState()
 
@@ -111,8 +112,13 @@ fun NetworkOptimizerScreen(
         modifier = modifier
             .fillMaxSize()
             .testTag("network_optimizer_screen"),
-        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 96.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+        contentPadding = PaddingValues(
+            start = responsive.screenHorizontalPadding,
+            end = responsive.screenHorizontalPadding,
+            top = 8.dp,
+            bottom = 96.dp
+        ),
+        verticalArrangement = Arrangement.spacedBy(responsive.sectionSpacing)
     ) {
         // 1. Live Network & Ping Status Hero Card
         item {

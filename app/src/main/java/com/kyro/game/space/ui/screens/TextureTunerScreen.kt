@@ -176,12 +176,19 @@ fun TextureTunerScreen(
         "Applies to all added Game Space Home games via ANGLE Driver"
     }
 
+    val responsive = com.kyro.game.space.ui.theme.rememberResponsiveMetrics()
+
     LazyColumn(
         modifier = modifier
             .fillMaxSize()
             .testTag("texture_tuner_screen"),
-        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 96.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp)
+        contentPadding = PaddingValues(
+            start = responsive.screenHorizontalPadding,
+            end = responsive.screenHorizontalPadding,
+            top = 8.dp,
+            bottom = 96.dp
+        ),
+        verticalArrangement = Arrangement.spacedBy(responsive.sectionSpacing)
     ) {
         // 1. Device, GPU & ANGLE Driver Compatibility Card
         item {

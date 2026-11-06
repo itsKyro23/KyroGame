@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -57,6 +58,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.kyro.game.space.ads.AdMobManager
@@ -72,6 +74,7 @@ import com.kyro.game.space.ui.screens.TextureTunerScreen
 import com.kyro.game.space.ui.screens.ToolsScreen
 import com.kyro.game.space.ui.theme.KyroAccent
 import com.kyro.game.space.ui.theme.KyroPrimary
+import com.kyro.game.space.ui.theme.rememberResponsiveMetrics
 
 enum class GameSpaceTab(
     val title: String,
@@ -102,6 +105,7 @@ fun GameSpaceApp(
     onRequestNotification: () -> Unit
 ) {
     val context = LocalContext.current
+    val responsive = rememberResponsiveMetrics()
     var showSplash by rememberSaveable { mutableStateOf(true) }
     var currentTab by rememberSaveable { mutableStateOf(GameSpaceTab.HOME) }
     var activeSubScreen by rememberSaveable { mutableStateOf(ToolSubScreen.NONE) }
@@ -168,16 +172,20 @@ fun GameSpaceApp(
                                 GameSpaceTab.SETTINGS -> "PREFERENCES"
                             }
                         },
-                        style = MaterialTheme.typography.titleLarge,
+                        style = MaterialTheme.typography.titleLarge.copy(
+                            fontSize = responsive.topBarTitleSize
+                        ),
                         fontWeight = FontWeight.Black,
-                        letterSpacing = 1.sp,
+                        letterSpacing = if (responsive.isCompactWidth) 0.5.sp else 1.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                         color = MaterialTheme.colorScheme.onBackground
                     )
                 },
                 actions = {
                     com.kyro.game.space.ui.components.NoxEnergyBadge(
                         onClick = { showEnergyDialog = true },
-                        modifier = Modifier.padding(end = 12.dp)
+                        modifier = Modifier.padding(end = if (responsive.isCompactWidth) 8.dp else 12.dp)
                     )
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -191,7 +199,7 @@ fun GameSpaceApp(
                     com.kyro.game.space.ads.AdMobBanner(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 12.dp, vertical = 2.dp)
+                            .padding(horizontal = responsive.screenHorizontalPadding, vertical = 2.dp)
                     )
                 }
 
@@ -217,7 +225,9 @@ fun GameSpaceApp(
                         label = {
                             Text(
                                 text = tab.title,
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                         },
                         colors = NavigationBarItemDefaults.colors(
@@ -235,9 +245,13 @@ fun GameSpaceApp(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding)
+                .padding(innerPadding),
+            contentAlignment = Alignment.TopCenter
         ) {
             AnimatedContent(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .widthIn(max = responsive.maxContentWidth),
                 targetState = activeSubScreen,
                 transitionSpec = {
                     if (targetState != ToolSubScreen.NONE) {

@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -115,7 +116,7 @@ fun GameCard(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(118.dp)
+                .heightIn(min = 118.dp)
         ) {
             // Background Artwork using direct draw alpha (no offscreen saveLayer allocation!)
             val iconBitmap = appIconImage
@@ -126,26 +127,27 @@ fun GameCard(
                     contentScale = ContentScale.Crop,
                     alpha = 0.36f,
                     filterQuality = FilterQuality.Low,
-                    modifier = Modifier.fillMaxSize()
+                    modifier = Modifier.matchParentSize()
                 )
             }
 
             // Balanced Dark & Vignette Scrim
             Box(
                 modifier = Modifier
-                    .fillMaxSize()
+                    .matchParentSize()
                     .background(VerticalScrimBrush)
             )
             Box(
                 modifier = Modifier
-                    .fillMaxSize()
+                    .matchParentSize()
                     .background(HorizontalScrimBrush)
             )
 
             // Content Foreground
             Column(
                 modifier = Modifier
-                    .fillMaxSize()
+                    .fillMaxWidth()
+                    .heightIn(min = 118.dp)
                     .padding(horizontal = 14.dp, vertical = 10.dp),
                 verticalArrangement = Arrangement.SpaceBetween
             ) {
@@ -212,18 +214,26 @@ fun GameCard(
                     }
                 }
 
+                Spacer(modifier = Modifier.height(8.dp))
+
                 // Bottom Row: Playtime / Last played & Compact Customize + Play Buttons
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(end = 6.dp)
+                    ) {
                         Text(
                             text = "Total: ${game.formattedPlaytime}",
                             style = MaterialTheme.typography.bodySmall,
                             fontWeight = FontWeight.SemiBold,
-                            color = KyroAccent
+                            color = KyroAccent,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                         Text(
                             text = "Last: ${game.formattedLastPlayed}",
@@ -249,7 +259,7 @@ fun GameCard(
                                 containerColor = Color(0xCC262632),
                                 contentColor = Color.White
                             ),
-                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                            contentPadding = PaddingValues(horizontal = 9.dp, vertical = 4.dp)
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Tune,
@@ -261,7 +271,8 @@ fun GameCard(
                                 text = "TUNE • 10⚡",
                                 style = MaterialTheme.typography.labelSmall,
                                 fontWeight = FontWeight.Bold,
-                                fontSize = 11.sp
+                                fontSize = 11.sp,
+                                maxLines = 1
                             )
                         }
 
@@ -277,7 +288,7 @@ fun GameCard(
                                 contentColor = Color.White
                             ),
                             contentPadding = PaddingValues(
-                                horizontal = 12.dp,
+                                horizontal = 11.dp,
                                 vertical = 4.dp
                             ),
                             elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp)
@@ -293,7 +304,8 @@ fun GameCard(
                                 style = MaterialTheme.typography.labelSmall,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 11.sp,
-                                letterSpacing = 0.6.sp
+                                letterSpacing = 0.6.sp,
+                                maxLines = 1
                             )
                         }
                     }

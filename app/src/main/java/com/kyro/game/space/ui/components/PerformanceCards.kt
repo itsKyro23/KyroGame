@@ -273,8 +273,13 @@ private fun PerformanceCard(
                     text = title,
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    letterSpacing = 1.sp,
-                    fontWeight = FontWeight.Bold
+                    letterSpacing = 0.8.sp,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(end = 6.dp)
                 )
                 if (onIconClick != null) {
                     Surface(

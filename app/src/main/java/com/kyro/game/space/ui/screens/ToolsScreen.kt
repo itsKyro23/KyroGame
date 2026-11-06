@@ -62,6 +62,7 @@ import com.kyro.game.space.ui.theme.KyroCyan
 import com.kyro.game.space.ui.theme.KyroGreen
 import com.kyro.game.space.ui.theme.KyroOrange
 import com.kyro.game.space.ui.theme.KyroPrimary
+import com.kyro.game.space.ui.theme.rememberResponsiveMetrics
 import kotlinx.coroutines.launch
 
 @Composable
@@ -74,6 +75,7 @@ fun ToolsScreen(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val responsive = rememberResponsiveMetrics()
     val scope = rememberCoroutineScope()
     val overview by repository.connectionState.collectAsState()
     val resState by repository.resolutionState.collectAsState()
@@ -103,8 +105,13 @@ fun ToolsScreen(
         modifier = modifier
             .fillMaxSize()
             .testTag("tools_screen"),
-        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 96.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+        contentPadding = PaddingValues(
+            start = responsive.screenHorizontalPadding,
+            end = responsive.screenHorizontalPadding,
+            top = 8.dp,
+            bottom = 96.dp
+        ),
+        verticalArrangement = Arrangement.spacedBy(responsive.sectionSpacing)
     ) {
         // Section Header
         item {
@@ -253,7 +260,10 @@ fun ToolsScreen(
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(end = 8.dp)
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Security,
@@ -266,7 +276,9 @@ fun ToolsScreen(
                                 style = MaterialTheme.typography.labelSmall,
                                 color = KyroCyan,
                                 fontWeight = FontWeight.SemiBold,
-                                fontSize = 11.sp
+                                fontSize = 11.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
 
@@ -539,7 +551,10 @@ fun ToolsScreen(
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(end = 8.dp)
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Speed,

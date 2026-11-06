@@ -81,6 +81,7 @@ fun ResolutionChangerScreen(
     BackHandler(onBack = onBack)
 
     val context = LocalContext.current
+    val responsive = com.kyro.game.space.ui.theme.rememberResponsiveMetrics()
     val scope = rememberCoroutineScope()
     val resState by repository.resolutionState.collectAsState()
 
@@ -122,8 +123,13 @@ fun ResolutionChangerScreen(
         modifier = modifier
             .fillMaxSize()
             .testTag("resolution_changer_screen"),
-        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 96.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+        contentPadding = PaddingValues(
+            start = responsive.screenHorizontalPadding,
+            end = responsive.screenHorizontalPadding,
+            top = 8.dp,
+            bottom = 96.dp
+        ),
+        verticalArrangement = Arrangement.spacedBy(responsive.sectionSpacing)
     ) {
         // 1. Main Resolution Changer Card
         item {

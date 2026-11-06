@@ -39,6 +39,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.kyro.game.space.data.model.ConnectionOverview
@@ -47,6 +48,7 @@ import com.kyro.game.space.data.model.ExecutionMethod
 import com.kyro.game.space.ui.theme.KyroCyan
 import com.kyro.game.space.ui.theme.KyroGreen
 import com.kyro.game.space.ui.theme.KyroOrange
+import com.kyro.game.space.ui.theme.rememberResponsiveMetrics
 
 @Composable
 fun ConnectionStatusCard(
@@ -56,6 +58,7 @@ fun ConnectionStatusCard(
     onOpenTerminal: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val responsive = rememberResponsiveMetrics()
     val statusColor = when (overview.status) {
         ConnectionStatus.CONNECTED -> KyroGreen
         ConnectionStatus.CONNECTING -> KyroCyan
@@ -88,7 +91,7 @@ fun ConnectionStatusCard(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(18.dp)
+                .padding(responsive.cardInnerPadding)
         ) {
             // Header: Method & Status Pill
             Row(
@@ -96,7 +99,12 @@ fun ConnectionStatusCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(end = 8.dp)
+                ) {
                     Surface(
                         shape = CircleShape,
                         color = MaterialTheme.colorScheme.primaryContainer,
@@ -111,8 +119,8 @@ fun ConnectionStatusCard(
                             )
                         }
                     }
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Column {
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = when (overview.method) {
                                 ExecutionMethod.SHIZUKU -> "Shizuku Engine"
@@ -120,12 +128,16 @@ fun ConnectionStatusCard(
                                 ExecutionMethod.ROOT -> "Root Access (su)"
                             },
                             style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                         Text(
                             text = overview.androidVersion,
                             style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
@@ -136,7 +148,10 @@ fun ConnectionStatusCard(
                     color = statusColor.copy(alpha = 0.15f)
                 ) {
                     Row(
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                        modifier = Modifier.padding(
+                            horizontal = if (responsive.isCompactWidth) 8.dp else 10.dp,
+                            vertical = 5.dp
+                        ),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Box(
@@ -157,7 +172,8 @@ fun ConnectionStatusCard(
                             style = MaterialTheme.typography.labelSmall,
                             fontWeight = FontWeight.Bold,
                             color = statusColor,
-                            letterSpacing = 0.5.sp
+                            letterSpacing = 0.5.sp,
+                            maxLines = 1
                         )
                     }
                 }
@@ -255,7 +271,8 @@ fun ConnectionStatusCard(
                         containerColor = MaterialTheme.colorScheme.primary,
                         contentColor = MaterialTheme.colorScheme.onPrimary
                     ),
-                    shape = RoundedCornerShape(12.dp)
+                    shape = RoundedCornerShape(12.dp),
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 10.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Default.Refresh,
@@ -263,7 +280,12 @@ fun ConnectionStatusCard(
                         modifier = Modifier.size(16.dp)
                     )
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text("Reconnect", style = MaterialTheme.typography.labelLarge)
+                    Text(
+                        text = "Reconnect",
+                        style = MaterialTheme.typography.labelLarge,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
                 }
 
                 if (overview.status == ConnectionStatus.PERMISSION_REQUIRED && overview.method == ExecutionMethod.SHIZUKU) {
@@ -272,9 +294,15 @@ fun ConnectionStatusCard(
                         modifier = Modifier
                             .weight(1f)
                             .testTag("grant_shizuku_button"),
-                        shape = RoundedCornerShape(12.dp)
+                        shape = RoundedCornerShape(12.dp),
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 10.dp)
                     ) {
-                        Text("Grant", style = MaterialTheme.typography.labelLarge)
+                        Text(
+                            text = "Grant",
+                            style = MaterialTheme.typography.labelLarge,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
                     }
                 } else if (overview.method == ExecutionMethod.MANUAL_ADB && !overview.manualAdb.isDaemonInjected) {
                     FilledTonalButton(
@@ -282,9 +310,15 @@ fun ConnectionStatusCard(
                         modifier = Modifier
                             .weight(1f)
                             .testTag("setup_adb_daemon_button"),
-                        shape = RoundedCornerShape(12.dp)
+                        shape = RoundedCornerShape(12.dp),
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 10.dp)
                     ) {
-                        Text("Setup / Inject", style = MaterialTheme.typography.labelLarge)
+                        Text(
+                            text = "Setup / Inject",
+                            style = MaterialTheme.typography.labelLarge,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
                     }
                 } else if (overview.method == ExecutionMethod.ROOT && !overview.root.isRootGranted) {
                     FilledTonalButton(
@@ -292,9 +326,15 @@ fun ConnectionStatusCard(
                         modifier = Modifier
                             .weight(1f)
                             .testTag("grant_root_button"),
-                        shape = RoundedCornerShape(12.dp)
+                        shape = RoundedCornerShape(12.dp),
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 10.dp)
                     ) {
-                        Text("Grant Root", style = MaterialTheme.typography.labelLarge)
+                        Text(
+                            text = "Grant Root",
+                            style = MaterialTheme.typography.labelLarge,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
                     }
                 } else {
                     OutlinedButton(
@@ -302,7 +342,8 @@ fun ConnectionStatusCard(
                         modifier = Modifier
                             .weight(1f)
                             .testTag("terminal_test_button"),
-                        shape = RoundedCornerShape(12.dp)
+                        shape = RoundedCornerShape(12.dp),
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 10.dp)
                     ) {
                         Icon(
                             imageVector = Icons.Default.Terminal,
@@ -310,7 +351,12 @@ fun ConnectionStatusCard(
                             modifier = Modifier.size(16.dp)
                         )
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("Terminal", style = MaterialTheme.typography.labelLarge)
+                        Text(
+                            text = "Terminal",
+                            style = MaterialTheme.typography.labelLarge,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
                     }
                 }
             }

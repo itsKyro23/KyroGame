@@ -67,6 +67,7 @@ import com.kyro.game.space.ui.theme.KyroAccent
 import com.kyro.game.space.ui.theme.KyroCyan
 import com.kyro.game.space.ui.theme.KyroOrange
 import com.kyro.game.space.ui.theme.KyroPrimary
+import com.kyro.game.space.ui.theme.rememberResponsiveMetrics
 import kotlinx.coroutines.launch
 
 enum class AppFilter {
@@ -84,6 +85,7 @@ fun AppsScreen(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val responsive = rememberResponsiveMetrics()
     val scope = rememberCoroutineScope()
     var searchQuery by remember { mutableStateOf("") }
     var selectedFilter by remember { mutableStateOf(AppFilter.ALL) }
@@ -118,12 +120,12 @@ fun AppsScreen(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp)
+                .padding(horizontal = responsive.screenHorizontalPadding, vertical = 8.dp)
         ) {
             OutlinedTextField(
                 value = searchQuery,
                 onValueChange = { searchQuery = it },
-                label = { Text("Search apps or package name...") },
+                label = { Text("Search apps or package name...", maxLines = 1, overflow = TextOverflow.Ellipsis) },
                 leadingIcon = {
                     Icon(imageVector = Icons.Default.Search, contentDescription = "Search")
                 },
@@ -172,7 +174,12 @@ fun AppsScreen(
         // App List
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 96.dp),
+            contentPadding = PaddingValues(
+                start = responsive.screenHorizontalPadding,
+                end = responsive.screenHorizontalPadding,
+                top = 4.dp,
+                bottom = 96.dp
+            ),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             if (!overview.isAnyPermissionActive) {
@@ -347,7 +354,8 @@ private fun AppListItem(
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false)
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     // Game / App Badge
@@ -360,6 +368,7 @@ private fun AppListItem(
                             style = MaterialTheme.typography.labelSmall,
                             color = if (app.isGame) KyroAccent else MaterialTheme.colorScheme.onSurfaceVariant,
                             fontWeight = FontWeight.Bold,
+                            maxLines = 1,
                             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                         )
                     }
