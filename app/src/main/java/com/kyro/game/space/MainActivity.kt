@@ -47,6 +47,10 @@ class MainActivity : ComponentActivity() {
         // Initialize Google AdMob SDK
         AdMobManager.initialize(applicationContext)
 
+        // Initialize Google Play In-App Updates & Reviews
+        com.kyro.game.space.util.GooglePlayManager.init(applicationContext)
+        com.kyro.game.space.util.GooglePlayManager.checkForUpdate(applicationContext)
+
         // Initialize NOX Secure Energy Vault
         com.kyro.game.space.data.energy.NoxEnergyManager.init(applicationContext)
 
@@ -83,6 +87,7 @@ class MainActivity : ComponentActivity() {
         super.onResume()
         checkPermissions()
         repository.updateShizukuStatus()
+        com.kyro.game.space.util.GooglePlayManager.checkForUpdate(applicationContext)
         lifecycleScope.launch {
             try {
                 repository.checkDaemonAndSyncState()
@@ -96,6 +101,7 @@ class MainActivity : ComponentActivity() {
             repository.deactivateTextureSessionOnExit()
         }
         repository.cleanUp()
+        com.kyro.game.space.util.GooglePlayManager.cleanUp()
         super.onDestroy()
     }
 

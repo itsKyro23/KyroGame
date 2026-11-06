@@ -1,5 +1,6 @@
 package com.kyro.game.space.ui.screens
 
+import android.app.Activity
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
@@ -30,6 +31,7 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.SportsEsports
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material3.Button
@@ -39,6 +41,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.RadioButton
@@ -48,6 +51,7 @@ import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -58,6 +62,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.style.TextAlign
+import com.kyro.game.space.util.AppUpdateState
+import com.kyro.game.space.util.GooglePlayManager
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -513,7 +520,418 @@ fun SettingsScreen(
             }
         }
 
-        // Section D: About Kyro Game Space (Comprehensive Application Info)
+        // Section D: Google Play App Updates
+        item {
+            val updateState by GooglePlayManager.updateState.collectAsState()
+
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("google_play_update_card"),
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant
+                ),
+                border = BorderStroke(
+                    1.dp,
+                    MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)
+                ),
+                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(18.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Surface(
+                                shape = CircleShape,
+                                color = KyroCyan.copy(alpha = 0.16f),
+                                modifier = Modifier.size(40.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = Icons.Default.Refresh,
+                                        contentDescription = "App Update",
+                                        tint = KyroCyan,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                            }
+                            Column {
+                                Text(
+                                    text = "GOOGLE PLAY APP UPDATE",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    letterSpacing = 0.5.sp
+                                )
+                                Text(
+                                    text = "Official Play Store version checks & updates",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+
+                        val (badgeText, badgeColor) = when (updateState) {
+                            is AppUpdateState.Checking -> Pair("CHECKING...", KyroCyan)
+                            is AppUpdateState.Available -> Pair("UPDATE AVAILABLE", KyroAccent)
+                            is AppUpdateState.Downloading -> Pair("DOWNLOADING", KyroCyan)
+                            is AppUpdateState.Downloaded -> Pair("READY TO INSTALL", KyroGreen)
+                            is AppUpdateState.Error -> Pair("PLAY STORE", Color(0xFFE57373))
+                            is AppUpdateState.UpToDate -> Pair("LATEST VERSION", KyroGreen)
+                            AppUpdateState.Idle -> Pair("v${BuildConfig.VERSION_NAME}", KyroGreen)
+                        }
+
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = badgeColor.copy(alpha = 0.16f),
+                            border = BorderStroke(1.dp, badgeColor.copy(alpha = 0.45f))
+                        ) {
+                            Text(
+                                text = badgeText,
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = badgeColor,
+                                fontSize = 10.sp,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            )
+                        }
+                    }
+
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.25f))
+
+                    // Update state information
+                    when (val state = updateState) {
+                        is AppUpdateState.Checking -> {
+                            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Text(
+                                    text = "Connecting to Google Play Store to query version catalog...",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                LinearProgressIndicator(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    color = KyroCyan
+                                )
+                            }
+                        }
+                        is AppUpdateState.Available -> {
+                            Surface(
+                                shape = RoundedCornerShape(12.dp),
+                                color = KyroAccent.copy(alpha = 0.14f),
+                                border = BorderStroke(1.dp, KyroAccent.copy(alpha = 0.45f)),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(14.dp),
+                                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                                ) {
+                                    Text(
+                                        text = "A new release of NOX - Game Space (Build ${state.availableVersionCode}) is available on Google Play!",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color.White
+                                    )
+                                    Button(
+                                        onClick = {
+                                            val act = context as? Activity
+                                            if (act != null) {
+                                                val started = GooglePlayManager.startUpdate(act, state.appUpdateInfo)
+                                                if (!started) {
+                                                    GooglePlayManager.openPlayStore(context)
+                                                }
+                                            } else {
+                                                GooglePlayManager.openPlayStore(context)
+                                            }
+                                        },
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .testTag("start_inapp_update_btn"),
+                                        shape = RoundedCornerShape(10.dp),
+                                        colors = ButtonDefaults.buttonColors(containerColor = KyroAccent)
+                                    ) {
+                                        Text("Update Now (Google Play)", fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                            }
+                        }
+                        is AppUpdateState.Downloading -> {
+                            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                val progress = if (state.totalBytes > 0) {
+                                    state.bytesDownloaded.toFloat() / state.totalBytes.toFloat()
+                                } else 0f
+                                Text(
+                                    text = "Downloading update from Google Play: ${state.bytesDownloaded / (1024 * 1024)}MB / ${state.totalBytes / (1024 * 1024)}MB",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = KyroCyan
+                                )
+                                LinearProgressIndicator(
+                                    progress = { progress },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    color = KyroCyan
+                                )
+                            }
+                        }
+                        is AppUpdateState.Downloaded -> {
+                            Surface(
+                                shape = RoundedCornerShape(12.dp),
+                                color = KyroGreen.copy(alpha = 0.16f),
+                                border = BorderStroke(1.dp, KyroGreen.copy(alpha = 0.5f)),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(14.dp),
+                                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                                ) {
+                                    Text(
+                                        text = "Update downloaded and ready to install! Restart the app to apply changes.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = KyroGreen
+                                    )
+                                    Button(
+                                        onClick = { GooglePlayManager.completeUpdate() },
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .testTag("complete_update_btn"),
+                                        shape = RoundedCornerShape(10.dp),
+                                        colors = ButtonDefaults.buttonColors(containerColor = KyroGreen)
+                                    ) {
+                                        Text("Restart & Complete Update", color = Color.Black, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                            }
+                        }
+                        is AppUpdateState.Error -> {
+                            Text(
+                                text = "Status: ${state.message}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color(0xFFE57373)
+                            )
+                        }
+                        is AppUpdateState.UpToDate, AppUpdateState.Idle -> {
+                            Text(
+                                text = "Current installed version: v${BuildConfig.VERSION_NAME} (Build ${BuildConfig.VERSION_CODE}). You are running the latest official build.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Button(
+                            onClick = {
+                                GooglePlayManager.checkForUpdate(context) { result ->
+                                    if (result is AppUpdateState.UpToDate) {
+                                        Toast.makeText(context, "App is up to date (v${BuildConfig.VERSION_NAME})", Toast.LENGTH_SHORT).show()
+                                    }
+                                }
+                            },
+                            modifier = Modifier
+                                .weight(1f)
+                                .testTag("check_update_btn"),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = KyroPrimary)
+                        ) {
+                            Icon(imageVector = Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Check for Update", fontSize = 12.sp)
+                        }
+
+                        OutlinedButton(
+                            onClick = {
+                                GooglePlayManager.openPlayStore(context)
+                            },
+                            modifier = Modifier
+                                .weight(1f)
+                                .testTag("open_play_store_btn"),
+                            shape = RoundedCornerShape(12.dp),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f))
+                        ) {
+                            Text("Open Play Store", fontSize = 12.sp)
+                        }
+                    }
+                }
+            }
+        }
+
+        // Section E: Google Play Rating & Community Feedback
+        item {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("google_play_rating_card"),
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant
+                ),
+                border = BorderStroke(
+                    1.dp,
+                    MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)
+                ),
+                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(18.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Surface(
+                                shape = CircleShape,
+                                color = Color(0xFFFFB300).copy(alpha = 0.18f),
+                                modifier = Modifier.size(40.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = Icons.Default.Star,
+                                        contentDescription = "Rating",
+                                        tint = Color(0xFFFFB300),
+                                        modifier = Modifier.size(22.dp)
+                                    )
+                                }
+                            }
+                            Column {
+                                Text(
+                                    text = "RATE & REVIEW ON GOOGLE PLAY",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    letterSpacing = 0.5.sp
+                                )
+                                Text(
+                                    text = "Share your gaming performance feedback",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = Color(0xFFFFB300).copy(alpha = 0.16f),
+                            border = BorderStroke(1.dp, Color(0xFFFFB300).copy(alpha = 0.45f))
+                        ) {
+                            Text(
+                                text = "5.0 ★ PLAY STORE",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFFFFB300),
+                                fontSize = 10.sp,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            )
+                        }
+                    }
+
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.25f))
+
+                    // Rating Stars visual showcase
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = Color(0xFF141724),
+                        border = BorderStroke(1.dp, Color(0xFF262C40)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(14.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                repeat(5) {
+                                    Icon(
+                                        imageVector = Icons.Default.Star,
+                                        contentDescription = "Star",
+                                        tint = Color(0xFFFFB300),
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                }
+                            }
+                            Text(
+                                text = "Enjoying the FPS boosts & low latency?",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White
+                            )
+                            Text(
+                                text = "Your rating directly motivates new hardware optimizations, GPU tuning profiles, and community features.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color(0xFFA6B0C3),
+                                textAlign = TextAlign.Center,
+                                lineHeight = 16.sp
+                            )
+                        }
+                    }
+
+                    // Action Buttons
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Button(
+                            onClick = {
+                                val act = context as? Activity
+                                if (act != null) {
+                                    GooglePlayManager.launchInAppReview(act)
+                                } else {
+                                    GooglePlayManager.openPlayStore(context)
+                                }
+                            },
+                            modifier = Modifier
+                                .weight(1f)
+                                .testTag("rate_app_inapp_btn"),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFFB300))
+                        ) {
+                            Icon(imageVector = Icons.Default.Star, contentDescription = null, tint = Color.Black, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Rate on Google Play", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                        }
+
+                        OutlinedButton(
+                            onClick = {
+                                GooglePlayManager.openPlayStore(context)
+                            },
+                            modifier = Modifier
+                                .weight(0.85f)
+                                .testTag("write_review_btn"),
+                            shape = RoundedCornerShape(12.dp),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f))
+                        ) {
+                            Text("Play Store Page", fontSize = 12.sp)
+                        }
+                    }
+                }
+            }
+        }
+
+        // Section F: About NOX - Game Space (Comprehensive Application Info)
         item {
             Card(
                 modifier = Modifier

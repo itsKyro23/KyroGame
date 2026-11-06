@@ -160,6 +160,11 @@ dependencies {
   implementation(libs.shizuku.provider)
   // Google Mobile Ads (AdMob)
   implementation(libs.play.services.ads)
+  // Google Play In-App Updates & Reviews
+  implementation(libs.play.app.update)
+  implementation(libs.play.app.update.ktx)
+  implementation(libs.play.review)
+  implementation(libs.play.review.ktx)
   // implementation(libs.coil.compose)
   // implementation(libs.converter.moshi)
   // implementation(libs.firebase.ai)
