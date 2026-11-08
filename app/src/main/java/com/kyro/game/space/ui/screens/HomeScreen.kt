@@ -88,6 +88,7 @@ fun HomeScreen(
     onRequestNotification: () -> Unit,
     onNavigateToApps: () -> Unit,
     onNavigateToNetworkOptimizer: () -> Unit = {},
+    onNavigateToAotCompiler: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -301,6 +302,42 @@ fun HomeScreen(
                                 contentDescription = null,
                                 tint = tierBadgeColor,
                                 modifier = Modifier.size(13.dp)
+                            )
+                        }
+                    }
+
+                    // Quick AOT DEX Compiler Button
+                    Surface(
+                        onClick = onNavigateToAotCompiler,
+                        shape = RoundedCornerShape(12.dp),
+                        color = KyroOrange.copy(alpha = 0.14f),
+                        border = androidx.compose.foundation.BorderStroke(
+                            1.dp,
+                            KyroOrange.copy(alpha = 0.45f)
+                        ),
+                        modifier = Modifier.testTag("home_open_aot_compiler_btn")
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(
+                                horizontal = if (responsive.isCompactWidth) 8.dp else 10.dp,
+                                vertical = 5.dp
+                            ),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Bolt,
+                                contentDescription = "AOT Game DEX Compiler",
+                                tint = KyroOrange,
+                                modifier = Modifier.size(13.dp)
+                            )
+                            Text(
+                                text = "AOT DEX",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = KyroOrange,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = if (responsive.isCompactWidth) 10.sp else 11.sp,
+                                maxLines = 1
                             )
                         }
                     }

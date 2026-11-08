@@ -2588,6 +2588,8 @@ class GameSpaceRepository(
 
         val startTime = System.currentTimeMillis()
         val updatedStatuses = _aotCompilerState.value.packageAotStatuses.toMutableMap()
+        val logs = mutableListOf<String>()
+        logs.add("> Starting AOT DEX Compiler [${mode.shortLabel}] for ${targetList.size} target(s)...")
 
         _aotCompilerState.value = _aotCompilerState.value.copy(
             selectedTargetPackage = cleanPkg,
@@ -2595,37 +2597,44 @@ class GameSpaceRepository(
             isCompiling = true,
             progress = 0.08f,
             currentPackageBeingCompiled = targetList.first(),
-            lastStatusMessage = "Compiling ${targetList.size} game(s) with ${mode.shortLabel}..."
+            lastStatusMessage = "Compiling ${targetList.size} game(s) with ${mode.shortLabel}...",
+            compiledLogLines = logs.toList()
         )
 
         var successCount = 0
         for ((index, pkg) in targetList.withIndex()) {
             val stepProgress = ((index.toFloat() + 0.2f) / targetList.size.toFloat()).coerceIn(0.10f, 0.94f)
             val cmd = mode.buildCompileCommand(pkg)
+            logs.add("$ $cmd")
 
             _aotCompilerState.value = _aotCompilerState.value.copy(
                 progress = stepProgress,
                 currentPackageBeingCompiled = pkg,
-                lastStatusMessage = "Compiling (${index + 1}/${targetList.size}): $pkg..."
+                lastStatusMessage = "Compiling (${index + 1}/${targetList.size}): $pkg...",
+                compiledLogLines = logs.toList()
             )
 
+            val pkgStart = System.currentTimeMillis()
             val res = try {
                 executeCommand(cmd, timeoutMs = 60000L)
             } catch (e: Throwable) {
                 CommandResult(-1, "", e.message ?: "Execution error", false)
             }
+            val pkgDur = (System.currentTimeMillis() - pkgStart).coerceAtLeast(1L)
 
             val rawOut = (res.stdout + "\n" + res.stderr).trim()
             val isPkgSuccess = res.isSuccess || rawOut.contains("Success", ignoreCase = true)
 
             val newPkgStatus = if (isPkgSuccess) {
                 successCount++
+                logs.add("  ✓ [$pkg] -> ${rawOut.ifBlank { "Success" }} (${pkgDur}ms)")
                 when (mode) {
                     AotCompileMode.SPEED_PROFILE -> GameAotStatus.SPEED_PROFILE
                     AotCompileMode.FULL_SPEED -> GameAotStatus.FULL_SPEED
                     AotCompileMode.RESET -> GameAotStatus.RESET_DEFAULT
                 }
             } else {
+                logs.add("  ✗ [$pkg] -> ${rawOut.ifBlank { "Failed (exit ${res.exitCode})" }}")
                 GameAotStatus.FAILED
             }
 
@@ -2633,7 +2642,8 @@ class GameSpaceRepository(
             prefs.edit().putString("aot_pkg_status_$pkg", newPkgStatus.name).apply()
 
             _aotCompilerState.value = _aotCompilerState.value.copy(
-                packageAotStatuses = updatedStatuses.toMap()
+                packageAotStatuses = updatedStatuses.toMap(),
+                compiledLogLines = logs.toList()
             )
         }
 
@@ -2644,6 +2654,7 @@ class GameSpaceRepository(
         } else {
             "AOT Compilation failed for target game(s). Status updated to Failed."
         }
+        logs.add("> $summaryMsg")
 
         if (successCount > 0) {
             prefs.edit()
@@ -2658,6 +2669,7 @@ class GameSpaceRepository(
             progress = 1.0f,
             currentPackageBeingCompiled = "",
             lastStatusMessage = summaryMsg,
+            compiledLogLines = logs.toList(),
             packageAotStatuses = updatedStatuses.toMap(),
             lastCompiledCount = if (successCount > 0) successCount else _aotCompilerState.value.lastCompiledCount,
             lastCompileDurationMs = if (successCount > 0) totalDuration else _aotCompilerState.value.lastCompileDurationMs,

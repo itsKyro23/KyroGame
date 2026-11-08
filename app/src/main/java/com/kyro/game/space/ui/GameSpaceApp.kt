@@ -316,6 +316,7 @@ fun GameSpaceApp(
                             AotCompilerScreen(
                                 repository = repository,
                                 homeGames = homeGames,
+                                allApps = allApps,
                                 onBack = { activeSubScreen = ToolSubScreen.NONE }
                             )
                         }
@@ -359,6 +360,9 @@ fun GameSpaceApp(
                                         onNavigateToApps = { currentTab = GameSpaceTab.APPS },
                                         onNavigateToNetworkOptimizer = {
                                             activeSubScreen = ToolSubScreen.NETWORK_OPTIMIZER
+                                        },
+                                        onNavigateToAotCompiler = {
+                                            activeSubScreen = ToolSubScreen.AOT_COMPILER
                                         }
                                     )
                                     GameSpaceTab.TOOLS -> ToolsScreen(

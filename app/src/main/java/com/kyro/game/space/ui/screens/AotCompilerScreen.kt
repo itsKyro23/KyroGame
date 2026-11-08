@@ -57,11 +57,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.FilterQuality
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.kyro.game.space.data.energy.NoxEnergyManager
@@ -81,6 +85,7 @@ import kotlinx.coroutines.launch
 fun AotCompilerScreen(
     repository: GameSpaceRepository,
     homeGames: List<GameItem>,
+    allApps: List<GameItem> = emptyList(),
     onBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -94,10 +99,19 @@ fun AotCompilerScreen(
 
     var showTargetPickerDialog by remember { mutableStateOf(false) }
     var showInsufficientEnergyDialog by remember { mutableStateOf(false) }
+    var showAllGamesStatus by remember { mutableStateOf(true) }
 
-    LaunchedEffect(homeGames) {
+    val displayGames = remember(homeGames, allApps) {
         if (homeGames.isNotEmpty()) {
-            AppIconCache.preloadIconsAsync(context, homeGames.map { it.packageName })
+            homeGames
+        } else {
+            allApps.filter { it.isGame }
+        }
+    }
+
+    LaunchedEffect(displayGames) {
+        if (displayGames.isNotEmpty()) {
+            AppIconCache.preloadIconsAsync(context, displayGames.map { it.packageName })
         }
     }
 
@@ -108,11 +122,12 @@ fun AotCompilerScreen(
         NoxEnergyManager.COST_AOT_DEX_COMPILER // 15⚡
     }
 
-    val selectedGameItem = remember(aotState.selectedTargetPackage, homeGames) {
+    val selectedGameItem = remember(aotState.selectedTargetPackage, displayGames, allApps) {
         if (aotState.selectedTargetPackage.isBlank()) {
             null
         } else {
-            homeGames.firstOrNull { it.packageName == aotState.selectedTargetPackage }
+            displayGames.firstOrNull { it.packageName == aotState.selectedTargetPackage }
+                ?: allApps.firstOrNull { it.packageName == aotState.selectedTargetPackage }
         }
     }
 
@@ -120,7 +135,7 @@ fun AotCompilerScreen(
         ?: if (aotState.selectedTargetPackage.isNotBlank()) {
             aotState.selectedTargetPackage
         } else {
-            "All Added Home Games (${homeGames.size})"
+            "All Added Home Games (${displayGames.size})"
         }
 
     val selectedTargetAotStatus = if (aotState.selectedTargetPackage.isNotBlank()) {
@@ -134,11 +149,45 @@ fun AotCompilerScreen(
     } else if (aotState.selectedTargetPackage.isNotBlank()) {
         "${aotState.selectedTargetPackage} • ${selectedTargetAotStatus?.label ?: "Not Compiled"}"
     } else {
-        val compiledInHome = homeGames.count {
+        val compiledInHome = displayGames.count {
             val st = aotState.statusForPackage(it.packageName)
             st == GameAotStatus.SPEED_PROFILE || st == GameAotStatus.FULL_SPEED
         }
-        "Compiled: $compiledInHome/${homeGames.size} Home games • Tap to select game"
+        "Compiled: $compiledInHome/${displayGames.size} Home games • Tap to select..."
+    }
+
+    val executeCompilationNow: () -> Unit = {
+        scope.launch {
+            val res = repository.runAotGameCompile(
+                targetPackage = aotState.selectedTargetPackage,
+                mode = aotState.selectedMode
+            )
+            if (res.isSuccess && requiredEnergy > 0) {
+                NoxEnergyManager.consumeEnergy(context, requiredEnergy)
+            }
+            val msg = res.getOrElse { it.message ?: "AOT compilation failed" }
+            Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    val triggerCompileWithChecks: () -> Unit = {
+        if (!overview.isAnyPermissionActive) {
+            Toast.makeText(
+                context,
+                "Connect Shizuku, Wireless ADB, or Root first!",
+                Toast.LENGTH_SHORT
+            ).show()
+        } else if (displayGames.isEmpty() && aotState.selectedTargetPackage.isBlank()) {
+            Toast.makeText(
+                context,
+                "Add at least 1 game to Home Hub first!",
+                Toast.LENGTH_SHORT
+            ).show()
+        } else if (requiredEnergy > 0 && !NoxEnergyManager.hasEnergy(context, requiredEnergy)) {
+            showInsufficientEnergyDialog = true
+        } else {
+            executeCompilationNow()
+        }
     }
 
     LazyColumn(
@@ -282,7 +331,7 @@ fun AotCompilerScreen(
                         )
                     }
 
-                    // Target Game Selector Row (Matches Lightweight Texture Selector Bar)
+                    // Target Game Selector Row
                     Surface(
                         onClick = { showTargetPickerDialog = true },
                         shape = RoundedCornerShape(14.dp),
@@ -299,30 +348,22 @@ fun AotCompilerScreen(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
-                            val iconBmp = remember(aotState.selectedTargetPackage) {
-                                AppIconCache.getCachedImageBitmap(aotState.selectedTargetPackage)
-                            }
-                            Surface(
-                                shape = RoundedCornerShape(10.dp),
-                                color = KyroCyan.copy(alpha = 0.16f),
-                                modifier = Modifier.size(40.dp)
-                            ) {
-                                if (iconBmp != null) {
-                                    Image(
-                                        bitmap = iconBmp,
-                                        contentDescription = targetTitle,
-                                        modifier = Modifier
-                                            .fillMaxSize()
-                                            .clip(RoundedCornerShape(10.dp))
-                                    )
-                                } else {
+                            if (aotState.selectedTargetPackage.isNotBlank()) {
+                                AotAppIconBox(
+                                    packageName = aotState.selectedTargetPackage,
+                                    appName = targetTitle,
+                                    size = 40.dp,
+                                    cornerRadius = 10.dp
+                                )
+                            } else {
+                                Surface(
+                                    shape = RoundedCornerShape(10.dp),
+                                    color = KyroCyan.copy(alpha = 0.16f),
+                                    modifier = Modifier.size(40.dp)
+                                ) {
                                     Box(contentAlignment = Alignment.Center) {
                                         Icon(
-                                            imageVector = if (aotState.selectedTargetPackage.isNotBlank()) {
-                                                Icons.Default.SportsEsports
-                                            } else {
-                                                Icons.Default.Public
-                                            },
+                                            imageVector = Icons.Default.Public,
                                             contentDescription = null,
                                             tint = KyroCyan,
                                             modifier = Modifier.size(20.dp)
@@ -384,21 +425,46 @@ fun AotCompilerScreen(
                         }
                     }
 
-                    // Per-Game Live AOT Status List
-                    if (homeGames.isNotEmpty()) {
+                    // Per-Game Live AOT Status List (with real App Icons)
+                    if (displayGames.isNotEmpty()) {
                         HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.25f))
 
-                        Text(
-                            text = "GAME AOT COMPILATION STATUS",
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFF8E99B3),
-                            fontSize = 10.sp,
-                            letterSpacing = 0.6.sp
-                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "GAME AOT COMPILATION STATUS",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF8E99B3),
+                                fontSize = 10.sp,
+                                letterSpacing = 0.6.sp
+                            )
+
+                            if (displayGames.size > 4) {
+                                Surface(
+                                    onClick = { showAllGamesStatus = !showAllGamesStatus },
+                                    shape = RoundedCornerShape(6.dp),
+                                    color = Color(0xFF151D2E)
+                                ) {
+                                    Text(
+                                        text = if (showAllGamesStatus) "Compact (${displayGames.size})" else "Show All (${displayGames.size})",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = KyroCyan,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 9.5.sp,
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                                    )
+                                }
+                            }
+                        }
+
+                        val visibleGames = if (showAllGamesStatus) displayGames else displayGames.take(4)
 
                         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            homeGames.forEach { game ->
+                            visibleGames.forEach { game ->
                                 val gameStatus = aotState.statusForPackage(game.packageName)
                                 val isBeingCompiled = aotState.isCompiling && aotState.currentPackageBeingCompiled == game.packageName
                                 val statusColor = when {
@@ -435,17 +501,28 @@ fun AotCompilerScreen(
                                         verticalAlignment = Alignment.CenterVertically,
                                         horizontalArrangement = Arrangement.SpaceBetween
                                     ) {
-                                        Text(
-                                            text = game.appName,
-                                            style = MaterialTheme.typography.bodySmall,
-                                            fontWeight = FontWeight.Bold,
-                                            color = Color.White,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis,
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(10.dp),
                                             modifier = Modifier
                                                 .weight(1f)
                                                 .padding(end = 8.dp)
-                                        )
+                                        ) {
+                                            AotAppIconBox(
+                                                packageName = game.packageName,
+                                                appName = game.appName,
+                                                size = 32.dp,
+                                                cornerRadius = 8.dp
+                                            )
+                                            Text(
+                                                text = game.appName,
+                                                style = MaterialTheme.typography.bodySmall,
+                                                fontWeight = FontWeight.Bold,
+                                                color = Color.White,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                        }
 
                                         Surface(
                                             shape = RoundedCornerShape(6.dp),
@@ -471,7 +548,7 @@ fun AotCompilerScreen(
             }
         }
 
-        // Section 2: Compilation Mode Selector + Execute Action (Clean without CMD preview or compiler log)
+        // Section 2: Compilation Mode Selector + Execute Action
         item {
             Card(
                 modifier = Modifier.fillMaxWidth(),
@@ -602,45 +679,8 @@ fun AotCompilerScreen(
                         }
                     }
 
-                    // Run Compilation Button (Only deducts 15⚡ when compilation succeeds!)
-                    val executeCompilationNow: () -> Unit = {
-                        scope.launch {
-                            val res = repository.runAotGameCompile(
-                                targetPackage = aotState.selectedTargetPackage,
-                                mode = aotState.selectedMode
-                            )
-                            if (res.isSuccess && requiredEnergy > 0) {
-                                NoxEnergyManager.consumeEnergy(context, requiredEnergy)
-                            }
-                            val msg = res.getOrElse { it.message ?: "AOT compilation failed" }
-                            Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
-                        }
-                    }
-
                     Button(
-                        onClick = {
-                            if (!overview.isAnyPermissionActive) {
-                                Toast.makeText(
-                                    context,
-                                    "Connect Shizuku, Wireless ADB, or Root first!",
-                                    Toast.LENGTH_SHORT
-                                ).show()
-                                return@Button
-                            }
-                            if (homeGames.isEmpty() && aotState.selectedTargetPackage.isBlank()) {
-                                Toast.makeText(
-                                    context,
-                                    "Add at least 1 game to Home Hub first!",
-                                    Toast.LENGTH_SHORT
-                                ).show()
-                                return@Button
-                            }
-                            if (requiredEnergy > 0 && !NoxEnergyManager.hasEnergy(context, requiredEnergy)) {
-                                showInsufficientEnergyDialog = true
-                            } else {
-                                executeCompilationNow()
-                            }
-                        },
+                        onClick = triggerCompileWithChecks,
                         enabled = !aotState.isCompiling,
                         shape = RoundedCornerShape(14.dp),
                         colors = ButtonDefaults.buttonColors(
@@ -676,10 +716,11 @@ fun AotCompilerScreen(
         }
     }
 
-    // Target Game Picker Dialog (Shows live AOT Status badge for every game!)
+    // Target Game Picker Dialog (Shows real App Icon + live AOT Status badge for every game)
     if (showTargetPickerDialog) {
-        val gameCandidates = remember(homeGames) {
-            homeGames.sortedBy { it.appName.lowercase() }
+        val gameCandidates = remember(displayGames, allApps) {
+            val base = if (displayGames.isNotEmpty()) displayGames else allApps
+            base.sortedBy { it.appName.lowercase() }
         }
 
         AlertDialog(
@@ -753,12 +794,12 @@ fun AotCompilerScreen(
                                 )
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text(
-                                        text = "All Added Home Games (${homeGames.size})",
+                                        text = "All Added Home Games (${displayGames.size})",
                                         style = MaterialTheme.typography.bodyMedium,
                                         fontWeight = FontWeight.Bold
                                     )
                                     Text(
-                                        text = "Compiled: $compiledCount/${homeGames.size} games • Cost: 15⚡",
+                                        text = "Compiled: $compiledCount/${displayGames.size} games • Cost: 15⚡",
                                         style = MaterialTheme.typography.labelSmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
@@ -814,9 +855,6 @@ fun AotCompilerScreen(
 
                     items(items = gameCandidates, key = { it.packageName }) { game ->
                         val isSelected = aotState.selectedTargetPackage == game.packageName
-                        val gameIconBitmap = remember(game.packageName) {
-                            AppIconCache.getCachedImageBitmap(game.packageName)
-                        }
                         val gameAotStatus = aotState.statusForPackage(game.packageName)
                         val badgeColor = when (gameAotStatus) {
                             GameAotStatus.SPEED_PROFILE -> KyroGreen
@@ -848,30 +886,12 @@ fun AotCompilerScreen(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(12.dp)
                             ) {
-                                Surface(
-                                    shape = RoundedCornerShape(10.dp),
-                                    color = KyroCyan.copy(alpha = 0.14f),
-                                    modifier = Modifier.size(40.dp)
-                                ) {
-                                    if (gameIconBitmap != null) {
-                                        Image(
-                                            bitmap = gameIconBitmap,
-                                            contentDescription = game.appName,
-                                            modifier = Modifier
-                                                .fillMaxSize()
-                                                .clip(RoundedCornerShape(10.dp))
-                                        )
-                                    } else {
-                                        Box(contentAlignment = Alignment.Center) {
-                                            Icon(
-                                                imageVector = Icons.Default.SportsEsports,
-                                                contentDescription = null,
-                                                tint = KyroCyan,
-                                                modifier = Modifier.size(20.dp)
-                                            )
-                                        }
-                                    }
-                                }
+                                AotAppIconBox(
+                                    packageName = game.packageName,
+                                    appName = game.appName,
+                                    size = 40.dp,
+                                    cornerRadius = 10.dp
+                                )
                                 Column(
                                     modifier = Modifier.weight(1f),
                                     verticalArrangement = Arrangement.spacedBy(3.dp)
@@ -940,18 +960,59 @@ fun AotCompilerScreen(
             onDismiss = { showInsufficientEnergyDialog = false },
             onEnergyGranted = {
                 showInsufficientEnergyDialog = false
-                scope.launch {
-                    val res = repository.runAotGameCompile(
-                        targetPackage = aotState.selectedTargetPackage,
-                        mode = aotState.selectedMode
-                    )
-                    if (res.isSuccess && requiredEnergy > 0) {
-                        NoxEnergyManager.consumeEnergy(context, requiredEnergy)
-                    }
-                    val msg = res.getOrElse { it.message ?: "AOT compilation failed" }
-                    Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
-                }
+                executeCompilationNow()
             }
         )
+    }
+}
+
+@Composable
+private fun AotAppIconBox(
+    packageName: String,
+    appName: String,
+    size: Dp = 36.dp,
+    cornerRadius: Dp = 9.dp
+) {
+    val context = LocalContext.current
+    var iconBitmap by remember(packageName) {
+        mutableStateOf(
+            AppIconCache.getCachedImageBitmap(packageName)
+                ?: AppIconCache.getIcon(context, packageName)?.asImageBitmap()
+        )
+    }
+
+    LaunchedEffect(packageName) {
+        if (iconBitmap == null && packageName.isNotBlank()) {
+            iconBitmap = AppIconCache.getOrLoadImageBitmap(context, packageName)
+        }
+    }
+
+    val shape = RoundedCornerShape(cornerRadius)
+    Surface(
+        shape = shape,
+        color = KyroCyan.copy(alpha = 0.14f),
+        modifier = Modifier.size(size)
+    ) {
+        val bmp = iconBitmap
+        if (bmp != null) {
+            Image(
+                bitmap = bmp,
+                contentDescription = appName,
+                contentScale = ContentScale.Crop,
+                filterQuality = FilterQuality.Medium,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clip(shape)
+            )
+        } else {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(
+                    imageVector = Icons.Default.SportsEsports,
+                    contentDescription = null,
+                    tint = KyroCyan,
+                    modifier = Modifier.size(size * 0.52f)
+                )
+            }
+        }
     }
 }
