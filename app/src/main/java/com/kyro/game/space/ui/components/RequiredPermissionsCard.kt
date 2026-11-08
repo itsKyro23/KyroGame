@@ -56,6 +56,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.kyro.game.space.data.model.ExecutionMethod
 import com.kyro.game.space.ui.theme.KyroGreen
+import com.kyro.game.space.ui.theme.appStrings
 
 data class PermissionRequirement(
     val id: String,
@@ -79,6 +80,7 @@ fun RequiredPermissionsCard(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val strings = appStrings()
     var showRestrictedGuideDialog by remember { mutableStateOf(false) }
     var restrictedDialogTargetAction by remember { mutableStateOf("") }
     var restrictedDialogTitle by remember { mutableStateOf("") }
@@ -194,7 +196,7 @@ fun RequiredPermissionsCard(
                         .padding(end = 6.dp)
                 ) {
                     Text(
-                        text = "REQUIRED PERMISSIONS",
+                        text = strings.reqPermissionsTitle,
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         letterSpacing = 0.5.sp,
@@ -208,7 +210,7 @@ fun RequiredPermissionsCard(
                         color = MaterialTheme.colorScheme.error.copy(alpha = 0.15f)
                     ) {
                         Text(
-                            text = "${pendingPermissions.size} Pending",
+                            text = "${pendingPermissions.size} ${strings.pendingSuffix}",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.error,
                             fontWeight = FontWeight.Bold,
@@ -241,7 +243,7 @@ fun RequiredPermissionsCard(
 
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = "Grant specific permissions to unlock in-game overlay, playtime tracking, and elevated system controls.",
+                text = strings.reqPermissionsSubtitle,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -339,6 +341,7 @@ private fun PermissionRowItem(
     context: Context,
     onOpenAppInfo: () -> Unit
 ) {
+    val strings = appStrings()
     Surface(
         modifier = Modifier
             .fillMaxWidth()
@@ -415,7 +418,7 @@ private fun PermissionRowItem(
                             )
                             Spacer(modifier = Modifier.width(4.dp))
                             Text(
-                                text = "Granted",
+                                text = strings.permGranted,
                                 style = MaterialTheme.typography.labelSmall,
                                 color = KyroGreen,
                                 fontWeight = FontWeight.Bold
@@ -432,7 +435,7 @@ private fun PermissionRowItem(
                             contentColor = MaterialTheme.colorScheme.onPrimaryContainer
                         )
                     ) {
-                        Text(text = "Grant", style = MaterialTheme.typography.labelSmall)
+                        Text(text = strings.btnGrant, style = MaterialTheme.typography.labelSmall)
                     }
                 }
             }

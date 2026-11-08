@@ -62,6 +62,7 @@ import com.kyro.game.space.ui.theme.KyroCyan
 import com.kyro.game.space.ui.theme.KyroGreen
 import com.kyro.game.space.ui.theme.KyroOrange
 import com.kyro.game.space.ui.theme.KyroPrimary
+import com.kyro.game.space.ui.theme.appStrings
 import com.kyro.game.space.ui.theme.rememberResponsiveMetrics
 import kotlinx.coroutines.launch
 
@@ -76,6 +77,7 @@ fun ToolsScreen(
 ) {
     val context = LocalContext.current
     val responsive = rememberResponsiveMetrics()
+    val strings = appStrings()
     val scope = rememberCoroutineScope()
     val overview by repository.connectionState.collectAsState()
     val resState by repository.resolutionState.collectAsState()
@@ -129,7 +131,7 @@ fun ToolsScreen(
                     modifier = Modifier.size(20.dp)
                 )
                 Text(
-                    text = "SYSTEM & GAMING TOOLS",
+                    text = strings.toolsHeaderTitle,
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.Bold,
                     letterSpacing = 0.8.sp,
@@ -162,7 +164,7 @@ fun ToolsScreen(
         // 1. Resolution Changer Tool Card
         item {
             Card(
-                onClick = { openToolSafely(onOpenResolutionChanger, "Resolution Changer") },
+                onClick = { openToolSafely(onOpenResolutionChanger, strings.toolResolutionTitle) },
                 modifier = Modifier
                     .fillMaxWidth()
                     .testTag("tools_resolution_changer_card"),
@@ -205,7 +207,7 @@ fun ToolsScreen(
                             }
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    text = "Resolution Changer",
+                                    text = strings.toolResolutionTitle,
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Black,
                                     color = MaterialTheme.colorScheme.onSurface
@@ -245,7 +247,7 @@ fun ToolsScreen(
                     }
 
                     Text(
-                        text = "Boost GPU frame rate and reduce thermal throttling by scaling display resolution down to 360p with device-matched presets and a 10-second crash/misclick auto-revert watchdog.",
+                        text = strings.toolResolutionDesc,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         lineHeight = 17.sp
@@ -283,7 +285,7 @@ fun ToolsScreen(
                         }
 
                         Button(
-                            onClick = { openToolSafely(onOpenResolutionChanger, "Resolution Changer") },
+                            onClick = { openToolSafely(onOpenResolutionChanger, strings.toolResolutionTitle) },
                             shape = RoundedCornerShape(10.dp),
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = MaterialTheme.colorScheme.primary,
@@ -295,7 +297,7 @@ fun ToolsScreen(
                                 .testTag("open_resolution_changer_btn")
                         ) {
                             Text(
-                                text = "Open",
+                                text = strings.btnOpen,
                                 style = MaterialTheme.typography.labelSmall,
                                 fontWeight = FontWeight.Bold
                             )
@@ -315,7 +317,7 @@ fun ToolsScreen(
         item {
             val texSkyBlue = Color(0xFF56B4E9)
             Card(
-                onClick = { openToolSafely(onOpenTextureTuner, "Lightweight Texture") },
+                onClick = { openToolSafely(onOpenTextureTuner, strings.toolTextureTitle) },
                 modifier = Modifier
                     .fillMaxWidth()
                     .testTag("tools_texture_tuner_card"),
@@ -358,7 +360,7 @@ fun ToolsScreen(
                             }
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    text = "Lightweight Texture",
+                                    text = strings.toolTextureTitle,
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Black,
                                     color = MaterialTheme.colorScheme.onSurface
@@ -391,7 +393,7 @@ fun ToolsScreen(
                     }
 
                     Text(
-                        text = "Tune 3D game texture filtering (Smooth Bilinear, Retro Pixel, or Total Blocky Mipmaps) with a live Before/After split preview and GPU compatibility check — without shrinking UI resolution.",
+                        text = strings.toolTextureDesc,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         lineHeight = 17.sp
@@ -429,7 +431,7 @@ fun ToolsScreen(
                         Spacer(modifier = Modifier.width(8.dp))
 
                         Button(
-                            onClick = { openToolSafely(onOpenTextureTuner, "Lightweight Texture") },
+                            onClick = { openToolSafely(onOpenTextureTuner, strings.toolTextureTitle) },
                             shape = RoundedCornerShape(10.dp),
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = MaterialTheme.colorScheme.primary,
@@ -441,7 +443,7 @@ fun ToolsScreen(
                                 .testTag("open_texture_tuner_btn")
                         ) {
                             Text(
-                                text = "Open",
+                                text = strings.btnOpen,
                                 style = MaterialTheme.typography.labelSmall,
                                 fontWeight = FontWeight.Bold
                             )
@@ -460,7 +462,7 @@ fun ToolsScreen(
         // 3. Network Optimizer Tool Card
         item {
             Card(
-                onClick = { openToolSafely(onOpenNetworkOptimizer, "Network Optimizer") },
+                onClick = { openToolSafely(onOpenNetworkOptimizer, strings.toolNetworkTitle) },
                 modifier = Modifier
                     .fillMaxWidth()
                     .testTag("tools_network_optimizer_card"),
@@ -503,7 +505,7 @@ fun ToolsScreen(
                             }
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    text = "Network Optimizer",
+                                    text = strings.toolNetworkTitle,
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Black,
                                     color = MaterialTheme.colorScheme.onSurface
@@ -536,7 +538,7 @@ fun ToolsScreen(
                     }
 
                     Text(
-                        text = "Benchmark all gaming DNS resolvers across 10 multi-second passes to select the lowest-jitter server, lock Wi-Fi low-latency mode, and prioritize 4G/5G cellular packets.",
+                        text = strings.toolNetworkDesc,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         lineHeight = 17.sp
@@ -574,7 +576,7 @@ fun ToolsScreen(
                         }
 
                         Button(
-                            onClick = { openToolSafely(onOpenNetworkOptimizer, "Network Optimizer") },
+                            onClick = { openToolSafely(onOpenNetworkOptimizer, strings.toolNetworkTitle) },
                             shape = RoundedCornerShape(10.dp),
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = MaterialTheme.colorScheme.primary,
@@ -586,7 +588,7 @@ fun ToolsScreen(
                                 .testTag("open_network_optimizer_btn")
                         ) {
                             Text(
-                                text = "Open",
+                                text = strings.btnOpen,
                                 style = MaterialTheme.typography.labelSmall,
                                 fontWeight = FontWeight.Bold
                             )
@@ -605,7 +607,7 @@ fun ToolsScreen(
         // 4. AOT Game DEX Compiler Tool Card
         item {
             Card(
-                onClick = { openToolSafely(onOpenAotCompiler, "AOT Game DEX Compiler") },
+                onClick = { openToolSafely(onOpenAotCompiler, strings.toolAotTitle) },
                 modifier = Modifier
                     .fillMaxWidth()
                     .testTag("tools_aot_compiler_card"),
@@ -648,7 +650,7 @@ fun ToolsScreen(
                             }
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    text = "AOT Game DEX Compiler",
+                                    text = strings.toolAotTitle,
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Black,
                                     color = MaterialTheme.colorScheme.onSurface
@@ -692,7 +694,7 @@ fun ToolsScreen(
                     }
 
                     Text(
-                        text = "Pre-compile game DEX bytecode ahead-of-time via cmd package compile (-m speed-profile or -m speed -f) to eliminate runtime JIT compilation stutters during intense teamfights and map loads.",
+                        text = strings.toolAotDesc,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         lineHeight = 17.sp
@@ -734,7 +736,7 @@ fun ToolsScreen(
                         Spacer(modifier = Modifier.width(8.dp))
 
                         Button(
-                            onClick = { openToolSafely(onOpenAotCompiler, "AOT Game DEX Compiler") },
+                            onClick = { openToolSafely(onOpenAotCompiler, strings.toolAotTitle) },
                             shape = RoundedCornerShape(10.dp),
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = MaterialTheme.colorScheme.primary,
@@ -746,7 +748,7 @@ fun ToolsScreen(
                                 .testTag("open_aot_compiler_btn")
                         ) {
                             Text(
-                                text = "Open",
+                                text = strings.btnOpen,
                                 style = MaterialTheme.typography.labelSmall,
                                 fontWeight = FontWeight.Bold
                             )
@@ -775,7 +777,7 @@ fun ToolsScreen(
             },
             title = {
                 Text(
-                    text = "Permission Required",
+                    text = strings.permRequiredTitle,
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )

@@ -74,7 +74,11 @@ import com.kyro.game.space.ui.screens.TextureTunerScreen
 import com.kyro.game.space.ui.screens.ToolsScreen
 import com.kyro.game.space.ui.theme.KyroAccent
 import com.kyro.game.space.ui.theme.KyroPrimary
+import com.kyro.game.space.ui.theme.LocalAppStrings
+import com.kyro.game.space.ui.theme.appStrings
 import com.kyro.game.space.ui.theme.rememberResponsiveMetrics
+import com.kyro.game.space.ui.theme.stringsForLanguage
+import androidx.compose.runtime.CompositionLocalProvider
 
 enum class GameSpaceTab(
     val title: String,
@@ -119,6 +123,8 @@ fun GameSpaceApp(
 
     val refreshIntervalMs by repository.refreshIntervalMs.collectAsState()
     val floatingHudEnabled by repository.floatingHudEnabled.collectAsState()
+    val appLanguage by repository.appLanguage.collectAsState()
+    val currentStrings = remember(appLanguage) { stringsForLanguage(appLanguage) }
 
     if (showSplash) {
         SplashScreen(
@@ -140,314 +146,324 @@ fun GameSpaceApp(
         showExitDialog = true
     }
 
-    Scaffold(
-        modifier = Modifier.fillMaxSize(),
-        topBar = {
-            TopAppBar(
-                navigationIcon = {
-                    if (activeSubScreen != ToolSubScreen.NONE) {
-                        IconButton(
-                            onClick = { activeSubScreen = ToolSubScreen.NONE },
-                            modifier = Modifier.testTag("network_optimizer_back_button")
-                        ) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = "Back",
-                                tint = MaterialTheme.colorScheme.onBackground
-                            )
-                        }
-                    }
-                },
-                title = {
-                    Text(
-                        text = when (activeSubScreen) {
-                            ToolSubScreen.RESOLUTION_CHANGER -> "RESOLUTION CHANGER"
-                            ToolSubScreen.TEXTURE_TUNER -> "LIGHTWEIGHT TEXTURE"
-                            ToolSubScreen.NETWORK_OPTIMIZER -> "NETWORK OPTIMIZER"
-                            ToolSubScreen.AOT_COMPILER -> "AOT GAME DEX COMPILER"
-                            ToolSubScreen.NONE -> when (currentTab) {
-                                GameSpaceTab.HOME -> "NOX - GAME SPACE"
-                                GameSpaceTab.TOOLS -> "TACTICAL TOOLS"
-                                GameSpaceTab.APPS -> "APP MANAGER"
-                                GameSpaceTab.SETTINGS -> "PREFERENCES"
-                            }
-                        },
-                        style = MaterialTheme.typography.titleLarge.copy(
-                            fontSize = responsive.topBarTitleSize
-                        ),
-                        fontWeight = FontWeight.Black,
-                        letterSpacing = if (responsive.isCompactWidth) 0.5.sp else 1.sp,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        color = MaterialTheme.colorScheme.onBackground
-                    )
-                },
-                actions = {
-                    com.kyro.game.space.ui.components.NoxEnergyBadge(
-                        onClick = { showEnergyDialog = true },
-                        modifier = Modifier.padding(end = if (responsive.isCompactWidth) 8.dp else 12.dp)
-                    )
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.background
-                )
-            )
-        },
-        bottomBar = {
-            androidx.compose.foundation.layout.Column {
-                if (activeSubScreen == ToolSubScreen.NONE) {
-                    com.kyro.game.space.ads.AdMobBanner(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = responsive.screenHorizontalPadding, vertical = 2.dp)
-                    )
-                }
+    CompositionLocalProvider(LocalAppStrings provides currentStrings) {
+        val strings = appStrings()
 
-                NavigationBar(
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    tonalElevation = 6.dp,
-                    modifier = Modifier.testTag("bottom_nav_bar")
-                ) {
-                GameSpaceTab.entries.forEach { tab ->
-                    val isSelected = currentTab == tab && activeSubScreen == ToolSubScreen.NONE
-                    NavigationBarItem(
-                        selected = isSelected,
-                        onClick = {
-                            activeSubScreen = ToolSubScreen.NONE
-                            currentTab = tab
-                        },
-                        icon = {
-                            Icon(
-                                imageVector = if (isSelected) tab.selectedIcon else tab.unselectedIcon,
-                                contentDescription = tab.title
-                            )
-                        },
-                        label = {
-                            Text(
-                                text = tab.title,
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        },
-                        colors = NavigationBarItemDefaults.colors(
-                            selectedIconColor = MaterialTheme.colorScheme.onPrimary,
-                            selectedTextColor = KyroAccent,
-                            indicatorColor = KyroPrimary
-                        ),
-                        modifier = Modifier.testTag("tab_${tab.name.lowercase()}")
-                    )
-                }
-            }
-        }
-    }
-    ) { innerPadding ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding),
-            contentAlignment = Alignment.TopCenter
-        ) {
-            AnimatedContent(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .widthIn(max = responsive.maxContentWidth),
-                targetState = activeSubScreen,
-                transitionSpec = {
-                    if (targetState != ToolSubScreen.NONE) {
-                        (slideInHorizontally(
-                            animationSpec = tween(340, easing = FastOutSlowInEasing)
-                        ) { width -> width } + fadeIn(animationSpec = tween(300)))
-                            .togetherWith(
-                                slideOutHorizontally(
-                                    animationSpec = tween(280, easing = FastOutSlowInEasing)
-                                ) { width -> -width / 3 } + fadeOut(animationSpec = tween(240))
-                            )
-                    } else {
-                        (slideInHorizontally(
-                            animationSpec = tween(320, easing = FastOutSlowInEasing)
-                        ) { width -> -width / 3 } + fadeIn(animationSpec = tween(300)))
-                            .togetherWith(
-                                slideOutHorizontally(
-                                    animationSpec = tween(300, easing = FastOutSlowInEasing)
-                                ) { width -> width } + fadeOut(animationSpec = tween(240))
-                            )
-                    }
-                },
-                label = "subscreen_animated_transition"
-            ) { subScreen ->
-                when (subScreen) {
-                    ToolSubScreen.RESOLUTION_CHANGER -> {
-                        ResolutionChangerScreen(
-                            repository = repository,
-                            onBack = { activeSubScreen = ToolSubScreen.NONE }
-                        )
-                    }
-                    ToolSubScreen.TEXTURE_TUNER -> {
-                        TextureTunerScreen(
-                            repository = repository,
-                            allApps = allApps,
-                            onBack = { activeSubScreen = ToolSubScreen.NONE }
-                        )
-                    }
-                    ToolSubScreen.NETWORK_OPTIMIZER -> {
-                        NetworkOptimizerScreen(
-                            repository = repository,
-                            stats = stats,
-                            onBack = { activeSubScreen = ToolSubScreen.NONE }
-                        )
-                    }
-                    ToolSubScreen.AOT_COMPILER -> {
-                        AotCompilerScreen(
-                            repository = repository,
-                            homeGames = homeGames,
-                            onBack = { activeSubScreen = ToolSubScreen.NONE }
-                        )
-                    }
-                    ToolSubScreen.NONE -> {
-                        AnimatedContent(
-                            targetState = currentTab,
-                            transitionSpec = {
-                                val direction = targetState.ordinal.compareTo(initialState.ordinal)
-                                if (direction >= 0) {
-                                    (slideInHorizontally(
-                                        animationSpec = tween(300, easing = FastOutSlowInEasing)
-                                    ) { width -> width / 3 } + fadeIn(animationSpec = tween(280)))
-                                        .togetherWith(
-                                            slideOutHorizontally(
-                                                animationSpec = tween(280, easing = FastOutSlowInEasing)
-                                            ) { width -> -width / 3 } + fadeOut(animationSpec = tween(240))
-                                        )
-                                } else {
-                                    (slideInHorizontally(
-                                        animationSpec = tween(300, easing = FastOutSlowInEasing)
-                                    ) { width -> -width / 3 } + fadeIn(animationSpec = tween(280)))
-                                        .togetherWith(
-                                            slideOutHorizontally(
-                                                animationSpec = tween(280, easing = FastOutSlowInEasing)
-                                            ) { width -> width / 3 } + fadeOut(animationSpec = tween(240))
-                                        )
+        Scaffold(
+            modifier = Modifier.fillMaxSize(),
+            topBar = {
+                TopAppBar(
+                    navigationIcon = {
+                        if (activeSubScreen != ToolSubScreen.NONE) {
+                            IconButton(
+                                onClick = { activeSubScreen = ToolSubScreen.NONE },
+                                modifier = Modifier.testTag("network_optimizer_back_button")
+                            ) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                    contentDescription = "Back",
+                                    tint = MaterialTheme.colorScheme.onBackground
+                                )
+                            }
+                        }
+                    },
+                    title = {
+                        Text(
+                            text = when (activeSubScreen) {
+                                ToolSubScreen.RESOLUTION_CHANGER -> strings.topTitleResolution
+                                ToolSubScreen.TEXTURE_TUNER -> strings.topTitleTexture
+                                ToolSubScreen.NETWORK_OPTIMIZER -> strings.topTitleNetwork
+                                ToolSubScreen.AOT_COMPILER -> strings.topTitleAot
+                                ToolSubScreen.NONE -> when (currentTab) {
+                                    GameSpaceTab.HOME -> strings.topTitleHome
+                                    GameSpaceTab.TOOLS -> strings.topTitleTools
+                                    GameSpaceTab.APPS -> strings.topTitleApps
+                                    GameSpaceTab.SETTINGS -> strings.topTitleSettings
                                 }
                             },
-                            label = "tab_smooth_slide"
-                        ) { targetTab ->
-                            when (targetTab) {
-                                GameSpaceTab.HOME -> HomeScreen(
-                                    repository = repository,
-                                    overview = overview,
-                                    stats = stats,
-                                    homeGames = homeGames,
-                                    isUsageAccessGranted = isUsageAccessGranted,
-                                    isOverlayGranted = isOverlayGranted,
-                                    isNotificationGranted = isNotificationGranted,
-                                    onRequestNotification = onRequestNotification,
-                                    onNavigateToApps = { currentTab = GameSpaceTab.APPS },
-                                    onNavigateToNetworkOptimizer = {
-                                        activeSubScreen = ToolSubScreen.NETWORK_OPTIMIZER
+                            style = MaterialTheme.typography.titleLarge.copy(
+                                fontSize = responsive.topBarTitleSize
+                            ),
+                            fontWeight = FontWeight.Black,
+                            letterSpacing = if (responsive.isCompactWidth) 0.5.sp else 1.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            color = MaterialTheme.colorScheme.onBackground
+                        )
+                    },
+                    actions = {
+                        com.kyro.game.space.ui.components.NoxEnergyBadge(
+                            onClick = { showEnergyDialog = true },
+                            modifier = Modifier.padding(end = if (responsive.isCompactWidth) 8.dp else 12.dp)
+                        )
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.background
+                    )
+                )
+            },
+            bottomBar = {
+                androidx.compose.foundation.layout.Column {
+                    if (activeSubScreen == ToolSubScreen.NONE) {
+                        com.kyro.game.space.ads.AdMobBanner(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = responsive.screenHorizontalPadding, vertical = 2.dp)
+                        )
+                    }
+
+                    NavigationBar(
+                        containerColor = MaterialTheme.colorScheme.surface,
+                        tonalElevation = 6.dp,
+                        modifier = Modifier.testTag("bottom_nav_bar")
+                    ) {
+                        GameSpaceTab.entries.forEach { tab ->
+                            val isSelected = currentTab == tab && activeSubScreen == ToolSubScreen.NONE
+                            val tabLabel = when (tab) {
+                                GameSpaceTab.HOME -> strings.tabHome
+                                GameSpaceTab.TOOLS -> strings.tabTools
+                                GameSpaceTab.APPS -> strings.tabApps
+                                GameSpaceTab.SETTINGS -> strings.tabSettings
+                            }
+                            NavigationBarItem(
+                                selected = isSelected,
+                                onClick = {
+                                    activeSubScreen = ToolSubScreen.NONE
+                                    currentTab = tab
+                                },
+                                icon = {
+                                    Icon(
+                                        imageVector = if (isSelected) tab.selectedIcon else tab.unselectedIcon,
+                                        contentDescription = tabLabel
+                                    )
+                                },
+                                label = {
+                                    Text(
+                                        text = tabLabel,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                },
+                                colors = NavigationBarItemDefaults.colors(
+                                    selectedIconColor = MaterialTheme.colorScheme.onPrimary,
+                                    selectedTextColor = KyroAccent,
+                                    indicatorColor = KyroPrimary
+                                ),
+                                modifier = Modifier.testTag("tab_${tab.name.lowercase()}")
+                            )
+                        }
+                    }
+                }
+            }
+        ) { innerPadding ->
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding),
+                contentAlignment = Alignment.TopCenter
+            ) {
+                AnimatedContent(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .widthIn(max = responsive.maxContentWidth),
+                    targetState = activeSubScreen,
+                    transitionSpec = {
+                        if (targetState != ToolSubScreen.NONE) {
+                            (slideInHorizontally(
+                                animationSpec = tween(340, easing = FastOutSlowInEasing)
+                            ) { width -> width } + fadeIn(animationSpec = tween(300)))
+                                .togetherWith(
+                                    slideOutHorizontally(
+                                        animationSpec = tween(280, easing = FastOutSlowInEasing)
+                                    ) { width -> -width / 3 } + fadeOut(animationSpec = tween(240))
+                                )
+                        } else {
+                            (slideInHorizontally(
+                                animationSpec = tween(320, easing = FastOutSlowInEasing)
+                            ) { width -> -width / 3 } + fadeIn(animationSpec = tween(300)))
+                                .togetherWith(
+                                    slideOutHorizontally(
+                                        animationSpec = tween(300, easing = FastOutSlowInEasing)
+                                    ) { width -> width } + fadeOut(animationSpec = tween(240))
+                                )
+                        }
+                    },
+                    label = "subscreen_animated_transition"
+                ) { subScreen ->
+                    when (subScreen) {
+                        ToolSubScreen.RESOLUTION_CHANGER -> {
+                            ResolutionChangerScreen(
+                                repository = repository,
+                                onBack = { activeSubScreen = ToolSubScreen.NONE }
+                            )
+                        }
+                        ToolSubScreen.TEXTURE_TUNER -> {
+                            TextureTunerScreen(
+                                repository = repository,
+                                allApps = allApps,
+                                onBack = { activeSubScreen = ToolSubScreen.NONE }
+                            )
+                        }
+                        ToolSubScreen.NETWORK_OPTIMIZER -> {
+                            NetworkOptimizerScreen(
+                                repository = repository,
+                                stats = stats,
+                                onBack = { activeSubScreen = ToolSubScreen.NONE }
+                            )
+                        }
+                        ToolSubScreen.AOT_COMPILER -> {
+                            AotCompilerScreen(
+                                repository = repository,
+                                homeGames = homeGames,
+                                onBack = { activeSubScreen = ToolSubScreen.NONE }
+                            )
+                        }
+                        ToolSubScreen.NONE -> {
+                            AnimatedContent(
+                                targetState = currentTab,
+                                transitionSpec = {
+                                    val direction = targetState.ordinal.compareTo(initialState.ordinal)
+                                    if (direction >= 0) {
+                                        (slideInHorizontally(
+                                            animationSpec = tween(300, easing = FastOutSlowInEasing)
+                                        ) { width -> width / 3 } + fadeIn(animationSpec = tween(280)))
+                                            .togetherWith(
+                                                slideOutHorizontally(
+                                                    animationSpec = tween(280, easing = FastOutSlowInEasing)
+                                                ) { width -> -width / 3 } + fadeOut(animationSpec = tween(240))
+                                            )
+                                    } else {
+                                        (slideInHorizontally(
+                                            animationSpec = tween(300, easing = FastOutSlowInEasing)
+                                        ) { width -> -width / 3 } + fadeIn(animationSpec = tween(280)))
+                                            .togetherWith(
+                                                slideOutHorizontally(
+                                                    animationSpec = tween(280, easing = FastOutSlowInEasing)
+                                                ) { width -> width / 3 } + fadeOut(animationSpec = tween(240))
+                                            )
                                     }
-                                )
-                                GameSpaceTab.TOOLS -> ToolsScreen(
-                                    repository = repository,
-                                    onOpenResolutionChanger = {
-                                        activeSubScreen = ToolSubScreen.RESOLUTION_CHANGER
-                                    },
-                                    onOpenNetworkOptimizer = {
-                                        activeSubScreen = ToolSubScreen.NETWORK_OPTIMIZER
-                                    },
-                                    onOpenTextureTuner = {
-                                        activeSubScreen = ToolSubScreen.TEXTURE_TUNER
-                                    },
-                                    onOpenAotCompiler = {
-                                        activeSubScreen = ToolSubScreen.AOT_COMPILER
-                                    }
-                                )
-                                GameSpaceTab.APPS -> AppsScreen(
-                                    repository = repository,
-                                    allApps = allApps,
-                                    overview = overview
-                                )
-                                GameSpaceTab.SETTINGS -> SettingsScreen(
-                                    repository = repository,
-                                    overview = overview,
-                                    refreshIntervalMs = refreshIntervalMs,
-                                    floatingHudEnabled = floatingHudEnabled,
-                                    isOverlayGranted = isOverlayGranted
-                                )
+                                },
+                                label = "tab_smooth_slide"
+                            ) { targetTab ->
+                                when (targetTab) {
+                                    GameSpaceTab.HOME -> HomeScreen(
+                                        repository = repository,
+                                        overview = overview,
+                                        stats = stats,
+                                        homeGames = homeGames,
+                                        isUsageAccessGranted = isUsageAccessGranted,
+                                        isOverlayGranted = isOverlayGranted,
+                                        isNotificationGranted = isNotificationGranted,
+                                        onRequestNotification = onRequestNotification,
+                                        onNavigateToApps = { currentTab = GameSpaceTab.APPS },
+                                        onNavigateToNetworkOptimizer = {
+                                            activeSubScreen = ToolSubScreen.NETWORK_OPTIMIZER
+                                        }
+                                    )
+                                    GameSpaceTab.TOOLS -> ToolsScreen(
+                                        repository = repository,
+                                        onOpenResolutionChanger = {
+                                            activeSubScreen = ToolSubScreen.RESOLUTION_CHANGER
+                                        },
+                                        onOpenNetworkOptimizer = {
+                                            activeSubScreen = ToolSubScreen.NETWORK_OPTIMIZER
+                                        },
+                                        onOpenTextureTuner = {
+                                            activeSubScreen = ToolSubScreen.TEXTURE_TUNER
+                                        },
+                                        onOpenAotCompiler = {
+                                            activeSubScreen = ToolSubScreen.AOT_COMPILER
+                                        }
+                                    )
+                                    GameSpaceTab.APPS -> AppsScreen(
+                                        repository = repository,
+                                        allApps = allApps,
+                                        overview = overview
+                                    )
+                                    GameSpaceTab.SETTINGS -> SettingsScreen(
+                                        repository = repository,
+                                        overview = overview,
+                                        refreshIntervalMs = refreshIntervalMs,
+                                        floatingHudEnabled = floatingHudEnabled,
+                                        isOverlayGranted = isOverlayGranted
+                                    )
+                                }
                             }
                         }
                     }
                 }
             }
         }
-    }
 
-    if (showExitDialog) {
-        AlertDialog(
-            onDismissRequest = { showExitDialog = false },
-            containerColor = MaterialTheme.colorScheme.surface,
-            shape = RoundedCornerShape(22.dp),
-            title = {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ExitToApp,
-                        contentDescription = null,
-                        tint = KyroAccent
-                    )
+        if (showExitDialog) {
+            AlertDialog(
+                onDismissRequest = { showExitDialog = false },
+                containerColor = MaterialTheme.colorScheme.surface,
+                shape = RoundedCornerShape(22.dp),
+                title = {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ExitToApp,
+                            contentDescription = null,
+                            tint = KyroAccent
+                        )
+                        Text(
+                            text = strings.exitDialogTitle,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                },
+                text = {
                     Text(
-                        text = "Exit NOX - Game Space?",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
+                        text = strings.exitDialogMessage,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        lineHeight = 19.sp
                     )
+                },
+                dismissButton = {
+                    TextButton(
+                        onClick = { showExitDialog = false },
+                        modifier = Modifier.testTag("exit_dialog_cancel_btn")
+                    ) {
+                        Text(
+                            text = strings.exitDialogCancel,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            showExitDialog = false
+                            repository.deactivateTextureSessionOnExit()
+                            (context as? Activity)?.finish()
+                        },
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = KyroPrimary,
+                            contentColor = Color.White
+                        ),
+                        modifier = Modifier.testTag("exit_dialog_confirm_btn")
+                    ) {
+                        Text(
+                            text = strings.exitDialogConfirm,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
                 }
-            },
-            text = {
-                Text(
-                    text = "Are you sure you want to exit NOX - Game Space? Active background optimizations and the In-Game Floating HUD will continue running if enabled.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    lineHeight = 19.sp
-                )
-            },
-            dismissButton = {
-                TextButton(
-                    onClick = { showExitDialog = false },
-                    modifier = Modifier.testTag("exit_dialog_cancel_btn")
-                ) {
-                    Text(
-                        text = "Cancel",
-                        fontWeight = FontWeight.SemiBold
-                    )
-                }
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        showExitDialog = false
-                        repository.deactivateTextureSessionOnExit()
-                        (context as? Activity)?.finish()
-                    },
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = KyroPrimary,
-                        contentColor = Color.White
-                    ),
-                    modifier = Modifier.testTag("exit_dialog_confirm_btn")
-                ) {
-                    Text(
-                        text = "Exit App",
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-            }
-        )
-    }
+            )
+        }
 
-    if (showEnergyDialog) {
-        com.kyro.game.space.ui.components.NoxEnergyTopUpDialog(
-            onDismiss = { showEnergyDialog = false }
-        )
+        if (showEnergyDialog) {
+            com.kyro.game.space.ui.components.NoxEnergyTopUpDialog(
+                onDismiss = { showEnergyDialog = false }
+            )
+        }
     }
 }

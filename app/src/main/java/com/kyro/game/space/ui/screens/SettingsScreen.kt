@@ -27,6 +27,7 @@ import androidx.compose.material.icons.filled.Cable
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Layers
+import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Speed
@@ -77,10 +78,12 @@ import com.kyro.game.space.service.FloatingHudService
 import com.kyro.game.space.ui.components.AdbCommandDialog
 import com.kyro.game.space.ui.components.ManualAdbPairingDialog
 import com.kyro.game.space.ui.components.PrivacyPolicyDialog
+import com.kyro.game.space.ui.theme.AppLanguage
 import com.kyro.game.space.ui.theme.KyroAccent
 import com.kyro.game.space.ui.theme.KyroCyan
 import com.kyro.game.space.ui.theme.KyroGreen
 import com.kyro.game.space.ui.theme.KyroPrimary
+import com.kyro.game.space.ui.theme.appStrings
 import com.kyro.game.space.ui.theme.rememberResponsiveMetrics
 import androidx.compose.ui.text.style.TextOverflow
 import kotlinx.coroutines.launch
@@ -96,6 +99,8 @@ fun SettingsScreen(
 ) {
     val context = LocalContext.current
     val responsive = rememberResponsiveMetrics()
+    val strings = appStrings()
+    val currentLanguage by repository.appLanguage.collectAsState()
     val scope = rememberCoroutineScope()
 
     var showPairingDialog by remember { mutableStateOf(false) }
@@ -151,7 +156,7 @@ fun SettingsScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "EXECUTION PERMISSION ENGINE",
+                            text = strings.settingsExecEngineTitle,
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
                             letterSpacing = 0.5.sp,
@@ -177,7 +182,7 @@ fun SettingsScreen(
                     }
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(
-                        text = "Select the privileged permission engine used to execute game optimizations, resolution scaling, texture tuning, and live HUD telemetry. Only the selected engine will be used.",
+                        text = strings.settingsExecEngineDesc,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         lineHeight = 17.sp
@@ -187,7 +192,7 @@ fun SettingsScreen(
 
                     // Option 1: Shizuku
                     ExecutionOptionRow(
-                        title = "Shizuku Engine (Recommended)",
+                        title = strings.settingsShizukuTitle,
                         subtitle = if (overview.shizuku.version > 0) {
                             "Low-latency binder IPC via Shizuku service (API v${overview.shizuku.version})"
                         } else {
@@ -204,7 +209,7 @@ fun SettingsScreen(
 
                     // Option 2: Manual ADB (libadb.so)
                     ExecutionOptionRow(
-                        title = "Wireless ADB Daemon (libadb.so)",
+                        title = strings.settingsWirelessAdbTitle,
                         subtitle = "${overview.manualAdb.libAdbDetails}\n${overview.manualAdb.daemonStatus}",
                         icon = Icons.Default.Wifi,
                         selected = overview.method == ExecutionMethod.MANUAL_ADB,
@@ -217,7 +222,7 @@ fun SettingsScreen(
 
                     // Option 3: Root Access (su / Magisk / KernelSU)
                     ExecutionOptionRow(
-                        title = "Root Access (SU / Magisk / KernelSU)",
+                        title = strings.settingsRootTitle,
                         subtitle = overview.root.statusMessage,
                         icon = Icons.Default.Security,
                         selected = overview.method == ExecutionMethod.ROOT,
@@ -251,7 +256,7 @@ fun SettingsScreen(
                                         .testTag("request_shizuku_perm_btn"),
                                     shape = RoundedCornerShape(12.dp)
                                 ) {
-                                    Text("Check / Grant Shizuku")
+                                    Text(strings.btnCheckGrantShizuku, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 }
                             }
                             ExecutionMethod.MANUAL_ADB -> {
@@ -265,7 +270,11 @@ fun SettingsScreen(
                                         containerColor = MaterialTheme.colorScheme.primary
                                     )
                                 ) {
-                                    Text(if (overview.manualAdb.isDaemonInjected) "Daemon Active (Configure)" else "Pair & Connect ADB")
+                                    Text(
+                                        text = if (overview.manualAdb.isDaemonInjected) strings.btnDaemonActiveConfig else strings.btnPairConnectAdb,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
                                 }
                             }
                             ExecutionMethod.ROOT -> {
@@ -288,7 +297,11 @@ fun SettingsScreen(
                                         containerColor = MaterialTheme.colorScheme.primary
                                     )
                                 ) {
-                                    Text(if (overview.root.isRootGranted) "Root Active (Verify)" else "Check / Grant Root")
+                                    Text(
+                                        text = if (overview.root.isRootGranted) strings.btnRootActiveVerify else strings.btnCheckGrantRoot,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
                                 }
                             }
                         }
@@ -300,7 +313,7 @@ fun SettingsScreen(
                         ) {
                             Icon(imageVector = Icons.Default.Terminal, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text("ADB Shell")
+                            Text(strings.btnAdbShell, maxLines = 1)
                         }
                     }
                 }
@@ -352,12 +365,12 @@ fun SettingsScreen(
                             verticalArrangement = Arrangement.spacedBy(3.dp)
                         ) {
                             Text(
-                                text = "In-Game Floating HUD",
+                                text = strings.settingsFloatingHudTitle,
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold
                             )
                             Text(
-                                text = "Translucent black draggable overlay displaying live in-game FPS, real CPU load, and GPU usage while playing.",
+                                text = strings.settingsFloatingHudDesc,
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 lineHeight = 16.sp
@@ -396,7 +409,7 @@ fun SettingsScreen(
             }
         }
 
-        // Section C: General Settings
+        // Section C: General Settings (Including App Language Selector)
         item {
             Card(
                 modifier = Modifier
@@ -418,12 +431,123 @@ fun SettingsScreen(
                         .padding(18.dp)
                 ) {
                     Text(
-                        text = "GENERAL PREFERENCES",
+                        text = strings.settingsGeneralTitle,
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         letterSpacing = 0.5.sp
                     )
 
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    // App Language Selector (English, Bahasa Indonesia, Malaysia, Philippines)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Public,
+                                contentDescription = null,
+                                tint = KyroCyan
+                            )
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Column {
+                                Text(
+                                    text = strings.settingsLanguageTitle,
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                                Text(
+                                    text = strings.settingsLanguageSubtitle,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = KyroCyan.copy(alpha = 0.15f),
+                            border = BorderStroke(1.dp, KyroCyan.copy(alpha = 0.4f))
+                        ) {
+                            Text(
+                                text = currentLanguage.label.uppercase(),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = KyroCyan,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 10.sp,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    // 2x2 Responsive Grid of Language Options
+                    val languagePairs = remember { AppLanguage.entries.chunked(2) }
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        languagePairs.forEach { rowLanguages ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                rowLanguages.forEach { lang ->
+                                    val isSelected = currentLanguage == lang
+                                    Surface(
+                                        onClick = {
+                                            repository.setAppLanguage(lang)
+                                            Toast.makeText(
+                                                context,
+                                                "Language set to ${lang.label}",
+                                                Toast.LENGTH_SHORT
+                                            ).show()
+                                        },
+                                        shape = RoundedCornerShape(12.dp),
+                                        color = if (isSelected) KyroCyan.copy(alpha = 0.16f) else Color(0xFF1E1E26),
+                                        border = BorderStroke(
+                                            1.dp,
+                                            if (isSelected) KyroCyan else MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
+                                        ),
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .testTag("language_option_${lang.code}")
+                                    ) {
+                                        Column(
+                                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                                            verticalArrangement = Arrangement.spacedBy(2.dp)
+                                        ) {
+                                            Text(
+                                                text = lang.label,
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                fontWeight = FontWeight.Bold,
+                                                color = if (isSelected) KyroCyan else Color.White,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                            Text(
+                                                text = lang.subtitle,
+                                                style = MaterialTheme.typography.labelSmall,
+                                                fontSize = 10.sp,
+                                                color = if (isSelected) KyroCyan.copy(alpha = 0.85f) else MaterialTheme.colorScheme.onSurfaceVariant,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(14.dp))
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.25f))
                     Spacer(modifier = Modifier.height(14.dp))
 
                     // Dark Theme (Forced Pure Dark Gaming Mode)
@@ -444,12 +568,12 @@ fun SettingsScreen(
                             Spacer(modifier = Modifier.width(10.dp))
                             Column {
                                 Text(
-                                    text = "Display Theme",
+                                    text = strings.settingsDisplayThemeTitle,
                                     style = MaterialTheme.typography.bodyLarge,
                                     fontWeight = FontWeight.SemiBold
                                 )
                                 Text(
-                                    text = "OLED Pure Dark Gaming Interface",
+                                    text = strings.settingsDisplayThemeSubtitle,
                                     style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -461,7 +585,7 @@ fun SettingsScreen(
                             color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
                         ) {
                             Text(
-                                text = "PURE DARK",
+                                text = strings.settingsPureDarkBadge,
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.primary,
                                 fontWeight = FontWeight.Bold,
@@ -490,12 +614,12 @@ fun SettingsScreen(
                                 Spacer(modifier = Modifier.width(10.dp))
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text(
-                                        text = "Telemetry Polling Rate",
+                                        text = strings.settingsPollingRateTitle,
                                         style = MaterialTheme.typography.bodyLarge,
                                         fontWeight = FontWeight.SemiBold
                                     )
                                     Text(
-                                        text = "Hardware sensors & network ping update interval",
+                                        text = strings.settingsPollingRateSubtitle,
                                         style = MaterialTheme.typography.labelSmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
@@ -534,12 +658,12 @@ fun SettingsScreen(
                                 Spacer(modifier = Modifier.width(10.dp))
                                 Column {
                                     Text(
-                                        text = "Telemetry Polling Rate",
+                                        text = strings.settingsPollingRateTitle,
                                         style = MaterialTheme.typography.bodyLarge,
                                         fontWeight = FontWeight.SemiBold
                                     )
                                     Text(
-                                        text = "Hardware sensors & network ping update interval",
+                                        text = strings.settingsPollingRateSubtitle,
                                         style = MaterialTheme.typography.labelSmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
@@ -574,7 +698,7 @@ fun SettingsScreen(
                         Icon(imageVector = Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
-                            text = "Re-scan Installed Games & Sync Playtime",
+                            text = strings.btnRescanGames,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
@@ -635,7 +759,7 @@ fun SettingsScreen(
                             }
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    text = "GOOGLE PLAY APP UPDATE",
+                                    text = strings.settingsUpdateTitle,
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Bold,
                                     letterSpacing = 0.5.sp,
@@ -643,7 +767,7 @@ fun SettingsScreen(
                                     overflow = TextOverflow.Ellipsis
                                 )
                                 Text(
-                                    text = "Official Play Store version checks & updates",
+                                    text = strings.settingsUpdateSubtitle,
                                     style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     maxLines = 1,
@@ -821,7 +945,7 @@ fun SettingsScreen(
                             Icon(imageVector = Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
-                                text = "Check for Update",
+                                text = strings.btnCheckForUpdate,
                                 fontSize = 12.sp,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
@@ -840,7 +964,7 @@ fun SettingsScreen(
                             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f))
                         ) {
                             Text(
-                                text = "Open Play Store",
+                                text = strings.btnOpenPlayStore,
                                 fontSize = 12.sp,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
@@ -901,7 +1025,7 @@ fun SettingsScreen(
                             }
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    text = "RATE & REVIEW ON GOOGLE PLAY",
+                                    text = strings.settingsRatingTitle,
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Bold,
                                     letterSpacing = 0.5.sp,
@@ -909,7 +1033,7 @@ fun SettingsScreen(
                                     overflow = TextOverflow.Ellipsis
                                 )
                                 Text(
-                                    text = "Share your gaming performance feedback",
+                                    text = strings.settingsRatingSubtitle,
                                     style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     maxLines = 1,
@@ -963,13 +1087,14 @@ fun SettingsScreen(
                                 }
                             }
                             Text(
-                                text = "Enjoying the FPS boosts & low latency?",
+                                text = strings.settingsRatingHeadline,
                                 style = MaterialTheme.typography.titleSmall,
                                 fontWeight = FontWeight.Bold,
-                                color = Color.White
+                                color = Color.White,
+                                textAlign = TextAlign.Center
                             )
                             Text(
-                                text = "Your rating directly motivates new hardware optimizations, GPU tuning profiles, and community features.",
+                                text = strings.settingsRatingBody,
                                 style = MaterialTheme.typography.bodySmall,
                                 color = Color(0xFFA6B0C3),
                                 textAlign = TextAlign.Center,
@@ -996,11 +1121,19 @@ fun SettingsScreen(
                                 .weight(1f)
                                 .testTag("rate_app_inapp_btn"),
                             shape = RoundedCornerShape(12.dp),
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 10.dp),
                             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFFB300))
                         ) {
                             Icon(imageVector = Icons.Default.Star, contentDescription = null, tint = Color.Black, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text("Rate on Google Play", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                            Text(
+                                text = strings.btnRateInApp,
+                                color = Color.Black,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 12.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
                         }
 
                         OutlinedButton(
@@ -1011,9 +1144,15 @@ fun SettingsScreen(
                                 .weight(0.85f)
                                 .testTag("write_review_btn"),
                             shape = RoundedCornerShape(12.dp),
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 10.dp),
                             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f))
                         ) {
-                            Text("Play Store Page", fontSize = 12.sp)
+                            Text(
+                                text = strings.btnReviewOnPlay,
+                                fontSize = 12.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
                         }
                     }
                 }

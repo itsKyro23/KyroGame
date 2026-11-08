@@ -48,6 +48,7 @@ import com.kyro.game.space.data.model.ExecutionMethod
 import com.kyro.game.space.ui.theme.KyroCyan
 import com.kyro.game.space.ui.theme.KyroGreen
 import com.kyro.game.space.ui.theme.KyroOrange
+import com.kyro.game.space.ui.theme.appStrings
 import com.kyro.game.space.ui.theme.rememberResponsiveMetrics
 
 @Composable
@@ -59,6 +60,7 @@ fun ConnectionStatusCard(
     modifier: Modifier = Modifier
 ) {
     val responsive = rememberResponsiveMetrics()
+    val strings = appStrings()
     val statusColor = when (overview.status) {
         ConnectionStatus.CONNECTED -> KyroGreen
         ConnectionStatus.CONNECTING -> KyroCyan
@@ -163,11 +165,11 @@ fun ConnectionStatusCard(
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
                             text = when (overview.status) {
-                                ConnectionStatus.CONNECTED -> "CONNECTED"
-                                ConnectionStatus.CONNECTING -> "CONNECTING"
-                                ConnectionStatus.PERMISSION_REQUIRED -> "PERMISSION"
-                                ConnectionStatus.DISCONNECTED -> "DISCONNECTED"
-                                ConnectionStatus.ERROR -> "ERROR"
+                                ConnectionStatus.CONNECTED -> strings.statusConnected
+                                ConnectionStatus.CONNECTING -> strings.statusConnecting
+                                ConnectionStatus.PERMISSION_REQUIRED -> strings.statusPermission
+                                ConnectionStatus.DISCONNECTED -> strings.statusDisconnected
+                                ConnectionStatus.ERROR -> strings.statusError
                             },
                             style = MaterialTheme.typography.labelSmall,
                             fontWeight = FontWeight.Bold,
@@ -231,7 +233,7 @@ fun ConnectionStatusCard(
                                     shape = RoundedCornerShape(10.dp),
                                     modifier = Modifier.fillMaxWidth()
                                 ) {
-                                    Text("Open Shizuku App (Start Service)")
+                                    Text(strings.btnOpenShizukuApp)
                                 }
                             }
                         }
@@ -281,7 +283,7 @@ fun ConnectionStatusCard(
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        text = "Reconnect",
+                        text = strings.btnReconnect,
                         style = MaterialTheme.typography.labelLarge,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
@@ -298,7 +300,7 @@ fun ConnectionStatusCard(
                         contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 10.dp)
                     ) {
                         Text(
-                            text = "Grant",
+                            text = strings.btnGrant,
                             style = MaterialTheme.typography.labelLarge,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
@@ -314,7 +316,7 @@ fun ConnectionStatusCard(
                         contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 10.dp)
                     ) {
                         Text(
-                            text = "Setup / Inject",
+                            text = strings.btnSetupInject,
                             style = MaterialTheme.typography.labelLarge,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
@@ -330,7 +332,7 @@ fun ConnectionStatusCard(
                         contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 10.dp)
                     ) {
                         Text(
-                            text = "Grant Root",
+                            text = strings.btnGrantRoot,
                             style = MaterialTheme.typography.labelLarge,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
@@ -352,7 +354,7 @@ fun ConnectionStatusCard(
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
-                            text = "Terminal",
+                            text = strings.btnTerminal,
                             style = MaterialTheme.typography.labelLarge,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis

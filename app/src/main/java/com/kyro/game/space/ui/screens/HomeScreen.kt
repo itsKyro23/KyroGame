@@ -64,6 +64,7 @@ import com.kyro.game.space.ui.theme.KyroAccent
 import com.kyro.game.space.ui.theme.KyroCyan
 import com.kyro.game.space.ui.theme.KyroGreen
 import com.kyro.game.space.ui.theme.KyroOrange
+import com.kyro.game.space.ui.theme.appStrings
 import com.kyro.game.space.ui.theme.rememberResponsiveMetrics
 import androidx.compose.ui.graphics.Color
 import androidx.compose.material.icons.filled.Bolt
@@ -91,6 +92,7 @@ fun HomeScreen(
 ) {
     val context = LocalContext.current
     val responsive = rememberResponsiveMetrics()
+    val strings = appStrings()
     val scope = rememberCoroutineScope()
     val playBoostConfig by repository.playBoostConfig.collectAsState()
     var showTerminalDialog by remember { mutableStateOf(false) }
@@ -246,7 +248,7 @@ fun HomeScreen(
                     )
                     Spacer(modifier = Modifier.size(6.dp))
                     Text(
-                        text = "MY GAMES",
+                        text = strings.myGamesTitle,
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         letterSpacing = if (responsive.isCompactWidth) 0.5.sp else 1.sp,
@@ -286,7 +288,7 @@ fun HomeScreen(
                                 modifier = Modifier.size(14.dp)
                             )
                             Text(
-                                text = if (responsive.isCompactWidth) playBoostConfig.tier.title else "Boost: ${playBoostConfig.tier.title}",
+                                text = if (responsive.isCompactWidth) playBoostConfig.tier.title else "${strings.boostPrefix}: ${playBoostConfig.tier.title}",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = Color.White,
                                 fontWeight = FontWeight.Bold,
@@ -308,7 +310,7 @@ fun HomeScreen(
                         color = MaterialTheme.colorScheme.surfaceVariant
                     ) {
                         Text(
-                            text = "${homeGames.size} Titles",
+                            text = "${homeGames.size} ${strings.titlesSuffix}",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(
@@ -361,13 +363,13 @@ fun HomeScreen(
                         }
                         Spacer(modifier = Modifier.height(14.dp))
                         Text(
-                            text = "No Games in Hub Yet",
+                            text = strings.emptyGamesTitle,
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = "Add games from the Apps manager to customize quick launching and track playtime.",
+                            text = strings.emptyGamesSubtitle,
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             textAlign = TextAlign.Center
@@ -382,7 +384,7 @@ fun HomeScreen(
                         ) {
                             Icon(imageVector = Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.size(6.dp))
-                            Text("Browse Installed Apps")
+                            Text(strings.btnBrowseInstalledApps)
                         }
                     }
                 }
@@ -536,7 +538,7 @@ fun HomeScreen(
                         tint = KyroOrange
                     )
                     Text(
-                        text = "Permission Required",
+                        text = strings.permRequiredTitle,
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = Color.White
@@ -566,12 +568,12 @@ fun HomeScreen(
                         contentColor = Color(0xFF061424)
                     )
                 ) {
-                    Text("Connect Shizuku", fontWeight = FontWeight.Bold)
+                    Text(strings.btnConnectShizuku, fontWeight = FontWeight.Bold)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showPermissionBlockedDialog = null }) {
-                    Text("Close", color = Color(0xFFA0A7BD))
+                    Text(strings.btnClose, color = Color(0xFFA0A7BD))
                 }
             }
         )

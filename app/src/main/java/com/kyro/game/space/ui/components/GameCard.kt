@@ -55,6 +55,7 @@ import com.kyro.game.space.data.model.GameItem
 import com.kyro.game.space.ui.theme.KyroAccent
 import com.kyro.game.space.ui.theme.KyroCyan
 import com.kyro.game.space.ui.theme.KyroPrimary
+import com.kyro.game.space.ui.theme.appStrings
 import com.kyro.game.space.util.AppIconCache
 
 // Pre-allocated static brushes & shapes to avoid per-frame allocations while scrolling
@@ -87,6 +88,7 @@ fun GameCard(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val strings = appStrings()
 
     // Non-blocking instant cache lookup + background IO load if not yet in cache
     var appIconImage by remember(game.packageName) {
@@ -228,7 +230,7 @@ fun GameCard(
                             .padding(end = 6.dp)
                     ) {
                         Text(
-                            text = "Total: ${game.formattedPlaytime}",
+                            text = "${strings.cardTotalPrefix}: ${game.formattedPlaytime}",
                             style = MaterialTheme.typography.bodySmall,
                             fontWeight = FontWeight.SemiBold,
                             color = KyroAccent,
@@ -236,7 +238,7 @@ fun GameCard(
                             overflow = TextOverflow.Ellipsis
                         )
                         Text(
-                            text = "Last: ${game.formattedLastPlayed}",
+                            text = "${strings.cardLastPrefix}: ${game.formattedLastPlayed}",
                             style = MaterialTheme.typography.labelSmall,
                             color = Color(0xFFB5B7C2),
                             maxLines = 1,
@@ -268,7 +270,7 @@ fun GameCard(
                             )
                             Spacer(modifier = Modifier.width(4.dp))
                             Text(
-                                text = "TUNE • 10⚡",
+                                text = strings.btnTune,
                                 style = MaterialTheme.typography.labelSmall,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 11.sp,
@@ -300,7 +302,7 @@ fun GameCard(
                             )
                             Spacer(modifier = Modifier.width(3.dp))
                             Text(
-                                text = "PLAY",
+                                text = strings.btnPlay,
                                 style = MaterialTheme.typography.labelSmall,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 11.sp,

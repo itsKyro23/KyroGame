@@ -19,7 +19,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -33,33 +32,33 @@ import com.google.android.gms.ads.AdView
 import com.google.android.gms.ads.FullScreenContentCallback
 import com.google.android.gms.ads.LoadAdError
 import com.google.android.gms.ads.MobileAds
+import com.google.android.gms.ads.OnUserEarnedRewardListener
 import com.google.android.gms.ads.appopen.AppOpenAd
-import com.google.android.gms.ads.interstitial.InterstitialAd
-import com.google.android.gms.ads.interstitial.InterstitialAdLoadCallback
+import com.google.android.gms.ads.rewarded.RewardedAd
+import com.google.android.gms.ads.rewarded.RewardedAdLoadCallback
 
 /**
- * Manages Google AdMob Ads (App Open Ad, Interstitial Energy Ad, and Adaptive Banner).
- * Includes toggle to switch between official Google Test IDs and Production IDs.
+ * Manages Google AdMob Ads (App Open Ad, Rewarded Energy Ad, and Banner Ad).
+ * Configured with Real Production AdMob Unit IDs.
  */
 object AdMobManager {
 
     /**
-     * Switch between Official Google Test IDs (true) and User Production IDs (false).
-     * Set to TRUE per user request for safe testing without policy violations.
+     * Real Ads mode enabled (false = Production IDs).
      */
-    var USE_TEST_ADS: Boolean = true
+    var USE_TEST_ADS: Boolean = false
 
-    // Official Google AdMob Test Ad Unit IDs (100% safe for development)
+    // Official Google AdMob Test Ad Unit IDs (fallback reference)
+    const val TEST_APP_ID = "ca-app-pub-3940256099942544~3347511713"
     const val TEST_APP_OPEN_AD_ID = "ca-app-pub-3940256099942544/9257396112"
     const val TEST_BANNER_AD_ID = "ca-app-pub-3940256099942544/6300978111"
-    const val TEST_INTERSTITIAL_AD_ID = "ca-app-pub-3940256099942544/1033173712"
-    const val TEST_APP_ID = "ca-app-pub-3940256099942544~3347511713"
+    const val TEST_REWARDED_AD_ID = "ca-app-pub-3940256099942544/5224354917"
 
-    // Production AdMob IDs provided by user
+    // Real Production AdMob IDs provided by user
+    const val PROD_APP_ID = "ca-app-pub-4611749728265191~7055817688"
     const val PROD_APP_OPEN_AD_ID = "ca-app-pub-4611749728265191/6864245998"
     const val PROD_BANNER_AD_ID = "ca-app-pub-4611749728265191/5534852458"
-    const val PROD_APP_ID = "ca-app-pub-4611749728265191~7055817688"
-    const val PROD_INTERSTITIAL_AD_ID = "ca-app-pub-4611749728265191/6759258038"
+    const val PROD_REWARDED_AD_ID = "ca-app-pub-4611749728265191/8115927531"
 
     val currentAppOpenAdId: String
         get() = if (USE_TEST_ADS) TEST_APP_OPEN_AD_ID else PROD_APP_OPEN_AD_ID
@@ -67,17 +66,17 @@ object AdMobManager {
     val currentBannerAdId: String
         get() = if (USE_TEST_ADS) TEST_BANNER_AD_ID else PROD_BANNER_AD_ID
 
-    val currentInterstitialAdId: String
-        get() = if (USE_TEST_ADS || PROD_INTERSTITIAL_AD_ID.isBlank()) TEST_INTERSTITIAL_AD_ID else PROD_INTERSTITIAL_AD_ID
+    val currentRewardedAdId: String
+        get() = if (USE_TEST_ADS || PROD_REWARDED_AD_ID.isBlank()) TEST_REWARDED_AD_ID else PROD_REWARDED_AD_ID
 
     private var isInitialized = false
     private var appOpenAd: AppOpenAd? = null
     private var isLoadingAppOpen = false
     private var isShowingAppOpen = false
 
-    private var interstitialAd: InterstitialAd? = null
-    private var isLoadingInterstitial = false
-    private var isShowingInterstitial = false
+    private var rewardedAd: RewardedAd? = null
+    private var isLoadingRewarded = false
+    private var isShowingRewarded = false
 
     /**
      * Ensures App Open Ad is only shown ONCE per app launch session.
@@ -91,7 +90,7 @@ object AdMobManager {
             MobileAds.initialize(context) {
                 isInitialized = true
                 loadAppOpenAd(context)
-                loadInterstitialAd(context)
+                loadRewardedAd(context)
             }
         } catch (_: Throwable) {
         }
@@ -124,30 +123,30 @@ object AdMobManager {
         }
     }
 
-    fun loadInterstitialAd(context: Context) {
-        if (isLoadingInterstitial || interstitialAd != null) return
+    fun loadRewardedAd(context: Context) {
+        if (isLoadingRewarded || rewardedAd != null) return
 
         try {
-            isLoadingInterstitial = true
+            isLoadingRewarded = true
             val request = AdRequest.Builder().build()
-            InterstitialAd.load(
+            RewardedAd.load(
                 context.applicationContext,
-                currentInterstitialAdId,
+                currentRewardedAdId,
                 request,
-                object : InterstitialAdLoadCallback() {
-                    override fun onAdLoaded(ad: InterstitialAd) {
-                        interstitialAd = ad
-                        isLoadingInterstitial = false
+                object : RewardedAdLoadCallback() {
+                    override fun onAdLoaded(ad: RewardedAd) {
+                        rewardedAd = ad
+                        isLoadingRewarded = false
                     }
 
                     override fun onAdFailedToLoad(error: LoadAdError) {
-                        interstitialAd = null
-                        isLoadingInterstitial = false
+                        rewardedAd = null
+                        isLoadingRewarded = false
                     }
                 }
             )
         } catch (_: Throwable) {
-            isLoadingInterstitial = false
+            isLoadingRewarded = false
         }
     }
 
@@ -195,41 +194,67 @@ object AdMobManager {
     }
 
     /**
-     * Shows Interstitial Ad to grant +40 Energy.
+     * Shows Rewarded Ad to grant +40 Energy.
+     * If the Rewarded Ad is not available or fails to display, invokes [onAdUnavailable]
+     * so the UI can run the 20-second fallback countdown before granting the reward.
      */
-    fun showInterstitialAd(activity: Activity, onReward: () -> Unit, onFailedOrDismissed: () -> Unit = {}) {
-        val ad = interstitialAd
-        if (ad == null || isShowingInterstitial) {
-            // If ad not cached yet, reload and award fallback gracefully
-            loadInterstitialAd(activity)
-            onReward()
+    fun showRewardedAd(
+        activity: Activity,
+        onReward: () -> Unit,
+        onAdUnavailable: () -> Unit,
+        onDismissedWithoutReward: () -> Unit = {}
+    ) {
+        val ad = rewardedAd
+        if (ad == null || isShowingRewarded) {
+            loadRewardedAd(activity)
+            onAdUnavailable()
             return
         }
+
+        var rewardEarned = false
+        var rewardDelivered = false
 
         try {
             ad.fullScreenContentCallback = object : FullScreenContentCallback() {
                 override fun onAdDismissedFullScreenContent() {
-                    interstitialAd = null
-                    isShowingInterstitial = false
-                    loadInterstitialAd(activity)
-                    onReward()
+                    rewardedAd = null
+                    isShowingRewarded = false
+                    loadRewardedAd(activity)
+                    if (rewardEarned && !rewardDelivered) {
+                        rewardDelivered = true
+                        onReward()
+                    } else if (!rewardEarned) {
+                        onDismissedWithoutReward()
+                    }
                 }
 
                 override fun onAdFailedToShowFullScreenContent(error: AdError) {
-                    interstitialAd = null
-                    isShowingInterstitial = false
-                    loadInterstitialAd(activity)
-                    onReward()
+                    rewardedAd = null
+                    isShowingRewarded = false
+                    loadRewardedAd(activity)
+                    onAdUnavailable()
                 }
 
                 override fun onAdShowedFullScreenContent() {
-                    isShowingInterstitial = true
+                    isShowingRewarded = true
                 }
             }
-            ad.show(activity)
+
+            ad.show(
+                activity,
+                OnUserEarnedRewardListener {
+                    rewardEarned = true
+                    if (!rewardDelivered) {
+                        rewardDelivered = true
+                        onReward()
+                    }
+                }
+            )
         } catch (_: Throwable) {
-            isShowingInterstitial = false
-            onReward()
+            rewardedAd = null
+            isShowingRewarded = false
+            loadRewardedAd(activity)
+            onAdUnavailable()
         }
     }
 }

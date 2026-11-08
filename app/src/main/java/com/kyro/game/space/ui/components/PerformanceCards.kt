@@ -45,6 +45,7 @@ import com.kyro.game.space.data.model.DeviceStats
 import com.kyro.game.space.ui.theme.KyroCyan
 import com.kyro.game.space.ui.theme.KyroGreen
 import com.kyro.game.space.ui.theme.KyroOrange
+import com.kyro.game.space.ui.theme.appStrings
 
 @Composable
 fun PerformanceCards(
@@ -52,6 +53,8 @@ fun PerformanceCards(
     onOpenNetworkOptimizer: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
+    val strings = appStrings()
+
     Column(
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(10.dp)
@@ -66,7 +69,7 @@ fun PerformanceCards(
             val isOverheating = (stats.cpuTempC ?: 0f) > 55f || (stats.batteryTempC ?: 0f) > 42f
 
             PerformanceCard(
-                title = "TEMPERATURE",
+                title = strings.perfTemperature,
                 icon = Icons.Default.Thermostat,
                 accentColor = if (isOverheating) MaterialTheme.colorScheme.error else KyroOrange,
                 modifier = Modifier
@@ -90,7 +93,7 @@ fun PerformanceCards(
                     }
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "Battery: $batteryTempDisplay",
+                        text = "${strings.perfBattery}: $batteryTempDisplay",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -102,7 +105,7 @@ fun PerformanceCards(
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Text(
-                            text = "Health: ${stats.batteryHealth} • ${stats.batteryLevel}%",
+                            text = "${strings.perfHealth}: ${stats.batteryHealth} • ${stats.batteryLevel}%",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             fontSize = 10.sp,
@@ -124,7 +127,7 @@ fun PerformanceCards(
             }
 
             PerformanceCard(
-                title = "NETWORK PING",
+                title = strings.perfNetworkPing,
                 icon = Icons.Default.NetworkCheck,
                 accentColor = pingColor,
                 onIconClick = onOpenNetworkOptimizer,
@@ -150,7 +153,7 @@ fun PerformanceCards(
                     }
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = if (stats.isOnline) "${stats.networkType} (${stats.pingHost})" else "Offline",
+                        text = if (stats.isOnline) "${stats.networkType} (${stats.pingHost})" else strings.perfOffline,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
@@ -178,7 +181,7 @@ fun PerformanceCards(
                         )
                         Spacer(modifier = Modifier.width(5.dp))
                         Text(
-                            text = "Optimize / Repair",
+                            text = strings.perfOptimizeRepair,
                             style = MaterialTheme.typography.labelSmall,
                             fontWeight = FontWeight.Bold,
                             fontSize = 10.sp,
@@ -192,7 +195,7 @@ fun PerformanceCards(
 
         // RAM Card (Wide)
         PerformanceCard(
-            title = "RAM USAGE",
+            title = strings.perfRamUsage,
             icon = Icons.Default.Memory,
             accentColor = KyroCyan,
             modifier = Modifier
@@ -229,7 +232,7 @@ fun PerformanceCards(
                 )
                 Spacer(modifier = Modifier.height(6.dp))
                 Text(
-                    text = "Available: ${stats.availRamMb} MB free memory",
+                    text = "${strings.perfAvailableRamPrefix} ${stats.availRamMb} ${strings.perfAvailableRamSuffix}",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

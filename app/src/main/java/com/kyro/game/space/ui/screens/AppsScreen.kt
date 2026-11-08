@@ -67,6 +67,7 @@ import com.kyro.game.space.ui.theme.KyroAccent
 import com.kyro.game.space.ui.theme.KyroCyan
 import com.kyro.game.space.ui.theme.KyroOrange
 import com.kyro.game.space.ui.theme.KyroPrimary
+import com.kyro.game.space.ui.theme.appStrings
 import com.kyro.game.space.ui.theme.rememberResponsiveMetrics
 import kotlinx.coroutines.launch
 
@@ -86,6 +87,7 @@ fun AppsScreen(
 ) {
     val context = LocalContext.current
     val responsive = rememberResponsiveMetrics()
+    val strings = appStrings()
     val scope = rememberCoroutineScope()
     var searchQuery by remember { mutableStateOf("") }
     var selectedFilter by remember { mutableStateOf(AppFilter.ALL) }
@@ -125,7 +127,7 @@ fun AppsScreen(
             OutlinedTextField(
                 value = searchQuery,
                 onValueChange = { searchQuery = it },
-                label = { Text("Search apps or package name...", maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                label = { Text(strings.searchAppsPlaceholder, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                 leadingIcon = {
                     Icon(imageVector = Icons.Default.Search, contentDescription = "Search")
                 },
@@ -163,7 +165,13 @@ fun AppsScreen(
                                 AppFilter.APPS -> allApps.count { !it.isGame }
                                 AppFilter.ADDED -> allApps.count { it.isAddedToHome }
                             }
-                            Text("${filter.name.lowercase().capitalize()} ($count)")
+                            val filterLabel = when (filter) {
+                                AppFilter.ALL -> strings.filterAll
+                                AppFilter.GAMES -> strings.filterGames
+                                AppFilter.APPS -> strings.filterApps
+                                AppFilter.ADDED -> strings.filterAdded
+                            }
+                            Text("$filterLabel ($count)")
                         },
                         modifier = Modifier.testTag("filter_chip_${filter.name}")
                     )
@@ -237,7 +245,7 @@ fun AppsScreen(
                         tint = KyroOrange
                     )
                     Text(
-                        text = "Cannot Add Games",
+                        text = strings.cannotAddGamesTitle,
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = Color.White
@@ -246,7 +254,7 @@ fun AppsScreen(
             },
             text = {
                 Text(
-                    text = "Adding games to Game Space Home requires an active execution permission (Shizuku, Wireless ADB, or Root) to inject game optimizations, ANGLE drivers, and performance monitors.",
+                    text = strings.cannotAddGamesDesc,
                     style = MaterialTheme.typography.bodyMedium,
                     color = Color(0xFFC0CDDE),
                     lineHeight = 20.sp
@@ -267,12 +275,12 @@ fun AppsScreen(
                         contentColor = Color(0xFF061424)
                     )
                 ) {
-                    Text("Connect Shizuku", fontWeight = FontWeight.Bold)
+                    Text(strings.btnConnectShizuku, fontWeight = FontWeight.Bold)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showPermissionBlockedDialog = false }) {
-                    Text("Close", color = Color(0xFFA0A7BD))
+                    Text(strings.btnClose, color = Color(0xFFA0A7BD))
                 }
             }
         )
@@ -298,6 +306,7 @@ private fun AppListItem(
     onToggleHome: (Boolean) -> Unit
 ) {
     val context = LocalContext.current
+    val strings = appStrings()
     val appIconBitmap = remember(app.packageName) {
         com.kyro.game.space.util.AppIconCache.getIcon(context, app.packageName)
     }
@@ -364,7 +373,7 @@ private fun AppListItem(
                         color = if (app.isGame) KyroAccent.copy(alpha = 0.2f) else MaterialTheme.colorScheme.surfaceVariant
                     ) {
                         Text(
-                            text = if (app.isGame) "GAME" else "APP",
+                            text = if (app.isGame) strings.badgeGame else strings.badgeApp,
                             style = MaterialTheme.typography.labelSmall,
                             color = if (app.isGame) KyroAccent else MaterialTheme.colorScheme.onSurfaceVariant,
                             fontWeight = FontWeight.Bold,
@@ -388,7 +397,7 @@ private fun AppListItem(
             // Add to Home Switch
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(
-                    text = if (app.isAddedToHome) "Home" else "Add",
+                    text = if (app.isAddedToHome) strings.switchHome else strings.switchAdd,
                     style = MaterialTheme.typography.labelSmall,
                     color = if (app.isAddedToHome) KyroAccent else MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -405,7 +414,3 @@ private fun AppListItem(
         }
     }
 }
-
-
-private fun String.capitalize(): String =
-    replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() }

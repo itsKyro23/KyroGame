@@ -46,7 +46,12 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -67,6 +72,7 @@ import com.kyro.game.space.ui.theme.KyroCyan
 import com.kyro.game.space.ui.theme.KyroGreen
 import com.kyro.game.space.ui.theme.KyroOrange
 import com.kyro.game.space.ui.theme.rememberResponsiveMetrics
+import kotlinx.coroutines.delay
 
 /**
  * Clickable Energy Badge for TopAppBar.
@@ -129,6 +135,23 @@ fun NoxEnergyTopUpDialog(
     val energy by NoxEnergyManager.energyState
     val isTampered by NoxEnergyManager.isTampered
 
+    var isWaitingFallback by remember { mutableStateOf(false) }
+    var fallbackSecondsLeft by remember { mutableIntStateOf(20) }
+
+    LaunchedEffect(isWaitingFallback) {
+        if (isWaitingFallback) {
+            fallbackSecondsLeft = 20
+            while (fallbackSecondsLeft > 0) {
+                delay(1000L)
+                fallbackSecondsLeft--
+            }
+            val updated = NoxEnergyManager.addEnergyFromAd(context)
+            Toast.makeText(context, "+40 Energy added! Total: $updated⚡", Toast.LENGTH_SHORT).show()
+            isWaitingFallback = false
+            onDismiss()
+        }
+    }
+
     val progressFraction = (energy.coerceAtLeast(0).toFloat() / NoxEnergyManager.MAX_ENERGY.toFloat()).coerceIn(0f, 1f)
     val animatedProgress by animateFloatAsState(
         targetValue = progressFraction,
@@ -148,7 +171,11 @@ fun NoxEnergyTopUpDialog(
     )
 
     AlertDialog(
-        onDismissRequest = onDismiss,
+        onDismissRequest = {
+            if (!isWaitingFallback) {
+                onDismiss()
+            }
+        },
         properties = DialogProperties(usePlatformDefaultWidth = false),
         modifier = Modifier
             .fillMaxWidth(0.94f)
@@ -580,6 +607,36 @@ fun NoxEnergyTopUpDialog(
                             }
                         }
                     }
+
+                    if (isWaitingFallback) {
+                        Surface(
+                            shape = RoundedCornerShape(14.dp),
+                            color = KyroOrange.copy(alpha = 0.14f),
+                            border = BorderStroke(1.dp, KyroOrange.copy(alpha = 0.5f)),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(12.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Text(
+                                    text = "Ad currently unavailable • Please wait ${fallbackSecondsLeft}s to claim +40⚡...",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = KyroOrange
+                                )
+                                LinearProgressIndicator(
+                                    progress = { (20 - fallbackSecondsLeft) / 20f },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(6.dp)
+                                        .clip(RoundedCornerShape(3.dp)),
+                                    color = KyroOrange,
+                                    trackColor = Color(0xFF1E2438)
+                                )
+                            }
+                        }
+                    }
                 }
             }
         },
@@ -587,25 +644,30 @@ fun NoxEnergyTopUpDialog(
             if (!isTampered && energy >= 0) {
                 Button(
                     onClick = {
+                        if (isWaitingFallback) return@Button
                         val activity = context as? Activity
                         if (activity != null) {
-                            AdMobManager.showInterstitialAd(
+                            AdMobManager.showRewardedAd(
                                 activity = activity,
                                 onReward = {
                                     val updated = NoxEnergyManager.addEnergyFromAd(context)
                                     Toast.makeText(context, "+40 Energy added! Total: $updated⚡", Toast.LENGTH_SHORT).show()
                                     onDismiss()
+                                },
+                                onAdUnavailable = {
+                                    isWaitingFallback = true
                                 }
                             )
                         } else {
-                            val updated = NoxEnergyManager.addEnergyFromAd(context)
-                            Toast.makeText(context, "+40 Energy added! Total: $updated⚡", Toast.LENGTH_SHORT).show()
-                            onDismiss()
+                            isWaitingFallback = true
                         }
                     },
+                    enabled = !isWaitingFallback,
                     colors = ButtonDefaults.buttonColors(
                         containerColor = KyroCyan,
-                        contentColor = Color(0xFF07121D)
+                        contentColor = Color(0xFF07121D),
+                        disabledContainerColor = KyroOrange.copy(alpha = 0.25f),
+                        disabledContentColor = KyroOrange
                     ),
                     shape = RoundedCornerShape(14.dp),
                     modifier = Modifier
@@ -619,7 +681,7 @@ fun NoxEnergyTopUpDialog(
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        text = "Watch Ad (+40⚡)",
+                        text = if (isWaitingFallback) "Wait ${fallbackSecondsLeft}s (+40⚡)" else "Watch Ad (+40⚡)",
                         fontWeight = FontWeight.Black,
                         fontSize = 13.sp
                     )
@@ -627,7 +689,12 @@ fun NoxEnergyTopUpDialog(
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
+            TextButton(
+                onClick = {
+                    isWaitingFallback = false
+                    onDismiss()
+                }
+            ) {
                 Text(
                     text = "Close",
                     color = Color(0xFFA0A7BD),
@@ -653,10 +720,34 @@ fun NoxInsufficientEnergyDialog(
     val energy by NoxEnergyManager.energyState
     val isTampered by NoxEnergyManager.isTampered
 
+    var isWaitingFallback by remember { mutableStateOf(false) }
+    var fallbackSecondsLeft by remember { mutableIntStateOf(20) }
+
+    LaunchedEffect(isWaitingFallback) {
+        if (isWaitingFallback) {
+            fallbackSecondsLeft = 20
+            while (fallbackSecondsLeft > 0) {
+                delay(1000L)
+                fallbackSecondsLeft--
+            }
+            val updated = NoxEnergyManager.addEnergyFromAd(context)
+            Toast.makeText(context, "+40 Energy added! Total: $updated⚡", Toast.LENGTH_SHORT).show()
+            isWaitingFallback = false
+            if (updated >= requiredCost) {
+                onEnergyGranted()
+            }
+            onDismiss()
+        }
+    }
+
     val deficit = (requiredCost - energy).coerceAtLeast(0)
 
     AlertDialog(
-        onDismissRequest = onDismiss,
+        onDismissRequest = {
+            if (!isWaitingFallback) {
+                onDismiss()
+            }
+        },
         properties = DialogProperties(usePlatformDefaultWidth = false),
         modifier = Modifier
             .fillMaxWidth(0.94f)
@@ -805,27 +896,53 @@ fun NoxInsufficientEnergyDialog(
                     // Boost Promo Card
                     Surface(
                         shape = RoundedCornerShape(14.dp),
-                        color = KyroCyan.copy(alpha = 0.12f),
-                        border = BorderStroke(1.dp, KyroCyan.copy(alpha = 0.35f)),
+                        color = if (isWaitingFallback) KyroOrange.copy(alpha = 0.14f) else KyroCyan.copy(alpha = 0.12f),
+                        border = BorderStroke(
+                            1.dp,
+                            if (isWaitingFallback) KyroOrange.copy(alpha = 0.5f) else KyroCyan.copy(alpha = 0.35f)
+                        ),
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Row(
-                            modifier = Modifier.padding(12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.PlayArrow,
-                                contentDescription = null,
-                                tint = KyroCyan,
-                                modifier = Modifier.size(20.dp)
-                            )
-                            Text(
-                                text = "Watch a quick ad to instantly recharge +40⚡ energy and continue with your optimization!",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = Color(0xFFDEE8F5),
-                                lineHeight = 16.sp
-                            )
+                        if (isWaitingFallback) {
+                            Column(
+                                modifier = Modifier.padding(12.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Text(
+                                    text = "Ad currently unavailable • Please wait ${fallbackSecondsLeft}s to claim +40⚡...",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = KyroOrange
+                                )
+                                LinearProgressIndicator(
+                                    progress = { (20 - fallbackSecondsLeft) / 20f },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(6.dp)
+                                        .clip(RoundedCornerShape(3.dp)),
+                                    color = KyroOrange,
+                                    trackColor = Color(0xFF1E2438)
+                                )
+                            }
+                        } else {
+                            Row(
+                                modifier = Modifier.padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.PlayArrow,
+                                    contentDescription = null,
+                                    tint = KyroCyan,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Text(
+                                    text = "Watch a quick Rewarded Ad to instantly recharge +40⚡ energy and continue with your optimization!",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = Color(0xFFDEE8F5),
+                                    lineHeight = 16.sp
+                                )
+                            }
                         }
                     }
                 }
@@ -835,9 +952,10 @@ fun NoxInsufficientEnergyDialog(
             if (!isTampered && energy >= 0) {
                 Button(
                     onClick = {
+                        if (isWaitingFallback) return@Button
                         val activity = context as? Activity
                         if (activity != null) {
-                            AdMobManager.showInterstitialAd(
+                            AdMobManager.showRewardedAd(
                                 activity = activity,
                                 onReward = {
                                     val updated = NoxEnergyManager.addEnergyFromAd(context)
@@ -846,20 +964,21 @@ fun NoxInsufficientEnergyDialog(
                                         onEnergyGranted()
                                     }
                                     onDismiss()
+                                },
+                                onAdUnavailable = {
+                                    isWaitingFallback = true
                                 }
                             )
                         } else {
-                            val updated = NoxEnergyManager.addEnergyFromAd(context)
-                            Toast.makeText(context, "+40 Energy added! Total: $updated⚡", Toast.LENGTH_SHORT).show()
-                            if (updated >= requiredCost) {
-                                onEnergyGranted()
-                            }
-                            onDismiss()
+                            isWaitingFallback = true
                         }
                     },
+                    enabled = !isWaitingFallback,
                     colors = ButtonDefaults.buttonColors(
                         containerColor = KyroCyan,
-                        contentColor = Color(0xFF07121D)
+                        contentColor = Color(0xFF07121D),
+                        disabledContainerColor = KyroOrange.copy(alpha = 0.25f),
+                        disabledContentColor = KyroOrange
                     ),
                     shape = RoundedCornerShape(14.dp),
                     modifier = Modifier.height(44.dp)
@@ -867,7 +986,7 @@ fun NoxInsufficientEnergyDialog(
                     Icon(imageVector = Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        text = "Watch Ad (+40⚡)",
+                        text = if (isWaitingFallback) "Wait ${fallbackSecondsLeft}s (+40⚡)" else "Watch Ad (+40⚡)",
                         fontWeight = FontWeight.Black,
                         fontSize = 13.sp
                     )
@@ -875,7 +994,12 @@ fun NoxInsufficientEnergyDialog(
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
+            TextButton(
+                onClick = {
+                    isWaitingFallback = false
+                    onDismiss()
+                }
+            ) {
                 Text(
                     text = "Cancel",
                     color = Color(0xFFA0A7BD),

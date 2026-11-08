@@ -104,6 +104,11 @@ class GameSpaceRepository(
     val refreshIntervalMs = MutableStateFlow(prefs.getLong("refresh_interval_ms", 2000L))
     val floatingHudEnabled = MutableStateFlow(prefs.getBoolean("floating_hud_enabled", false))
 
+    private val _appLanguage = MutableStateFlow(
+        com.kyro.game.space.ui.theme.AppLanguage.fromCode(prefs.getString("app_language", "en"))
+    )
+    val appLanguage: StateFlow<com.kyro.game.space.ui.theme.AppLanguage> = _appLanguage.asStateFlow()
+
     private val _gameConfigs = MutableStateFlow<Map<String, GameCustomConfig>>(loadAllSavedGameConfigs())
 
     private val _networkOptimizerState = MutableStateFlow(loadInitialNetworkOptimizerState())
@@ -1774,6 +1779,11 @@ class GameSpaceRepository(
     fun setFloatingHudEnabled(enabled: Boolean) {
         floatingHudEnabled.value = enabled
         prefs.edit().putBoolean("floating_hud_enabled", enabled).apply()
+    }
+
+    fun setAppLanguage(language: com.kyro.game.space.ui.theme.AppLanguage) {
+        _appLanguage.value = language
+        prefs.edit().putString("app_language", language.code).apply()
     }
 
     // =========================================================================
