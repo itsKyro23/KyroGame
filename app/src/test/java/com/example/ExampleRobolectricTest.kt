@@ -231,6 +231,18 @@ class ExampleRobolectricTest {
       val exitCleanupCmd = com.kyro.game.space.data.model.TextureConfig.buildSessionExitCleanupCommand()
       assertTrue(exitCleanupCmd.contains("angle_gl_driver_all_angle 0"))
       assertTrue(exitCleanupCmd.contains("debug.angle.feature_overrides_enabled \"\""))
+
+      // Verify Multi-Language support (English default, Bahasa Indonesia, Malaysia, Philippines)
+      assertEquals(com.kyro.game.space.ui.theme.AppLanguage.ENGLISH, repo.appLanguage.value)
+      for (lang in com.kyro.game.space.ui.theme.AppLanguage.entries) {
+        repo.setAppLanguage(lang)
+        assertEquals(lang, repo.appLanguage.value)
+        val strings = com.kyro.game.space.ui.theme.stringsForLanguage(lang)
+        assertEquals(lang, strings.language)
+        assertTrue(strings.tabHome.isNotBlank())
+        assertTrue(strings.formatAdFallbackWaitMessage(20).contains("20"))
+      }
+      repo.setAppLanguage(com.kyro.game.space.ui.theme.AppLanguage.ENGLISH)
     } finally {
       repo.cleanUp()
     }

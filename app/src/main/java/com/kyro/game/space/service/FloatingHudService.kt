@@ -99,7 +99,15 @@ class FloatingHudService : Service() {
         super.onCreate()
         try {
             createNotificationChannel()
-            startForeground(NOTIFICATION_ID, buildNotification())
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                startForeground(
+                    NOTIFICATION_ID,
+                    buildNotification(),
+                    android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
+                )
+            } else {
+                startForeground(NOTIFICATION_ID, buildNotification())
+            }
         } catch (_: Throwable) {
         }
 

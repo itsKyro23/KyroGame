@@ -51,6 +51,7 @@ import com.kyro.game.space.data.model.TextureDetailLevel
 import com.kyro.game.space.data.model.TextureQuickPreset
 import com.kyro.game.space.data.model.TextureTunerState
 import com.kyro.game.space.data.model.formatDownscaleClean
+import com.kyro.game.space.ui.theme.AppLanguage
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -104,10 +105,10 @@ class GameSpaceRepository(
     val refreshIntervalMs = MutableStateFlow(prefs.getLong("refresh_interval_ms", 2000L))
     val floatingHudEnabled = MutableStateFlow(prefs.getBoolean("floating_hud_enabled", false))
 
-    private val _appLanguage = MutableStateFlow(
-        com.kyro.game.space.ui.theme.AppLanguage.fromCode(prefs.getString("app_language", "en"))
+    private val _appLanguage: MutableStateFlow<AppLanguage> = MutableStateFlow(
+        AppLanguage.fromCode(prefs.getString("app_language", "en"))
     )
-    val appLanguage: StateFlow<com.kyro.game.space.ui.theme.AppLanguage> = _appLanguage.asStateFlow()
+    val appLanguage: StateFlow<AppLanguage> = _appLanguage.asStateFlow()
 
     private val _gameConfigs = MutableStateFlow<Map<String, GameCustomConfig>>(loadAllSavedGameConfigs())
 
@@ -1781,7 +1782,7 @@ class GameSpaceRepository(
         prefs.edit().putBoolean("floating_hud_enabled", enabled).apply()
     }
 
-    fun setAppLanguage(language: com.kyro.game.space.ui.theme.AppLanguage) {
+    fun setAppLanguage(language: AppLanguage) {
         _appLanguage.value = language
         prefs.edit().putString("app_language", language.code).apply()
     }
