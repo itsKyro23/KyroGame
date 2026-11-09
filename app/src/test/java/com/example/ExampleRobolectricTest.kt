@@ -209,7 +209,8 @@ class ExampleRobolectricTest {
 
       val shellCmd = blockyConfig.buildShellCommand("com.dts.freefiremax")
       assertTrue(shellCmd.contains("settings delete global angle_debug_package"))
-      assertTrue(shellCmd.contains("angle_gl_driver_all_angle 1"))
+      assertTrue(shellCmd.contains("settings delete global gpu_debug_app"))
+      assertTrue(shellCmd.contains("angle_gl_driver_all_angle 0"))
       assertTrue(shellCmd.contains("angle_gl_driver_selection_pkgs com.dts.freefiremax"))
       assertTrue(shellCmd.contains("angle_gl_driver_selection_values angle"))
       assertTrue(shellCmd.contains("angle_allowlist com.dts.freefiremax"))

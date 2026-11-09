@@ -231,6 +231,21 @@ class GameSpaceRepository(
                 refreshActiveExecutionMethodStatus()
             } catch (_: Throwable) {
             }
+            // Automatically sanitize any legacy global flags that could affect Play Integrity
+            try {
+                val allAngle = Settings.Global.getInt(context.contentResolver, "angle_gl_driver_all_angle", 0)
+                val gpuDebug = Settings.Global.getString(context.contentResolver, "gpu_debug_app")
+                if (allAngle != 0 || !gpuDebug.isNullOrBlank()) {
+                    executeCommand(
+                        "settings put global angle_gl_driver_all_angle 0 2>/dev/null || true; " +
+                            "settings delete global gpu_debug_app 2>/dev/null || true; " +
+                            "settings delete global angle_debug_package 2>/dev/null || true; " +
+                            "settings delete global enable_gpu_debug_layers 2>/dev/null || true; " +
+                            "settings delete global block_untrusted_touches 2>/dev/null || true"
+                    )
+                }
+            } catch (_: Throwable) {
+            }
             if (hadUnconfirmedResolutionOnStartup) {
                 try {
                     recoverUnconfirmedResolutionOnStartup()
@@ -545,6 +560,14 @@ class GameSpaceRepository(
                         "moe.shizuku.privileged.api",
                         "moe.shizuku.manager",
                         "com.shizuku.manager",
+                        "rikka.shizuku.app",
+                        "com.topjohnwu.magisk",
+                        "me.weishu.kernelsu",
+                        "me.bmax.apatch",
+                        "io.github.vvb2060.mahoshojo",
+                        "io.github.vvb2060.keyattestation",
+                        "org.lsposed.manager",
+                        "gr.nikolasspyr.integritycheck",
                         "com.android.systemui",
                         "android",
                         "com.android.phone",
@@ -555,6 +578,9 @@ class GameSpaceRepository(
                         "com.google.android.gms",
                         "com.google.android.gsf",
                         "com.android.vending",
+                        "com.google.android.ext.services",
+                        "com.google.android.ims",
+                        "com.google.android.modulemetadata",
                         "com.android.providers.settings",
                         "com.android.providers.media",
                         "com.android.providers.downloads",
@@ -563,36 +589,38 @@ class GameSpaceRepository(
                         "com.android.se",
                         "com.google.android.webview",
                         "com.android.webview",
+                        "com.xiaomi.finddevice",
+                        "com.miui.securitycenter",
+                        "com.samsung.android.kgclient",
                         defaultLauncherPkg,
                         defaultImePkg
                     ).filter { it.isNotBlank() }.toSet()
 
-                    // 1. Gather recently active packages (last 12 hours) so they are force-stopped first
-                    val priorityPackages = linkedSetOf<String>()
-                    try {
-                        val usm = context.getSystemService(Context.USAGE_STATS_SERVICE) as? UsageStatsManager
-                        if (usm != null) {
-                            val now = System.currentTimeMillis()
-                            val recentStats = usm.queryUsageStats(
-                                UsageStatsManager.INTERVAL_DAILY,
-                                now - 12L * 60L * 60L * 1000L,
-                                now
-                            ).orEmpty()
-                            recentStats
-                                .filter { it.lastTimeUsed > 0L }
-                                .sortedByDescending { it.lastTimeUsed }
-                                .forEach { stat ->
-                                    val pkg = stat.packageName.orEmpty().trim()
-                                    if (pkg.isNotEmpty() && pkg !in protectedSet) {
-                                        priorityPackages.add(pkg)
-                                    }
-                                }
-                        }
-                    } catch (_: Throwable) {
+                    fun isProtectedIntegrityOrSystemCore(pkgName: String): Boolean {
+                        val lower = pkgName.lowercase(Locale.US)
+                        if (pkgName in protectedSet) return true
+                        return lower.startsWith("com.google.android.gms") ||
+                            lower.startsWith("com.google.android.gsf") ||
+                            lower.startsWith("com.android.vending") ||
+                            lower.startsWith("com.google.android.ext") ||
+                            lower.startsWith("com.google.mainline") ||
+                            lower.startsWith("com.android.providers.") ||
+                            lower.startsWith("moe.shizuku") ||
+                            lower.startsWith("rikka.shizuku") ||
+                            lower.contains("magisk") ||
+                            lower.contains("kernelsu") ||
+                            lower.contains("apatch") ||
+                            lower.contains("trickystore") ||
+                            lower.contains("playintegrity") ||
+                            lower.contains("integrity") ||
+                            lower.contains("zygisk") ||
+                            lower.contains("lsposed") ||
+                            lower.contains("shamiko") ||
+                            lower.contains("keyattestation")
                     }
 
-                    // 2. Add known music, video, social, and streaming apps to high priority
-                    val knownMediaAndBgApps = listOf(
+                    // 1. Add known music, video, social, and streaming apps to high priority
+                    val knownMediaAndBgApps = setOf(
                         "com.spotify.music",
                         "com.google.android.apps.youtube.music",
                         "com.google.android.youtube",
@@ -622,40 +650,79 @@ class GameSpaceRepository(
                         "com.discord",
                         "com.android.chrome"
                     )
+
+                    // Build map of installed apps so we never force-stop core system/security/integrity packages
+                    val installedMap = mutableMapOf<String, ApplicationInfo>()
+                    try {
+                        for (appInfo in pm.getInstalledApplications(0)) {
+                            val p = appInfo.packageName?.trim().orEmpty()
+                            if (p.isNotEmpty()) {
+                                installedMap[p] = appInfo
+                            }
+                        }
+                    } catch (_: Throwable) {
+                    }
+
+                    fun canSafelyForceStopPackage(pkgName: String): Boolean {
+                        if (pkgName.isBlank() || isProtectedIntegrityOrSystemCore(pkgName)) return false
+                        if (pkgName in knownMediaAndBgApps) return true
+                        val info = installedMap[pkgName] ?: return false
+                        val isSystem = (info.flags and ApplicationInfo.FLAG_SYSTEM) != 0
+                        if (isSystem) return false
+                        val labelLower = try {
+                            pm.getApplicationLabel(info).toString().lowercase(Locale.US)
+                        } catch (_: Throwable) {
+                            ""
+                        }
+                        if (labelLower.contains("magisk") ||
+                            labelLower.contains("kernelsu") ||
+                            labelLower.contains("apatch") ||
+                            labelLower.contains("shizuku") ||
+                            labelLower.contains("integrity")
+                        ) {
+                            return false
+                        }
+                        return true
+                    }
+
+                    // 2. Gather recently active user/media packages (last 12 hours) so they are force-stopped first
+                    val priorityPackages = linkedSetOf<String>()
+                    try {
+                        val usm = context.getSystemService(Context.USAGE_STATS_SERVICE) as? UsageStatsManager
+                        if (usm != null) {
+                            val now = System.currentTimeMillis()
+                            val recentStats = usm.queryUsageStats(
+                                UsageStatsManager.INTERVAL_DAILY,
+                                now - 12L * 60L * 60L * 1000L,
+                                now
+                            ).orEmpty()
+                            recentStats
+                                .filter { it.lastTimeUsed > 0L }
+                                .sortedByDescending { it.lastTimeUsed }
+                                .forEach { stat ->
+                                    val pkg = stat.packageName.orEmpty().trim()
+                                    if (canSafelyForceStopPackage(pkg)) {
+                                        priorityPackages.add(pkg)
+                                    }
+                                }
+                        }
+                    } catch (_: Throwable) {
+                    }
+
                     for (pkg in knownMediaAndBgApps) {
-                        if (pkg !in protectedSet && isPackageInstalled(pkg)) {
+                        if (!isProtectedIntegrityOrSystemCore(pkg) && isPackageInstalled(pkg)) {
                             priorityPackages.add(pkg)
                         }
                     }
 
-                    // 3. Gather all installed user apps, updated system apps, and launchable apps
+                    // 3. Gather all non-system user apps and explicit media/social apps (never system/GMS/Root apps)
                     val allTargetPackages = linkedSetOf<String>()
                     allTargetPackages.addAll(priorityPackages)
 
-                    try {
-                        val launcherIntent = Intent(Intent.ACTION_MAIN, null).addCategory(Intent.CATEGORY_LAUNCHER)
-                        val resolveList = pm.queryIntentActivities(launcherIntent, 0)
-                        for (res in resolveList) {
-                            val pkg = res.activityInfo?.packageName?.trim().orEmpty()
-                            if (pkg.isNotEmpty() && pkg !in protectedSet) {
-                                allTargetPackages.add(pkg)
-                            }
+                    for (pkg in installedMap.keys) {
+                        if (canSafelyForceStopPackage(pkg)) {
+                            allTargetPackages.add(pkg)
                         }
-                    } catch (_: Throwable) {
-                    }
-
-                    try {
-                        val installedApps = pm.getInstalledApplications(0)
-                        for (appInfo in installedApps) {
-                            val pkg = appInfo.packageName?.trim().orEmpty()
-                            if (pkg.isEmpty() || pkg in protectedSet) continue
-                            val isSystem = (appInfo.flags and ApplicationInfo.FLAG_SYSTEM) != 0
-                            val isUpdatedSystem = (appInfo.flags and ApplicationInfo.FLAG_UPDATED_SYSTEM_APP) != 0
-                            if (!isSystem || isUpdatedSystem) {
-                                allTargetPackages.add(pkg)
-                            }
-                        }
-                    } catch (_: Throwable) {
                     }
 
                     // 4. Immediately request Android ActivityManager to kill background processes
@@ -668,7 +735,7 @@ class GameSpaceRepository(
                         }
                     }
 
-                    // 5. Build clean privileged shell script to stop active media and am force-stop every background package
+                    // 5. Build clean privileged shell script to stop active media and am force-stop every background user package
                     val syncPriorityList = priorityPackages.take(35)
                     val remainingList = allTargetPackages.filter { it !in syncPriorityList }
 
@@ -680,14 +747,13 @@ class GameSpaceRepository(
                         for (pkg in syncPriorityList) {
                             append("am force-stop $pkg 2>/dev/null; ")
                         }
-                        // Parallel batched am force-stop on all remaining apps for speed
+                        // Parallel batched am force-stop on all remaining user apps for speed
                         for (chunk in remainingList.chunked(20)) {
                             for (pkg in chunk) {
                                 append("am force-stop $pkg 2>/dev/null & ")
                             }
                             append("wait; ")
                         }
-                        append("am kill-all 2>/dev/null || true; ")
                         append("cmd game mode performance $cleanTarget 2>/dev/null || true")
                     }
 
@@ -710,13 +776,13 @@ class GameSpaceRepository(
                 delay(360)
             }
 
-            // Stage 4: Ultra Touch Polling & Sensitivity
+            // Stage 4: Ultra Touch Polling & Sensitivity (Play Integrity Safe — does not disable untrusted touch security)
             if (cfg.ultraTouchResponse) {
                 onProgress(0.82f, "[${cfg.tier.title}] Boosting touch pointer speed & input response...")
                 try {
                     executeCommand(
                         "settings put system pointer_speed 7 2>/dev/null || true; " +
-                            "settings put global block_untrusted_touches 0 2>/dev/null || true"
+                            "settings delete global block_untrusted_touches 2>/dev/null || true"
                     )
                 } catch (_: Throwable) {
                 }
@@ -1304,7 +1370,7 @@ class GameSpaceRepository(
         val cmd = if (enabled) {
             "settings put global mobile_data_always_on 1; " +
                 "settings put global netstats_enabled 1; " +
-                "cmd netpolicy set restrict-background true 2>/dev/null || true"
+                "cmd netpolicy set restrict-background false 2>/dev/null || true"
         } else {
             "cmd netpolicy set restrict-background false 2>/dev/null || true"
         }
@@ -2506,6 +2572,24 @@ class GameSpaceRepository(
                 Result.success("System defaults restored (SurfaceFlinger, Touch Speed & Heads-Up notifications reset).")
             } else {
                 Result.failure(Exception(res.stderr.ifBlank { "Failed to restore defaults via ${executionMethod.value.name}" }))
+            }
+        } catch (e: Throwable) {
+            com.kyro.game.space.service.PlayBoostNotificationManager.cancelBoostNotification(context)
+            Result.failure(e)
+        }
+    }
+
+    suspend fun restoreSafePlayIntegrityAndSystemDefaults(): Result<String> = withContext(Dispatchers.IO) {
+        try {
+            eglTextureSession.releaseSession()
+            prefs.edit().putBoolean("tex_session_live", false).apply()
+            val cmd = PlayBoostConfig.buildRestorePlayIntegrityAndSystemCommand()
+            val res = executeCommand(cmd)
+            com.kyro.game.space.service.PlayBoostNotificationManager.cancelBoostNotification(context)
+            if (res.isSuccess) {
+                Result.success("Play Integrity & System Defaults restored! Global ANGLE, GPU debug flags, and netpolicy cleaned.")
+            } else {
+                Result.failure(Exception(res.stderr.ifBlank { "Connect Shizuku, Wireless ADB, or Root first to restore system flags." }))
             }
         } catch (e: Throwable) {
             com.kyro.game.space.service.PlayBoostNotificationManager.cancelBoostNotification(context)

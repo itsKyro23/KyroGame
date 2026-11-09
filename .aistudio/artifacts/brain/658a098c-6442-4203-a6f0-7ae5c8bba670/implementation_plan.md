@@ -1,112 +1,100 @@
-# Rencana Implementasi: AOT Game DEX Compiler (Tools) & Play Auto-Boost Settings (Home)
+# NOX - Game Space: Play Integrity & Device Certification Protection Plan
 
-Dokumen ini merancang penambahan dua fitur nyata ke dalam **NOX - Game Space**:
-1. **AOT Game DEX Compiler** di halaman **Tools** (dengan integrasi biaya **NOX Energy Cell** `15⚡` untuk 1 game / `30⚡` untuk semua game).
-2. **Play Boost Settings Button & Dialog** di halaman **Home** (untuk mengatur tier **Auto-Boost** dan *checklist* tahapan optimasi nyata—termasuk penutupan paksa aplikasi latar belakang—yang otomatis dijalankan setiap kali tombol **Play** pada kartu game ditekan).
-
----
+Rencana ini mengamankan seluruh perintah shell pada **Force-Stop Background Apps**, **Lightweight Texture (ANGLE)**, **Play Boost**, dan **Network Optimizer** agar tidak pernah mengganggu **Google Play Services (DroidGuard)**, **Google Play Store Certification**, maupun modul **Root / PlayIntegrityFix / TrickyStore**, serta menyediakan fitur **1-Tap Restore Safe System & Integrity** untuk memulihkan status perangkat dengan cepat.
 
 ## User Review & Critical Decisions
 
 > [!IMPORTANT]
-> - **Biaya Energi AOT Game DEX Compiler**:
->   - **Single Game (`15⚡`)**: Mengompilasi 1 game yang dipilih (`speed-profile` atau `speed`).
->   - **All Added Games (`30⚡`)**: Mengompilasi seluruh game yang ada di daftar Home sekaligus.
->   - **Reset Compile (`0⚡` / Gratis)**: Mengembalikan status kompilasi paket ke standar.
-> - **3 Tier Preset Auto-Boost (Saat Klik Play di Game Card)**:
->   1. **`ECO PULSE` (Light / Safe Boost)**: Bersih-bersih cache RAM ringan tanpa menutup aplikasi latar belakang.
->   2. **`VELOCITY CORE` (Balanced / Competitive)**: Optimasi RAM + Touch Sensitivity + SurfaceFlinger Zero-Lag + Anti Pop-Up Notifikasi.
->   3. **`NOX OVERDRIVE` (Extreme / Max Performance)**: Semua fitur di atas + **Force-Stop Aplikasi Latar Belakang (`am force-stop` & `am kill-all`)** + **Fixed Performance Mode (`cmd power`)** + **Phantom Process Bypass**.
+> Seluruh fitur optimasi game tetap bekerja maksimal untuk game yang ditargetkan, namun diisolasi secara ketat agar tidak menyentuh komponen keamanan Google Play, layanan sistem, maupun modul Root/Integrity.
+
+- **Confirmed Decision 1**: Mengamankan fitur **Force-Stop Background Apps**, **Lightweight Texture**, **Play Boost**, dan **Network Optimizer** agar 100% aman terhadap *Play Integrity* (`MEETS_DEVICE_INTEGRITY` & `MEETS_STRONG_INTEGRITY`) dan *Play Protect Certification*.
+- **Confirmed Decision 2**: Menambahkan kartu tindakan cepat **Restore Safe System & Play Integrity** di halaman **Settings** agar pengguna dapat langsung membersihkan sisa flag `angle_gl_driver_all_angle`, `gpu_debug_app`, `debug.*`, dan me-refresh cache layanan Google Play Store kapan saja dalam satu ketukan.
 
 ---
 
-## 1. Penjelasan Detail Fitur yang Ditambahkan
+## 1. Overview & Core Concept
 
-### A. Fitur 1: **AOT Game DEX Compiler** (Di Menu **Tools**)
-- **Apa Fungsinya?**
-  Menggunakan mesin kompilator internal Android (`dex2oat` via `cmd package compile`) untuk menerjemahkan kode DEX game menjadi **instruksi mesin ARM64 asli (Ahead-Of-Time / AOT)** sebelum game dibuka. Ini menghilangkan *stutter/patah-patah* saat efek *skill* baru keluar dan mempercepat *loading* masuk ke dalam *match*.
-- **Pilihan Mode Kompilasi Nyata:**
-  1. **`Speed-Profile (Fast & Recommended)`**: Mengompilasi jalur kode utama game secara cerdas (`cmd package compile -m speed-profile -f <package>`).
-  2. **`Full Speed AOT (Maximum Zero-JIT)`**: Mengompilasi 100% seluruh metode di dalam game menjadi kode mesin (`cmd package compile -m speed -f <package>`).
-- **Integrasi NOX Energy:**
-  - Membutuhkan **`15⚡`** untuk 1 game, atau **`30⚡`** untuk semua game di Home.
-  - Juga ditampilkan secara rapi di dalam dialog **NOX Energy Cell (`NoxEnergyTopUpDialog`)**.
-
-### B. Fitur 2: **Play Boost Settings Button & Dialog** (Di Halaman **Home**)
-- **Lokasi Tombol:**
-  Terletak di baris judul **`MY GAMES`** pada halaman **Home** (di sebelah kanan badge jumlah game), berupa tombol kapsul **`Boost Settings`** yang menampilkan nama Tier aktif saat ini (`Eco Pulse` / `Velocity Core` / `Nox Overdrive`).
-- **3 Pilihan Tier Auto-Boost (Otomatis Mengatur Checklist):**
-
-| Nama Tier Boost | Level | Tahapan yang Dijalankan Saat Klik Tombol "Play" |
-| :--- | :--- | :--- |
-| **`ECO PULSE`** | **Ringan (Low)** | **Tahap 1–2:** Hanya membersihkan memori cache (`am trim-memory RUNNING_MODERATE` & `pm trim-caches`) dan menerapkan profil FPS game. Aplikasi chat/musik di latar belakang **tidak** ditutup. |
-| **`VELOCITY CORE`** | **Menengah (Mid)** | **Tahap 1–4:** Mencakup *Eco Pulse* + **Zero-Lag SurfaceFlinger** (`disable_backpressure 1`) + **Ultra Touch Response** (`pointer_speed 7`) + **Anti Pop-Up Notifikasi** (`heads_up_notifications_enabled 0`). |
-| **`NOX OVERDRIVE`** | **Ekstrem (High)** | **Tahap 1–6 (Maksimal):** Mencakup *Velocity Core* + **Force-Stop Background Apps** (menghentikan paksa aplikasi pihak ketiga yang berjalan di latar belakang dengan `am force-stop` & `am kill-all`) + **Fixed Performance Mode** (`cmd power set-fixed-performance-mode-enabled true` & ` max_phantom_processes` bypass). |
-
-- **6 Checklist Kustomisasi Nyata (Bisa Dicentang/Diubah Manual):**
-  Di dalam dialog, pengguna juga bisa mencentang atau mematikan setiap tahapan secara bebas:
-  1. **RAM & Cache Trim** (`am trim-memory system RUNNING_CRITICAL` + `pm trim-caches 4G`)
-  2. **Force-Stop Background Apps** (`am kill-all` + iterasi `am force-stop <pkg>` pada aplikasi non-esensial di latar belakang)
-  3. **Fixed CPU/GPU Performance Lock** (`cmd power set-fixed-performance-mode-enabled true` + `max_phantom_processes 2147483647`)
-  4. **SurfaceFlinger Zero-Lag Compositor** (`setprop debug.sf.disable_backpressure 1` + `setprop debug.sf.latch_unsignaled 1`)
-  5. **Ultra Touch Response & Polling** (`settings put system pointer_speed 7` + `settings put global block_untrusted_touches 0`)
-  6. **Block In-Game Heads-Up Notifications** (`settings put global heads_up_notifications_enabled 0` saat main, dan tombol *Restore Defaults* untuk mengembalikan semua pengaturan sistem ke standar kapan saja).
+- **What It Does**:
+  1. **Perlindungan Proses Root, Integrity & Google Attestation pada Force-Stop Background**: Memperluas daftar proteksi (`protectedSet` dan filter sistem) agar **Force-Stop Background Apps** hanya menutup aplikasi pengguna/hiburan/media latar belakang, dan **tidak pernah** mematikan aplikasi Root Manager (*Magisk, KernelSU, APatch, Shamiko, TrickyStore, PlayIntegrityFix, Zygisk*), layanan Google (*GMS, GSF, Play Store, ExtServices*), maupun layanan keamanan OEM (*Xiaomi FindDevice, MIUI Security, Samsung Knox/KGClient*). Selain itu, tidak lagi memaksa berhenti aplikasi sistem (`FLAG_SYSTEM` / `FLAG_UPDATED_SYSTEM_APP`) kecuali aplikasi hiburan/sosial/musik yang secara eksplisit dikenal (seperti YouTube, Chrome, atau aplikasi musik bawaan).
+  2. **Isolasi Per-Game pada Lightweight Texture (Tanpa Flag Global Berbahaya)**: Mengubah `angle_gl_driver_all_angle` agar **selalu `0`** (tidak pernah memaksa seluruh OS/Google Play Services memakai ANGLE), menghapus penggunaan `settings put global gpu_debug_app` dan `setprop debug.hwui.renderer skiavk` global, sehingga driver ANGLE dan filter tekstur hanya diterapkan secara spesifik pada paket game yang dipilih melalui `angle_gl_driver_selection_pkgs` dan `cmd game` / `device_config game_overlay`.
+  3. **Keamanan Play Boost & Network Optimizer**: Menghapus perubahan global `block_untrusted_touches 0` dan `cmd netpolicy set restrict-background true` yang dapat menghambat sinkronisasi token sertifikasi Google Play Services di latar belakang.
+  4. **Tombol 1-Tap "Restore Safe System & Integrity"**: Menyediakan tombol pemulihan instan di **Settings** untuk mereset seluruh flag sistem (`angle_gl_driver_all_angle 0`, menghapus `gpu_debug_app`, mereset properti `debug.*`, mengembalikan `netpolicy`, dan menyegarkan proses Play Store) agar perangkat langsung kembali bersih tanpa sisa flag debug.
+- **Target Audience / Persona**: Pengguna perangkat Android (baik *Non-Root / Shizuku / Wireless ADB* maupun *Root / Magisk / KernelSU*) yang menginginkan performa gaming maksimal tanpa kehilangan status **Play Protect Certified** atau **Play Integrity**.
+- **Key Value**: Performa game tetap kencang sementara status `MEETS_BASIC_INTEGRITY`, `MEETS_DEVICE_INTEGRITY`, dan `MEETS_STRONG_INTEGRITY` tetap terjaga aman.
 
 ---
 
-## 2. Desain UI & Alur Interaksi (Responsive & Tersusun Rapi)
+## 2. User Experience & Visual Design
 
-```
-┌─────────────────────────────────────────────────────────────────────────┐
-│                              HOME SCREEN                                │
-│  🎮 MY GAMES                               [⚡ Boost: Nox Overdrive ⚙️] │
-├─────────────────────────────────────────────────────────────────────────┤
-│                     (Klik Tombol Boost Settings)                        │
-│                                  ▼                                      │
-│  ┌───────────────────────────────────────────────────────────────────┐  │
-│  │ ⚡ PLAY AUTO-BOOST SETTINGS                                       │  │
-│  │ Pilih preset tier atau centang fitur yang dijalankan saat Play    │  │
-│  ├───────────────────────────────────────────────────────────────────┤  │
-│  │ [ 🟢 Eco Pulse ]   [ 🔵 Velocity Core ]   [ 🔴 Nox Overdrive ]    │  │
-│  ├───────────────────────────────────────────────────────────────────┤  │
-│  │ CHECKLIST TAHAPAN EKSEKUSI NYATA:                                 │  │
-│  │ [✓] 1. Deep RAM & Cache Purge (am trim-memory)                    │  │
-│  │ [✓] 2. Force-Stop Background Apps (Tutup aplikasi latar belakang) │  │
-│  │ [✓] 3. Fixed CPU/GPU Performance Lock (cmd power fixed-perf)      │  │
-│  │ [✓] 4. SurfaceFlinger Zero-Lag (Pangkas delay frame buffer)       │  │
-│  │ [✓] 5. Ultra Touch Polling & Sensitivity (Licinkan respon layar)  │  │
-│  │ [✓] 6. Block Heads-Up Pop-Up Notifications (Anti gangguan war)    │  │
-│  ├───────────────────────────────────────────────────────────────────┤  │
-│  │ [ Restore System Defaults ]                     [ Save Settings ] │  │
-│  └───────────────────────────────────────────────────────────────────┘  │
-└─────────────────────────────────────────────────────────────────────────┘
-```
-
-- **Tata Letak Responsif:**
-  - Menggunakan *Scrollable Container* dengan batas tinggi proporsional agar seluruh *chip* Tier dan 6 baris *Checklist* tampil rapi di semua ukuran layar tanpa bertumpuk.
-  - Saat pengguna menekan tombol **Play** pada kartu game mana pun, dialog **Pre-Launch Tactical Boost (`GameBoostDialog`)** akan menampilkan progres *real-time* sesuai daftar fitur yang dicentang oleh pengguna (termasuk jumlah aplikasi latar belakang yang di-*force-stop* jika opsi tersebut aktif).
+- **Key User Flows**:
+  1. **Otomatis Saat Membuka Aplikasi (Auto-Sanitize on Startup)**: Saat aplikasi dibuka, jika terdeteksi flag berbahaya warisan versi sebelumnya (`angle_gl_driver_all_angle == 1` atau `gpu_debug_app` aktif), aplikasi otomatis membersihkannya di belakang layar.
+  2. **Saat Menjalankan Play Boost (Force-Stop Background)**: Semua aplikasi latar belakang (Spotify, TikTok, Instagram, WhatsApp, YouTube, Chrome, dll.) tetap ditutup paksa secara menyeluruh untuk melapangkan RAM, namun layanan Google Play Integrity, layanan sistem Android, dan manajer Root/Zygisk tetap terlindungi 100%.
+  3. **Saat Menggunakan Lightweight Texture**: Pengguna memilih game atau profil Home Games dan menekan *Save & Apply*; driver ANGLE hanya diaktifkan khusus untuk daftar paket game tersebut tanpa mengubah driver sistem global.
+  4. **Saat Menekan "Restore Safe System & Integrity" di Settings**: Pengguna menekan tombol pemulihan di halaman **Settings**, melihat indikator proses pembersihan flag sistem, dan menerima konfirmasi bahwa seluruh pengaturan sistem & Play Integrity guard telah dikembalikan ke kondisi standar yang aman.
+- **Visual Identity & Theme**:
+  - *Aesthetic Direction*: Tactical Dark Gaming HUD yang konsisten dengan identitas visual **NOX - Game Space**.
+  - *Color Palette & Mood*: Permukaan gelap `#141826` / `#141419` dengan aksen hijau neon (`KyroGreen` `#00E676`) untuk indikator keamanan *Play Integrity Safe* dan aksen sian (`KyroCyan` `#00E5FF`) untuk kontrol tindakan.
+  - *Typography & Hierarchy*: Judul kartu menggunakan tipografi tebal berjarak rapi dengan badge status `PLAY INTEGRITY SAFE` bermonospace.
+  - *Component Styling & Layout*: Kartu status keamanan dan tombol *1-Tap Restore* ditempatkan secara responsif di halaman **Settings** dengan target sentuh minimal `48.dp`.
+- **Interactive Feedback & Motion**: Menampilkan umpan balik *Toast* dan status langsung saat proses pembersihan flag sistem selesai dijalankan.
 
 ---
 
-## 3. Arsitektur Teknis & Alur Data
+## 3. Key Product Decisions & Trade-Offs
 
+- **Decision 1: Isolasi ANGLE Driver Hanya untuk Paket Game (`angle_gl_driver_all_angle = 0`)**
+  - *Chosen Approach*: Selalu menjaga `angle_gl_driver_all_angle = 0` dan hanya mendaftarkan paket game ke `angle_gl_driver_selection_pkgs` + `angle_gl_driver_selection_values` serta `device_config put game_overlay <pkg> ... useAngle=true`.
+  - *Why*: Menyalakan `angle_gl_driver_all_angle = 1` memaksa proses `com.google.android.gms.unstable` (DroidGuard) dan SystemUI menggunakan ANGLE, yang memicu kegagalan pemeriksaan lingkungan perangkat pada Google Play Integrity.
+  - *Alternatives Considered*: Mematikan ANGLE sepenuhnya — ditolak karena fitur Lightweight Texture masih dibutuhkan untuk game 3D.
+- **Decision 2: Perlindungan Berlapis pada Force-Stop Background Apps**
+  - *Chosen Approach*: Melindungi seluruh paket Google (`com.google.android.gms*`, `com.google.android.gsf*`, `com.android.vending*`, `com.google.android.ext*`), seluruh paket Root/Integrity (`com.topjohnwu.magisk`, `me.weishu.kernelsu`, `me.bmax.apatch`, `io.github.vvb2060.*`, `moe.shizuku.*`), serta tidak melakukan `am force-stop` membabi buta pada aplikasi ber-flag `FLAG_SYSTEM` (kecuali aplikasi media/browser/sosial yang masuk daftar target eksplisit).
+  - *Why*: Memastikan aplikasi musik, sosial media, dan aplikasi pengguna tetap tertutup rapat saat *Boost*, tanpa pernah mematikan daemon Root/PlayIntegrityFix atau komponen Play Store.
+- **Decision 3: Menghapus Penggunaan `gpu_debug_app` dan `block_untrusted_touches 0`**
+  - *Chosen Approach*: Menghapus injeksi `settings put global gpu_debug_app` dan `settings put global block_untrusted_touches 0`, serta membersihkannya secara otomatis.
+  - *Why*: Kedua flag global tersebut dipantau oleh sistem keamanan Android dan anti-cheat sebagai tanda lingkungan debug yang tidak aman.
+
+---
+
+## 4. Technical Architecture & Data Strategy *(Technical Reference)*
+
+- **Architecture & Component Diagram**:
 ```
-┌───────────────────────────┐       ┌────────────────────────────────────┐
-│   PlayBoostSettingsDialog │──────▶│       GameSpaceRepository          │
-│ (Tier + 6 Checklists)     │       │ • Simpan PlayBoostConfig di Prefs  │
-└───────────────────────────┘       │ • boostAndLaunchGame() menjalankan │
-                                    │   perintah shell nyata per tahap   │
-┌───────────────────────────┐       │ • runAotGameCompile() menjalankan  │
-│   AotCompilerScreen       │──────▶│   cmd package compile -m speed     │
-│ (Tools Card + Full Screen)│       └────────────────────────────────────┘
-└───────────────────────────┘
+┌───────────────────────────────────────────────────────────────────────────┐
+│                         NOX - Game Space UI Layer                         │
+│  ┌──────────────────────┐  ┌──────────────────────┐  ┌─────────────────┐  │
+│  │   Home / Play Boost  │  │ Lightweight Texture  │  │ Settings Screen │  │
+│  │  (Safe Force-Stop)   │  │ (Per-Game ANGLE Only)│  │ (1-Tap Restore) │  │
+│  └──────────┬───────────┘  └──────────┬───────────┘  └────────┬────────┘  │
+└─────────────┼─────────────────────────┼───────────────────────┼───────────┘
+              │                         │                       │
+              ▼                         ▼                       ▼
+┌───────────────────────────────────────────────────────────────────────────┐
+│                 GameSpaceRepository & Command Sanitizer                   │
+│  ┌─────────────────────────────────────────────────────────────────────┐  │
+│  │ 1. Auto-Sanitize Startup Guard:                                     │  │
+│  │    Resets angle_gl_driver_all_angle=0 & deletes gpu_debug_app       │  │
+│  ├─────────────────────────────────────────────────────────────────────┤  │
+│  │ 2. Integrity-Safe Force-Stop Filter:                                │  │
+│  │    Protects GMS/PlayStore, System Core, & Root/PIF/TrickyStore pkgs │  │
+│  ├─────────────────────────────────────────────────────────────────────┤  │
+│  │ 3. Per-Package ANGLE Command Builder:                               │  │
+│  │    Applies angle_gl_driver_selection_pkgs without global debug flag │  │
+│  ├─────────────────────────────────────────────────────────────────────┤  │
+│  │ 4. 1-Tap Restore Safe System & Play Integrity Action:               │  │
+│  │    Cleans all global flags, debug props, netpolicy, & Play cache    │  │
+│  └─────────────────────────────────────────────────────────────────────┘  │
+└───────────────────────────────────────┬───────────────────────────────────┘
+                                        │
+                                        ▼
+┌───────────────────────────────────────────────────────────────────────────┐
+│            Privileged Shell Executor (Shizuku / Wireless ADB / Root)      │
+└───────────────────────────────────────────────────────────────────────────┘
 ```
 
-- **Penyimpanan Konfigurasi (`PlayBoostConfig`)**:
-  - Disimpan secara persisten di `SharedPreferences` (`kyro_game_space_prefs`) sehingga pilihan pengguna tetap tersimpan meskipun aplikasi ditutup.
-- **Perlindungan Aplikasi Penting Saat Force-Stop**:
-  - Saat tahap **Force-Stop Background Apps** berjalan, sistem otomatis mengecualikan:
-    1. Game yang sedang akan diluncurkan,
-    2. Aplikasi **NOX - Game Space** sendiri (`com.nox.gamespace`),
-    3. Layanan **Shizuku** (`moe.shizuku.privileged.api`), dan
-    4. Aplikasi sistem inti Android (`FLAG_SYSTEM`), sehingga koneksi Shizuku/ADB dan sistem HP tetap 100% aman.
+- **Data Model & State**:
+  - Menambahkan fungsi `restoreSafePlayIntegrityAndSystemDefaults()` pada `GameSpaceRepository` yang mengembalikan `Result<String>` berisi ringkasan pemulihan.
+  - Menambahkan daftar proteksi paket Root/Integrity & layanan sistem penting pada filter `Force-Stop Background Apps`.
+  - Memperbarui generator perintah shell `TextureConfig` dan `PlayBoostConfig` agar bebas dari flag global yang memicu kegagalan *Play Integrity*.
+- **Interactive Component & State Mapping**:
+  - Saat aplikasi dijalankan (`init`), `GameSpaceRepository` menjalankan pembersihan ringan untuk memastikan `angle_gl_driver_all_angle` bernilai `0` dan `gpu_debug_app` dihapus jika ada sesi lama yang tertinggal.
+  - Pada **Settings Screen**, tombol **Restore Safe System & Play Integrity** memanggil `repository.restoreSafePlayIntegrityAndSystemDefaults()`, menampilkan indikator *loading*, lalu memunculkan pesan sukses setelah seluruh pengaturan sistem dan flag debug dibersihkan.

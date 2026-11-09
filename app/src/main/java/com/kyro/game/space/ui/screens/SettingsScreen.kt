@@ -707,6 +707,139 @@ fun SettingsScreen(
             }
         }
 
+        // Section C2: Play Integrity & System Safety Guard (1-Tap Restore)
+        item {
+            var isRestoringIntegrity by remember { mutableStateOf(false) }
+
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("play_integrity_safety_card"),
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant
+                ),
+                border = BorderStroke(
+                    1.dp,
+                    KyroGreen.copy(alpha = 0.45f)
+                ),
+                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(responsive.cardInnerPadding),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(end = 8.dp)
+                        ) {
+                            Surface(
+                                shape = CircleShape,
+                                color = KyroGreen.copy(alpha = 0.16f),
+                                modifier = Modifier.size(40.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = Icons.Default.Security,
+                                        contentDescription = "Play Integrity Guard",
+                                        tint = KyroGreen,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                            }
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "PLAY INTEGRITY & SYSTEM GUARD",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    letterSpacing = 0.5.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Text(
+                                    text = "Protects Google Play Services, Root/Zygisk & Device Certification",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = KyroGreen.copy(alpha = 0.16f),
+                            border = BorderStroke(1.dp, KyroGreen.copy(alpha = 0.45f))
+                        ) {
+                            Text(
+                                text = "INTEGRITY SAFE",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontFamily = FontFamily.Monospace,
+                                fontWeight = FontWeight.Bold,
+                                color = KyroGreen,
+                                fontSize = 10.sp,
+                                maxLines = 1,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            )
+                        }
+                    }
+
+                    Text(
+                        text = "All boost and texture features isolate per-game flags and never force-stop Google Play Services, Magisk/KernelSU/APatch, or Play Integrity modules. Tap below to clean any leftover global ANGLE, GPU debug, or background network flags.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        lineHeight = 17.sp
+                    )
+
+                    Button(
+                        onClick = {
+                            if (!isRestoringIntegrity) {
+                                isRestoringIntegrity = true
+                                scope.launch {
+                                    val res = repository.restoreSafePlayIntegrityAndSystemDefaults()
+                                    isRestoringIntegrity = false
+                                    val msg = res.getOrElse { it.message ?: "Failed to restore defaults" }
+                                    Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+                                }
+                            }
+                        },
+                        enabled = !isRestoringIntegrity,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("restore_play_integrity_btn"),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = KyroGreen,
+                            contentColor = Color.Black
+                        )
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Security,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = if (isRestoringIntegrity) "Restoring Safe System Defaults..." else "Restore Safe System & Play Integrity",
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+            }
+        }
+
         // Section D: Google Play App Updates
         item {
             val updateState by GooglePlayManager.updateState.collectAsState()

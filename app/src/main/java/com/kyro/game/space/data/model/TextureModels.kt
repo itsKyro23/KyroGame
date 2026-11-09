@@ -248,15 +248,16 @@ data class TextureConfig(
         val cleanPkg = packageName.trim()
         val enabledStr = angleEnabledFeaturesString
         val disabledStr = angleDisabledFeaturesString
-        val allAngleFlag = if (driverMode == AngleDriverMode.ANGLE) "1" else "0"
         val gameOverlayCmd = if (cleanPkg.isNotEmpty() && driverMode == AngleDriverMode.ANGLE) {
             "device_config put game_overlay $cleanPkg mode=2,useAngle=true:mode=3,useAngle=true 2>/dev/null || true; " +
                 "cmd game mode 2 $cleanPkg 2>/dev/null || true; "
         } else ""
 
         return "settings delete global angle_debug_package 2>/dev/null || true; " +
+            "settings delete global gpu_debug_app 2>/dev/null || true; " +
+            "settings delete global enable_gpu_debug_layers 2>/dev/null || true; " +
             "settings put global show_angle_in_use_dialog_box 0 2>/dev/null || true; " +
-            "settings put global angle_gl_driver_all_angle $allAngleFlag 2>/dev/null || true; " +
+            "settings put global angle_gl_driver_all_angle 0 2>/dev/null || true; " +
             gameOverlayCmd +
             (if (enabledStr.isNotEmpty()) {
                 "setprop debug.angle.feature_overrides_enabled $enabledStr 2>/dev/null || true; "
@@ -274,12 +275,12 @@ data class TextureConfig(
      * Builds the full shell command sequence for applying Lightweight Texture + ANGLE / GPU Driver
      * for the selected target game (or added Home games when Global is selected).
      *
-     * Key Android GraphicsEnvironment & libANGLE mechanisms:
-     * 1. `angle_debug_package` is deleted so Android never looks for an external debug ANGLE APK.
-     * 2. `angle_gl_driver_all_angle 1` (while Kyro Game Space is active in ANGLE mode) +
-     *    `angle_gl_driver_selection_pkgs` / `angle_gl_driver_selection_values` +
-     *    `angle_whitelist` / `angle_allowlist` + `device_config put game_overlay <pkg> mode=2,useAngle=true:mode=3,useAngle=true`
-     *    ensure ANGLE (`libGLESv2_angle.so`) is loaded for the game across AOSP and OEM ROMs.
+     * Key Android GraphicsEnvironment & libANGLE mechanisms (Play Integrity Safe):
+     * 1. `angle_debug_package` and `gpu_debug_app` are always deleted so Play Services / DroidGuard
+     *    never detects global GPU debugging flags.
+     * 2. `angle_gl_driver_all_angle` is strictly kept at `0` so system apps and Google Play Services
+     *    never run on ANGLE; ANGLE is isolated per-game via `angle_gl_driver_selection_pkgs` /
+     *    `angle_gl_driver_selection_values` + `device_config put game_overlay <pkg> mode=2,useAngle=true:mode=3,useAngle=true`.
      * 3. Real `libANGLE` Vulkan feature overrides (`forceTextureLodOffset1..4`,
      *    `forceNearestFiltering`, `forceNearestMipFiltering`) are applied via `debug.angle.feature_overrides_enabled`
      *    and `debug.angle.feature_overrides_disabled` (kept strictly under the 91-byte `setprop` limit).
@@ -380,21 +381,20 @@ data class TextureConfig(
         val filterStr = if (sharpPixels) "nearest" else "linear"
         val mipmapStr = if (hardDistanceCutoff) "nearest" else "linear"
         val anisoVal = if (sharpPixels || hardDistanceCutoff) "1" else "2"
-        val rendererVal = if (driverMode == AngleDriverMode.ANGLE) "skiavk" else "opengl"
 
         // Real libANGLE Vulkan feature overrides (strictly <= 69 chars so setprop never fails)
         val angleEnabledFeatures = angleEnabledFeaturesString
         val angleDisabledFeatures = angleDisabledFeaturesString
 
-        val allAngleFlag = if (driverMode == AngleDriverMode.ANGLE) "1" else "0"
+        // Strictly keep angle_gl_driver_all_angle = 0 so Google Play Services / DroidGuard & system UI are untouched
         val angleSelectionCmd = if (pkgsCsv.isNotEmpty()) {
-            "settings put global angle_gl_driver_all_angle $allAngleFlag 2>/dev/null || true; " +
+            "settings put global angle_gl_driver_all_angle 0 2>/dev/null || true; " +
                 "settings put global angle_gl_driver_selection_pkgs $pkgsCsv 2>/dev/null || true; " +
                 "settings put global angle_gl_driver_selection_values $valsCsv 2>/dev/null || true; " +
                 "settings put global angle_whitelist $allowlistCsv 2>/dev/null || true; " +
                 "settings put global angle_allowlist $allowlistCsv 2>/dev/null || true; "
         } else {
-            "settings put global angle_gl_driver_all_angle $allAngleFlag 2>/dev/null || true; "
+            "settings put global angle_gl_driver_all_angle 0 2>/dev/null || true; "
         }
 
         // Configure Android GameManagerService game_overlay with useAngle=true for target packages
@@ -424,12 +424,6 @@ data class TextureConfig(
             }
         }
 
-        val gpuDebugAppCmd = if (targetPkg.isNotEmpty()) {
-            "settings put global gpu_debug_app $targetPkg 2>/dev/null || true; "
-        } else {
-            "settings delete global gpu_debug_app 2>/dev/null || true; "
-        }
-
         val forceStopCmd = if (forceStopTargets && targetSet.isNotEmpty()) {
             targetSet.joinToString("; ") { "am force-stop $it 2>/dev/null || true" }
         } else {
@@ -437,11 +431,12 @@ data class TextureConfig(
         }
 
         return "settings delete global angle_debug_package 2>/dev/null || true; " +
+            "settings delete global gpu_debug_app 2>/dev/null || true; " +
+            "settings delete global enable_gpu_debug_layers 2>/dev/null || true; " +
             "settings put global show_angle_in_use_dialog_box 0 2>/dev/null || true; " +
             angleSelectionCmd +
             gameOverlayAngleCmd +
             vendorDriverCmd +
-            gpuDebugAppCmd +
             "settings put global gpu_texture_lod_bias $biasStr 2>/dev/null || true; " +
             "settings put global gpu_texture_filter_mode $filterModeLabel 2>/dev/null || true; " +
             "settings put global angle_texture_lod_bias $biasStr 2>/dev/null || true; " +
@@ -465,7 +460,6 @@ data class TextureConfig(
             "setprop debug.angle.tex_mipmap_mode $mipmapStr 2>/dev/null || true; " +
             "setprop debug.egl.force_aniso $anisoVal 2>/dev/null || true; " +
             "setprop debug.egl.force_msaa 0 2>/dev/null || true; " +
-            "setprop debug.hwui.renderer $rendererVal 2>/dev/null || true; " +
             forceStopCmd
     }
 
@@ -477,6 +471,8 @@ data class TextureConfig(
         fun buildSessionExitCleanupCommand(): String {
             return "settings put global angle_gl_driver_all_angle 0 2>/dev/null || true; " +
                 "settings delete global angle_debug_package 2>/dev/null || true; " +
+                "settings delete global gpu_debug_app 2>/dev/null || true; " +
+                "settings delete global enable_gpu_debug_layers 2>/dev/null || true; " +
                 "setprop debug.angle.feature_overrides_enabled \"\" 2>/dev/null || true; " +
                 "setprop debug.angle.feature_overrides_disabled \"\" 2>/dev/null || true"
         }

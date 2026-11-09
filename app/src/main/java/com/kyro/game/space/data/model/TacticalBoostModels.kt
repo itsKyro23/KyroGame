@@ -231,7 +231,31 @@ data class PlayBoostConfig(
                 "setprop debug.sf.disable_backpressure 0 2>/dev/null || true; " +
                 "setprop debug.sf.latch_unsignaled 0 2>/dev/null || true; " +
                 "settings put system pointer_speed 0 2>/dev/null || true; " +
-                "settings put global heads_up_notifications_enabled 1 2>/dev/null || true"
+                "settings delete global block_untrusted_touches 2>/dev/null || true; " +
+                "settings put global heads_up_notifications_enabled 1 2>/dev/null || true; " +
+                "settings put global angle_gl_driver_all_angle 0 2>/dev/null || true; " +
+                "settings delete global angle_debug_package 2>/dev/null || true; " +
+                "settings delete global gpu_debug_app 2>/dev/null || true; " +
+                "settings delete global enable_gpu_debug_layers 2>/dev/null || true; " +
+                "cmd netpolicy set restrict-background false 2>/dev/null || true"
+        }
+
+        fun buildRestorePlayIntegrityAndSystemCommand(): String {
+            return buildRestoreSystemDefaultsCommand() + "; " +
+                "settings delete global angle_gl_driver_selection_pkgs 2>/dev/null || true; " +
+                "settings delete global angle_gl_driver_selection_values 2>/dev/null || true; " +
+                "settings delete global angle_whitelist 2>/dev/null || true; " +
+                "settings delete global angle_allowlist 2>/dev/null || true; " +
+                "settings delete global gpu_texture_lod_bias 2>/dev/null || true; " +
+                "settings delete global gpu_texture_filter_mode 2>/dev/null || true; " +
+                "settings delete global angle_texture_lod_bias 2>/dev/null || true; " +
+                "settings delete global angle_texture_filter 2>/dev/null || true; " +
+                "setprop debug.angle.feature_overrides_enabled \"\" 2>/dev/null || true; " +
+                "setprop debug.angle.feature_overrides_disabled \"\" 2>/dev/null || true; " +
+                "setprop debug.hwui.texture_lod_bias 0.0 2>/dev/null || true; " +
+                "setprop debug.egl.texture_lod_bias 0.0 2>/dev/null || true; " +
+                "setprop debug.angle.texture_lod_bias 0.0 2>/dev/null || true; " +
+                "setprop debug.vulkan.texture_lod_bias 0.0 2>/dev/null || true"
         }
     }
 }
