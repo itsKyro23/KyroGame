@@ -104,73 +104,50 @@ fun ToolsScreen(
         ),
         verticalArrangement = Arrangement.spacedBy(responsive.sectionSpacing)
     ) {
-        // Section Header + Quick 4-Tool Access Bar
+        // Section Header
         item {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 4.dp, vertical = 2.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Build,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Text(
-                        text = strings.toolsHeaderTitle,
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 0.8.sp,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 4.dp, vertical = 2.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Build,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(20.dp)
+                )
+                Text(
+                    text = strings.toolsHeaderTitle,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 0.8.sp,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            }
+        }
 
-                // Quick 4-Tool Pill Bar (Always visible at top of Tools screen)
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    QuickToolChip(
-                        label = "AOT DEX",
-                        icon = Icons.Default.Bolt,
-                        accent = KyroOrange,
-                        onClick = onOpenAotCompiler,
-                        modifier = Modifier
-                            .weight(1f)
-                            .testTag("quick_chip_aot_compiler")
-                    )
-                    QuickToolChip(
-                        label = "Resolution",
-                        icon = Icons.Default.AspectRatio,
-                        accent = MaterialTheme.colorScheme.primary,
-                        onClick = onOpenResolutionChanger,
-                        modifier = Modifier
-                            .weight(1f)
-                            .testTag("quick_chip_resolution")
-                    )
-                    QuickToolChip(
-                        label = "Texture",
-                        icon = Icons.Default.AutoAwesomeMosaic,
-                        accent = Color(0xFF56B4E9),
-                        onClick = onOpenTextureTuner,
-                        modifier = Modifier
-                            .weight(1f)
-                            .testTag("quick_chip_texture")
-                    )
-                    QuickToolChip(
-                        label = "Network",
-                        icon = Icons.Default.NetworkCheck,
-                        accent = KyroGreen,
-                        onClick = onOpenNetworkOptimizer,
-                        modifier = Modifier
-                            .weight(1f)
-                            .testTag("quick_chip_network")
-                    )
-                }
+        // Permission Required Banner at the top when no execution permission is active
+        if (!overview.isAnyPermissionActive) {
+            item {
+                PermissionRequiredBanner(
+                    overview = overview,
+                    onConnectShizuku = {
+                        val status = repository.requestShizukuPermission()
+                        if (status != "ALREADY_GRANTED") {
+                            Toast.makeText(context, "Opening Shizuku...", Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    onPairAdb = { showPairingDialog = true },
+                    onRequestRoot = {
+                        scope.launch {
+                            val info = repository.requestRootPermission()
+                            Toast.makeText(context, info.statusMessage, Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                )
             }
         }
 
@@ -185,7 +162,7 @@ fun ToolsScreen(
                 colors = CardDefaults.cardColors(
                     containerColor = MaterialTheme.colorScheme.surfaceVariant
                 ),
-                border = BorderStroke(1.dp, KyroOrange.copy(alpha = 0.45f)),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)),
                 elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
             ) {
                 Column(
@@ -776,27 +753,6 @@ fun ToolsScreen(
                 }
             }
         }
-
-        if (!overview.isAnyPermissionActive) {
-            item {
-                PermissionRequiredBanner(
-                    overview = overview,
-                    onConnectShizuku = {
-                        val status = repository.requestShizukuPermission()
-                        if (status != "ALREADY_GRANTED") {
-                            Toast.makeText(context, "Opening Shizuku...", Toast.LENGTH_SHORT).show()
-                        }
-                    },
-                    onPairAdb = { showPairingDialog = true },
-                    onRequestRoot = {
-                        scope.launch {
-                            val info = repository.requestRootPermission()
-                            Toast.makeText(context, info.statusMessage, Toast.LENGTH_SHORT).show()
-                        }
-                    }
-                )
-            }
-        }
     }
 
     if (showPairingDialog) {
@@ -809,45 +765,5 @@ fun ToolsScreen(
             onDisconnect = { repository.disconnectManualAdb() },
             onDismiss = { showPairingDialog = false }
         )
-    }
-}
-
-@Composable
-private fun QuickToolChip(
-    label: String,
-    icon: ImageVector,
-    accent: Color,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Surface(
-        onClick = onClick,
-        shape = RoundedCornerShape(12.dp),
-        color = accent.copy(alpha = 0.14f),
-        border = BorderStroke(1.dp, accent.copy(alpha = 0.45f)),
-        modifier = modifier
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = label,
-                tint = accent,
-                modifier = Modifier.size(14.dp)
-            )
-            Spacer(modifier = Modifier.width(4.dp))
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelSmall,
-                fontWeight = FontWeight.Bold,
-                color = Color.White,
-                fontSize = 10.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-        }
     }
 }

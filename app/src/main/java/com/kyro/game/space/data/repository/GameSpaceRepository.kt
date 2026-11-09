@@ -233,17 +233,14 @@ class GameSpaceRepository(
             }
             // Automatically sanitize any legacy global flags that could affect Play Integrity
             try {
-                val allAngle = Settings.Global.getInt(context.contentResolver, "angle_gl_driver_all_angle", 0)
-                val gpuDebug = Settings.Global.getString(context.contentResolver, "gpu_debug_app")
-                if (allAngle != 0 || !gpuDebug.isNullOrBlank()) {
-                    executeCommand(
-                        "settings put global angle_gl_driver_all_angle 0 2>/dev/null || true; " +
-                            "settings delete global gpu_debug_app 2>/dev/null || true; " +
-                            "settings delete global angle_debug_package 2>/dev/null || true; " +
-                            "settings delete global enable_gpu_debug_layers 2>/dev/null || true; " +
-                            "settings delete global block_untrusted_touches 2>/dev/null || true"
-                    )
-                }
+                executeCommand(
+                    "settings put global angle_gl_driver_all_angle 0 2>/dev/null || true; " +
+                        "settings delete global gpu_debug_app 2>/dev/null || true; " +
+                        "settings delete global angle_debug_package 2>/dev/null || true; " +
+                        "settings delete global enable_gpu_debug_layers 2>/dev/null || true; " +
+                        "settings delete global block_untrusted_touches 2>/dev/null || true; " +
+                        "cmd netpolicy set restrict-background false 2>/dev/null || true"
+                )
             } catch (_: Throwable) {
             }
             if (hadUnconfirmedResolutionOnStartup) {
@@ -604,7 +601,20 @@ class GameSpaceRepository(
                             lower.startsWith("com.android.vending") ||
                             lower.startsWith("com.google.android.ext") ||
                             lower.startsWith("com.google.mainline") ||
+                            lower.startsWith("com.google.android.ims") ||
+                            lower.startsWith("com.google.android.permissioncontroller") ||
+                            lower.startsWith("com.google.android.packageinstaller") ||
+                            lower.startsWith("com.google.android.networkstack") ||
+                            lower.startsWith("com.google.android.captiveportallogin") ||
                             lower.startsWith("com.android.providers.") ||
+                            lower.startsWith("com.android.systemui") ||
+                            lower.startsWith("com.android.settings") ||
+                            lower.startsWith("com.android.phone") ||
+                            lower.startsWith("com.android.server.") ||
+                            lower.startsWith("com.miui.security") ||
+                            lower.startsWith("com.xiaomi.finddevice") ||
+                            lower.startsWith("com.samsung.android.kgclient") ||
+                            lower.startsWith("com.samsung.android.knox") ||
                             lower.startsWith("moe.shizuku") ||
                             lower.startsWith("rikka.shizuku") ||
                             lower.contains("magisk") ||
@@ -651,6 +661,16 @@ class GameSpaceRepository(
                         "com.android.chrome"
                     )
 
+                    val launchableSet = mutableSetOf<String>()
+                    try {
+                        val launcherIntent = Intent(Intent.ACTION_MAIN, null).addCategory(Intent.CATEGORY_LAUNCHER)
+                        for (res in pm.queryIntentActivities(launcherIntent, 0)) {
+                            val p = res.activityInfo?.packageName?.trim().orEmpty()
+                            if (p.isNotEmpty()) launchableSet.add(p)
+                        }
+                    } catch (_: Throwable) {
+                    }
+
                     // Build map of installed apps so we never force-stop core system/security/integrity packages
                     val installedMap = mutableMapOf<String, ApplicationInfo>()
                     try {
@@ -668,7 +688,8 @@ class GameSpaceRepository(
                         if (pkgName in knownMediaAndBgApps) return true
                         val info = installedMap[pkgName] ?: return false
                         val isSystem = (info.flags and ApplicationInfo.FLAG_SYSTEM) != 0
-                        if (isSystem) return false
+                        val isUpdatedSystem = (info.flags and ApplicationInfo.FLAG_UPDATED_SYSTEM_APP) != 0
+                        if (isSystem && !(isUpdatedSystem && pkgName in launchableSet)) return false
                         val labelLower = try {
                             pm.getApplicationLabel(info).toString().lowercase(Locale.US)
                         } catch (_: Throwable) {
@@ -678,7 +699,9 @@ class GameSpaceRepository(
                             labelLower.contains("kernelsu") ||
                             labelLower.contains("apatch") ||
                             labelLower.contains("shizuku") ||
-                            labelLower.contains("integrity")
+                            labelLower.contains("integrity") ||
+                            labelLower.contains("play services") ||
+                            labelLower.contains("play store")
                         ) {
                             return false
                         }
@@ -2572,24 +2595,6 @@ class GameSpaceRepository(
                 Result.success("System defaults restored (SurfaceFlinger, Touch Speed & Heads-Up notifications reset).")
             } else {
                 Result.failure(Exception(res.stderr.ifBlank { "Failed to restore defaults via ${executionMethod.value.name}" }))
-            }
-        } catch (e: Throwable) {
-            com.kyro.game.space.service.PlayBoostNotificationManager.cancelBoostNotification(context)
-            Result.failure(e)
-        }
-    }
-
-    suspend fun restoreSafePlayIntegrityAndSystemDefaults(): Result<String> = withContext(Dispatchers.IO) {
-        try {
-            eglTextureSession.releaseSession()
-            prefs.edit().putBoolean("tex_session_live", false).apply()
-            val cmd = PlayBoostConfig.buildRestorePlayIntegrityAndSystemCommand()
-            val res = executeCommand(cmd)
-            com.kyro.game.space.service.PlayBoostNotificationManager.cancelBoostNotification(context)
-            if (res.isSuccess) {
-                Result.success("Play Integrity & System Defaults restored! Global ANGLE, GPU debug flags, and netpolicy cleaned.")
-            } else {
-                Result.failure(Exception(res.stderr.ifBlank { "Connect Shizuku, Wireless ADB, or Root first to restore system flags." }))
             }
         } catch (e: Throwable) {
             com.kyro.game.space.service.PlayBoostNotificationManager.cancelBoostNotification(context)
