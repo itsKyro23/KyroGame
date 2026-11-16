@@ -125,9 +125,9 @@ fun ConnectionStatusCard(
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = when (overview.method) {
-                                ExecutionMethod.SHIZUKU -> "Shizuku Engine"
-                                ExecutionMethod.MANUAL_ADB -> "Manual ADB (libadb.so)"
-                                ExecutionMethod.ROOT -> "Root Access (su)"
+                                ExecutionMethod.SHIZUKU -> strings.engineShizukuName
+                                ExecutionMethod.MANUAL_ADB -> strings.engineAdbName
+                                ExecutionMethod.ROOT -> strings.engineRootName
                             },
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
@@ -215,7 +215,7 @@ fun ConnectionStatusCard(
                         ExecutionMethod.SHIZUKU -> {
                             Spacer(modifier = Modifier.height(6.dp))
                             Text(
-                                text = "Service: ${if (overview.shizuku.isRunning) "Running (API v${overview.shizuku.version})" else "Stopped"} • Permission: ${if (overview.shizuku.isPermissionGranted) "Granted" else "Not Granted"}",
+                                text = "${strings.connServiceLabel}: ${if (overview.shizuku.isRunning) "${strings.connRunning} (API v${overview.shizuku.version})" else strings.connStopped} • ${strings.connPermLabel}: ${if (overview.shizuku.isPermissionGranted) strings.connPermGranted else strings.connPermNotGranted}",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -248,7 +248,7 @@ fun ConnectionStatusCard(
                         ExecutionMethod.ROOT -> {
                             Spacer(modifier = Modifier.height(6.dp))
                             Text(
-                                text = "Binary: ${if (overview.root.isSuBinaryPresent) "su (${overview.root.suVersion})" else "Not Found"} • Access: ${if (overview.root.isRootGranted) "Granted (uid=0)" else "Not Granted"}",
+                                text = "${strings.connBinaryLabel}: ${if (overview.root.isSuBinaryPresent) "su (${overview.root.suVersion})" else strings.connNotFound} • ${strings.connAccessLabel}: ${if (overview.root.isRootGranted) "${strings.connPermGranted} (uid=0)" else strings.connPermNotGranted}",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = if (overview.root.isRootGranted) KyroGreen else MaterialTheme.colorScheme.onSurfaceVariant
                             )

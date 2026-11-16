@@ -78,6 +78,7 @@ import com.kyro.game.space.ui.theme.KyroAccent
 import com.kyro.game.space.ui.theme.KyroCyan
 import com.kyro.game.space.ui.theme.KyroGreen
 import com.kyro.game.space.ui.theme.KyroOrange
+import com.kyro.game.space.ui.theme.appStrings
 import com.kyro.game.space.util.AppIconCache
 import kotlinx.coroutines.launch
 
@@ -92,6 +93,7 @@ fun AotCompilerScreen(
     BackHandler { onBack() }
 
     val context = LocalContext.current
+    val strings = appStrings()
     val responsive = com.kyro.game.space.ui.theme.rememberResponsiveMetrics()
     val scope = rememberCoroutineScope()
     val aotState by repository.aotCompilerState.collectAsState()
@@ -135,7 +137,7 @@ fun AotCompilerScreen(
         ?: if (aotState.selectedTargetPackage.isNotBlank()) {
             aotState.selectedTargetPackage
         } else {
-            "All Added Home Games (${displayGames.size})"
+            "${strings.aotAllHomeGamesLabel} (${displayGames.size})"
         }
 
     val selectedTargetAotStatus = if (aotState.selectedTargetPackage.isNotBlank()) {
@@ -153,7 +155,7 @@ fun AotCompilerScreen(
             val st = aotState.statusForPackage(it.packageName)
             st == GameAotStatus.SPEED_PROFILE || st == GameAotStatus.FULL_SPEED
         }
-        "Compiled: $compiledInHome/${displayGames.size} Home games • Tap to select..."
+        "$compiledInHome/${displayGames.size} • ${strings.aotTapToSelectLabel}"
     }
 
     val executeCompilationNow: () -> Unit = {
@@ -947,7 +949,7 @@ fun AotCompilerScreen(
             },
             confirmButton = {
                 TextButton(onClick = { showTargetPickerDialog = false }) {
-                    Text("Close")
+                    Text(strings.btnClose)
                 }
             }
         )

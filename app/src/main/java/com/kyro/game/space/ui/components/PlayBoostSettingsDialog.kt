@@ -64,6 +64,7 @@ import com.kyro.game.space.ui.theme.KyroCyan
 import com.kyro.game.space.ui.theme.KyroGreen
 import com.kyro.game.space.ui.theme.KyroOrange
 import com.kyro.game.space.ui.theme.KyroPrimary
+import com.kyro.game.space.ui.theme.appStrings
 import com.kyro.game.space.ui.theme.rememberResponsiveMetrics
 
 @Composable
@@ -74,6 +75,7 @@ fun PlayBoostSettingsDialog(
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
+    val strings = appStrings()
     val responsive = rememberResponsiveMetrics()
 
     var deepRamPurge by remember(initialConfig) { mutableStateOf(initialConfig.deepRamPurge) }
@@ -153,16 +155,15 @@ fun PlayBoostSettingsDialog(
                     }
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "PLAY AUTO-BOOST SETTINGS",
+                            text = strings.playBoostTitle,
                             style = MaterialTheme.typography.titleSmall,
                             fontWeight = FontWeight.Black,
                             letterSpacing = 0.9.sp,
                             color = Color.White,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
+                            maxLines = 1
                         )
                         Text(
-                            text = "Auto-executed when tapping Play on any game",
+                            text = strings.playBoostSubtitle,
                             style = MaterialTheme.typography.labelSmall,
                             color = Color(0xFF8E99B3),
                             fontSize = 10.5.sp
@@ -195,7 +196,7 @@ fun PlayBoostSettingsDialog(
                 // 1. Pinned Preset Tier Selector Row (Eco Pulse / Velocity Core / Nox Overdrive)
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(
-                        text = "AUTO-BOOST PRESET TIER",
+                        text = strings.playBoostPresetHeader,
                         style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.Bold,
                         color = Color(0xFF8E99B3),
@@ -270,7 +271,7 @@ fun PlayBoostSettingsDialog(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "REAL PRE-LAUNCH EXECUTION CHECKLIST",
+                            text = strings.playBoostStagesHeader,
                             style = MaterialTheme.typography.labelSmall,
                             fontWeight = FontWeight.Bold,
                             color = Color(0xFF8E99B3),
@@ -362,7 +363,7 @@ fun PlayBoostSettingsDialog(
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
-                            text = "Restore Stock System Defaults (Display, Touch & Pop-Up)",
+                            text = strings.playBoostRestoreBtn,
                             style = MaterialTheme.typography.labelSmall,
                             color = Color(0xFFA2AEC6),
                             fontSize = 10.5.sp
@@ -385,7 +386,7 @@ fun PlayBoostSettingsDialog(
                     onSaveConfig(newCfg)
                     Toast.makeText(
                         context,
-                        "Play Boost saved: ${activeTier.title} (${newCfg.activeStagesCount}/${PlayBoostConfig.TOTAL_STAGES} stages active)",
+                        "${strings.playBoostTitle}: ${activeTier.title} (${newCfg.activeStagesCount}/${PlayBoostConfig.TOTAL_STAGES})",
                         Toast.LENGTH_SHORT
                     ).show()
                     onDismiss()
@@ -404,7 +405,7 @@ fun PlayBoostSettingsDialog(
                 )
                 Spacer(modifier = Modifier.width(6.dp))
                 Text(
-                    text = "Save Settings",
+                    text = strings.playBoostSaveBtn,
                     fontWeight = FontWeight.Bold
                 )
             }
@@ -415,7 +416,7 @@ fun PlayBoostSettingsDialog(
                 modifier = Modifier.testTag("cancel_play_boost_btn")
             ) {
                 Text(
-                    text = "Cancel",
+                    text = strings.btnCancel,
                     color = Color(0xFF8E99B3),
                     fontWeight = FontWeight.SemiBold
                 )

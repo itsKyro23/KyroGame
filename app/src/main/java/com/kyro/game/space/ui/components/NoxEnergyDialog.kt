@@ -71,6 +71,7 @@ import com.kyro.game.space.data.energy.NoxEnergyManager
 import com.kyro.game.space.ui.theme.KyroCyan
 import com.kyro.game.space.ui.theme.KyroGreen
 import com.kyro.game.space.ui.theme.KyroOrange
+import com.kyro.game.space.ui.theme.appStrings
 import com.kyro.game.space.ui.theme.rememberResponsiveMetrics
 import kotlinx.coroutines.delay
 
@@ -131,6 +132,7 @@ fun NoxEnergyTopUpDialog(
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
+    val strings = appStrings()
     val responsive = rememberResponsiveMetrics()
     val energy by NoxEnergyManager.energyState
     val isTampered by NoxEnergyManager.isTampered
@@ -146,7 +148,7 @@ fun NoxEnergyTopUpDialog(
                 fallbackSecondsLeft--
             }
             val updated = NoxEnergyManager.addEnergyFromAd(context)
-            Toast.makeText(context, "+40 Energy added! Total: $updated⚡", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, "${strings.toastEnergyAddedPrefix} $updated⚡", Toast.LENGTH_SHORT).show()
             isWaitingFallback = false
             onDismiss()
         }
@@ -210,14 +212,14 @@ fun NoxEnergyTopUpDialog(
 
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = if (isTampered || energy < 0) "SECURITY INTEGRITY ALERT" else "NOX ENERGY CELL",
+                        text = if (isTampered || energy < 0) strings.energyTamperTitle else strings.energyVaultTitle,
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Black,
                         letterSpacing = 1.2.sp,
                         color = Color.White
                     )
                     Text(
-                        text = if (isTampered || energy < 0) "Tamper Violation Detected" else "Gaming Optimization Power Vault",
+                        text = if (isTampered || energy < 0) strings.energyTamperAlertTitle else strings.energyVaultSubtitle,
                         style = MaterialTheme.typography.labelSmall,
                         color = Color(0xFF8E99B3),
                         fontSize = 11.sp
@@ -254,14 +256,14 @@ fun NoxEnergyTopUpDialog(
                                     modifier = Modifier.size(18.dp)
                                 )
                                 Text(
-                                    text = "UNFAIR TAMPER DETECTED",
+                                    text = strings.energyTamperAlertTitle,
                                     style = MaterialTheme.typography.labelMedium,
                                     fontWeight = FontWeight.Black,
                                     color = Color(0xFFFF3366)
                                 )
                             }
                             Text(
-                                text = "Anti-hack integrity system identified an external database edit or memory manipulation. Energy is forcefully locked to -120 penalty.",
+                                text = strings.energyTamperDesc,
                                 style = MaterialTheme.typography.bodySmall,
                                 color = Color(0xFFE2E8F0),
                                 lineHeight = 16.sp
@@ -290,7 +292,7 @@ fun NoxEnergyTopUpDialog(
                             ) {
                                 Column {
                                     Text(
-                                        text = "CURRENT ENERGY",
+                                        text = strings.energyCurrentLabel,
                                         style = MaterialTheme.typography.labelSmall,
                                         fontSize = 10.sp,
                                         fontWeight = FontWeight.Bold,
@@ -321,7 +323,7 @@ fun NoxEnergyTopUpDialog(
                                     border = BorderStroke(1.dp, KyroGreen.copy(alpha = 0.4f))
                                 ) {
                                     Text(
-                                        text = "+40⚡ ON AD",
+                                        text = strings.energyOnAdBadge,
                                         style = MaterialTheme.typography.labelSmall,
                                         fontWeight = FontWeight.Bold,
                                         color = KyroGreen,
@@ -357,19 +359,19 @@ fun NoxEnergyTopUpDialog(
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
                                 Text(
-                                    text = "0⚡ Empty",
+                                    text = strings.energyEmptyLabel,
                                     style = MaterialTheme.typography.labelSmall,
                                     fontSize = 9.sp,
                                     color = Color(0xFF6B7280)
                                 )
                                 Text(
-                                    text = "Initial: ${NoxEnergyManager.INITIAL_ENERGY}⚡",
+                                    text = "${strings.energyInitialLabel}: ${NoxEnergyManager.INITIAL_ENERGY}⚡",
                                     style = MaterialTheme.typography.labelSmall,
                                     fontSize = 9.sp,
                                     color = Color(0xFF8E99B3)
                                 )
                                 Text(
-                                    text = "Max: ${NoxEnergyManager.MAX_ENERGY}⚡",
+                                    text = "${strings.energyMaxLabel}: ${NoxEnergyManager.MAX_ENERGY}⚡",
                                     style = MaterialTheme.typography.labelSmall,
                                     fontSize = 9.sp,
                                     color = KyroGreen
@@ -392,7 +394,7 @@ fun NoxEnergyTopUpDialog(
                             verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             Text(
-                                text = "FEATURE ENERGY COSTS (DEDUCTED ON APPLY ONLY)",
+                                text = strings.energyFeatureCostsHeader,
                                 style = MaterialTheme.typography.labelSmall,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 9.5.sp,
@@ -421,13 +423,13 @@ fun NoxEnergyTopUpDialog(
                                     )
                                     Column {
                                         Text(
-                                            text = "Lightweight Texture",
+                                            text = strings.toolTextureTitle,
                                             style = MaterialTheme.typography.bodySmall,
                                             fontWeight = FontWeight.SemiBold,
                                             color = Color.White
                                         )
                                         Text(
-                                            text = "Single: 20⚡ • All games: 40⚡",
+                                            text = strings.energyCostTextureSub,
                                             style = MaterialTheme.typography.labelSmall,
                                             color = Color(0xFF8E99B3),
                                             fontSize = 9.5.sp
@@ -473,13 +475,13 @@ fun NoxEnergyTopUpDialog(
                                     )
                                     Column {
                                         Text(
-                                            text = "Resolution Changer",
+                                            text = strings.toolResolutionTitle,
                                             style = MaterialTheme.typography.bodySmall,
                                             fontWeight = FontWeight.SemiBold,
                                             color = Color.White
                                         )
                                         Text(
-                                            text = "Display downscaling & auto DPI sync",
+                                            text = strings.energyCostResolutionSub,
                                             style = MaterialTheme.typography.labelSmall,
                                             color = Color(0xFF8E99B3),
                                             fontSize = 9.5.sp
@@ -525,13 +527,13 @@ fun NoxEnergyTopUpDialog(
                                     )
                                     Column {
                                         Text(
-                                            text = "Game Tune",
+                                            text = strings.energyCostGameTuneTitle,
                                             style = MaterialTheme.typography.bodySmall,
                                             fontWeight = FontWeight.SemiBold,
                                             color = Color.White
                                         )
                                         Text(
-                                            text = "Per-game FPS limit & overlay mode",
+                                            text = strings.energyCostGameTuneSub,
                                             style = MaterialTheme.typography.labelSmall,
                                             color = Color(0xFF8E99B3),
                                             fontSize = 9.5.sp
@@ -577,13 +579,13 @@ fun NoxEnergyTopUpDialog(
                                     )
                                     Column {
                                         Text(
-                                            text = "AOT Game DEX Compiler",
+                                            text = strings.toolAotTitle,
                                             style = MaterialTheme.typography.bodySmall,
                                             fontWeight = FontWeight.SemiBold,
                                             color = Color.White
                                         )
                                         Text(
-                                            text = "Native ARM64 ahead-of-time DEX compilation",
+                                            text = strings.energyCostAotSub,
                                             style = MaterialTheme.typography.labelSmall,
                                             color = Color(0xFF8E99B3),
                                             fontSize = 9.5.sp
@@ -620,7 +622,7 @@ fun NoxEnergyTopUpDialog(
                                 verticalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
                                 Text(
-                                    text = "Ad currently unavailable • Please wait ${fallbackSecondsLeft}s to claim +40⚡...",
+                                    text = strings.formatAdFallbackWaitMessage(fallbackSecondsLeft),
                                     style = MaterialTheme.typography.labelSmall,
                                     fontWeight = FontWeight.Bold,
                                     color = KyroOrange
@@ -651,7 +653,7 @@ fun NoxEnergyTopUpDialog(
                                 activity = activity,
                                 onReward = {
                                     val updated = NoxEnergyManager.addEnergyFromAd(context)
-                                    Toast.makeText(context, "+40 Energy added! Total: $updated⚡", Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(context, "${strings.toastEnergyAddedPrefix} $updated⚡", Toast.LENGTH_SHORT).show()
                                     onDismiss()
                                 },
                                 onAdUnavailable = {
@@ -681,7 +683,7 @@ fun NoxEnergyTopUpDialog(
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        text = if (isWaitingFallback) "Wait ${fallbackSecondsLeft}s (+40⚡)" else "Watch Ad (+40⚡)",
+                        text = if (isWaitingFallback) strings.formatWaitButtonLabel(fallbackSecondsLeft) else strings.energyWatchAdBtn,
                         fontWeight = FontWeight.Black,
                         fontSize = 13.sp
                     )
@@ -696,7 +698,7 @@ fun NoxEnergyTopUpDialog(
                 }
             ) {
                 Text(
-                    text = "Close",
+                    text = strings.btnClose,
                     color = Color(0xFFA0A7BD),
                     fontWeight = FontWeight.SemiBold
                 )
@@ -716,6 +718,7 @@ fun NoxInsufficientEnergyDialog(
     onEnergyGranted: () -> Unit
 ) {
     val context = LocalContext.current
+    val strings = appStrings()
     val responsive = rememberResponsiveMetrics()
     val energy by NoxEnergyManager.energyState
     val isTampered by NoxEnergyManager.isTampered
@@ -731,7 +734,7 @@ fun NoxInsufficientEnergyDialog(
                 fallbackSecondsLeft--
             }
             val updated = NoxEnergyManager.addEnergyFromAd(context)
-            Toast.makeText(context, "+40 Energy added! Total: $updated⚡", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, "${strings.toastEnergyAddedPrefix} $updated⚡", Toast.LENGTH_SHORT).show()
             isWaitingFallback = false
             if (updated >= requiredCost) {
                 onEnergyGranted()
@@ -776,14 +779,14 @@ fun NoxInsufficientEnergyDialog(
                 }
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "INSUFFICIENT ENERGY",
+                        text = strings.energyInsufficientTitle,
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Black,
                         letterSpacing = 1.1.sp,
                         color = Color.White
                     )
                     Text(
-                        text = "Quick Recharge Available",
+                        text = strings.energyQuickRechargeSubtitle,
                         style = MaterialTheme.typography.labelSmall,
                         color = KyroOrange,
                         fontSize = 11.sp
@@ -806,7 +809,7 @@ fun NoxInsufficientEnergyDialog(
                         border = BorderStroke(1.dp, Color(0xFFFF3366))
                     ) {
                         Text(
-                            text = "⚠️ Security alert: Energy is penalized to -120 due to detected external tamper.",
+                            text = "⚠️ ${strings.energyTamperShortAlert}",
                             style = MaterialTheme.typography.bodySmall,
                             color = Color(0xFFE2E8F0),
                             modifier = Modifier.padding(12.dp)
@@ -825,7 +828,7 @@ fun NoxInsufficientEnergyDialog(
                             verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             Text(
-                                text = "Applying $featureName",
+                                text = "${strings.energyApplyingPrefix} $featureName",
                                 style = MaterialTheme.typography.titleSmall,
                                 fontWeight = FontWeight.Bold,
                                 color = Color.White
@@ -837,7 +840,7 @@ fun NoxInsufficientEnergyDialog(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
-                                    text = "Required Energy:",
+                                    text = strings.energyRequiredLabel,
                                     style = MaterialTheme.typography.bodySmall,
                                     color = Color(0xFF8E99B3)
                                 )
@@ -856,7 +859,7 @@ fun NoxInsufficientEnergyDialog(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
-                                    text = "Current Energy:",
+                                    text = "${strings.energyCurrentLabel.lowercase().replaceFirstChar { it.uppercase() }}:",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = Color(0xFF8E99B3)
                                 )
@@ -877,7 +880,7 @@ fun NoxInsufficientEnergyDialog(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
-                                    text = "Shortfall:",
+                                    text = strings.energyShortfallLabel,
                                     style = MaterialTheme.typography.bodySmall,
                                     fontWeight = FontWeight.Bold,
                                     color = Color(0xFF8E99B3)
@@ -909,7 +912,7 @@ fun NoxInsufficientEnergyDialog(
                                 verticalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
                                 Text(
-                                    text = "Ad currently unavailable • Please wait ${fallbackSecondsLeft}s to claim +40⚡...",
+                                    text = strings.formatAdFallbackWaitMessage(fallbackSecondsLeft),
                                     style = MaterialTheme.typography.labelSmall,
                                     fontWeight = FontWeight.Bold,
                                     color = KyroOrange
@@ -937,7 +940,7 @@ fun NoxInsufficientEnergyDialog(
                                     modifier = Modifier.size(20.dp)
                                 )
                                 Text(
-                                    text = "Watch a quick Rewarded Ad to instantly recharge +40⚡ energy and continue with your optimization!",
+                                    text = strings.energyPromoDesc,
                                     style = MaterialTheme.typography.bodySmall,
                                     color = Color(0xFFDEE8F5),
                                     lineHeight = 16.sp
@@ -959,7 +962,7 @@ fun NoxInsufficientEnergyDialog(
                                 activity = activity,
                                 onReward = {
                                     val updated = NoxEnergyManager.addEnergyFromAd(context)
-                                    Toast.makeText(context, "+40 Energy added! Total: $updated⚡", Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(context, "${strings.toastEnergyAddedPrefix} $updated⚡", Toast.LENGTH_SHORT).show()
                                     if (updated >= requiredCost) {
                                         onEnergyGranted()
                                     }
@@ -986,7 +989,7 @@ fun NoxInsufficientEnergyDialog(
                     Icon(imageVector = Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        text = if (isWaitingFallback) "Wait ${fallbackSecondsLeft}s (+40⚡)" else "Watch Ad (+40⚡)",
+                        text = if (isWaitingFallback) strings.formatWaitButtonLabel(fallbackSecondsLeft) else strings.energyWatchAdBtn,
                         fontWeight = FontWeight.Black,
                         fontSize = 13.sp
                     )
@@ -1001,7 +1004,7 @@ fun NoxInsufficientEnergyDialog(
                 }
             ) {
                 Text(
-                    text = "Cancel",
+                    text = strings.btnCancel,
                     color = Color(0xFFA0A7BD),
                     fontWeight = FontWeight.SemiBold
                 )

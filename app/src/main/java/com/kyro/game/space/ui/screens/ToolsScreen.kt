@@ -137,7 +137,7 @@ fun ToolsScreen(
                     onConnectShizuku = {
                         val status = repository.requestShizukuPermission()
                         if (status != "ALREADY_GRANTED") {
-                            Toast.makeText(context, "Opening Shizuku...", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, strings.toastOpeningShizuku, Toast.LENGTH_SHORT).show()
                         }
                     },
                     onPairAdb = { showPairingDialog = true },
@@ -203,7 +203,7 @@ fun ToolsScreen(
                                     color = MaterialTheme.colorScheme.onSurface
                                 )
                                 Text(
-                                    text = "Pre-Compile DEX to Native ARM64 • Mode: ${aotState.selectedMode.shortLabel}",
+                                    text = "${strings.toolAotSubtitlePrefix} ${aotState.selectedMode.shortLabel}",
                                     style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     maxLines = 1,
@@ -267,9 +267,9 @@ fun ToolsScreen(
                             )
                             Text(
                                 text = if (aotState.lastCompiledCount > 0) {
-                                    "Compiled: ${aotState.lastCompiledCount} pkg(s) • ${aotState.lastCompiledModeLabel}"
+                                    "${strings.toolAotCompiledFooterPrefix} ${aotState.lastCompiledCount} pkg • ${aotState.lastCompiledModeLabel}"
                                 } else {
-                                    "Compile Game DEX: 15⚡ • Reset: Free"
+                                    strings.toolAotDefaultFooter
                                 },
                                 style = MaterialTheme.typography.labelSmall,
                                 color = KyroCyan,
@@ -363,7 +363,7 @@ fun ToolsScreen(
                                     color = MaterialTheme.colorScheme.onSurface
                                 )
                                 Text(
-                                    text = "Custom Display Scaling (360p – ${resState.nativeWidth}p) & DPI Sync",
+                                    text = "${strings.toolResolutionSubtitlePrefix} ${resState.nativeWidth}p) & DPI",
                                     style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     maxLines = 1,
@@ -424,7 +424,7 @@ fun ToolsScreen(
                                 modifier = Modifier.size(15.dp)
                             )
                             Text(
-                                text = "10s Countdown Watchdog • ${resState.currentDensityDpi} DPI",
+                                text = "${strings.toolResolutionFooterPrefix} • ${resState.currentDensityDpi} DPI",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = KyroCyan,
                                 fontWeight = FontWeight.SemiBold,
@@ -516,7 +516,7 @@ fun ToolsScreen(
                                     color = MaterialTheme.colorScheme.onSurface
                                 )
                                 Text(
-                                    text = "GPU Mipmap LOD Bias • Smooth / Retro / Blocky Pixels",
+                                    text = strings.toolTextureSubtitle,
                                     style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     maxLines = 1,
@@ -715,7 +715,7 @@ fun ToolsScreen(
                                 modifier = Modifier.size(15.dp)
                             )
                             Text(
-                                text = "Target: ${netState.activePingHost} (${netState.privateDnsHostname})",
+                                text = "${strings.toolNetworkTargetPrefix} ${netState.activePingHost} (${netState.privateDnsHostname})",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = KyroGreen,
                                 fontWeight = FontWeight.SemiBold,

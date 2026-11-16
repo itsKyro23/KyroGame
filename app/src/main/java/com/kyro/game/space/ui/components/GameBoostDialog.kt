@@ -68,6 +68,7 @@ import com.kyro.game.space.ui.theme.KyroCyan
 import com.kyro.game.space.ui.theme.KyroGreen
 import com.kyro.game.space.ui.theme.KyroOrange
 import com.kyro.game.space.ui.theme.KyroPrimary
+import com.kyro.game.space.ui.theme.appStrings
 import com.kyro.game.space.util.AppIconCache
 import kotlinx.coroutines.launch
 
@@ -79,6 +80,7 @@ fun GameBoostDialog(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val strings = appStrings()
     val scope = rememberCoroutineScope()
     val boostConfig by repository.playBoostConfig.collectAsState()
 
@@ -172,7 +174,7 @@ fun GameBoostDialog(
                             modifier = Modifier.size(15.dp)
                         )
                         Text(
-                            text = "${boostConfig.tier.title.uppercase()} • PRE-LAUNCH BOOST",
+                            text = "${boostConfig.tier.title.uppercase()} • ${strings.gameBoostBadgeSuffix}",
                             style = MaterialTheme.typography.labelSmall,
                             fontWeight = FontWeight.Black,
                             letterSpacing = 1.sp,
@@ -227,7 +229,7 @@ fun GameBoostDialog(
                         textAlign = TextAlign.Center
                     )
                     Text(
-                        text = "${(animatedProgress * 100).toInt()}% OPTIMIZED",
+                        text = "${(animatedProgress * 100).toInt()}% ${strings.gameBoostOptimizedSuffix}",
                         style = MaterialTheme.typography.titleMedium,
                         fontFamily = FontFamily.Monospace,
                         fontWeight = FontWeight.Bold,
@@ -334,7 +336,7 @@ fun GameBoostDialog(
                 modifier = Modifier.testTag("boost_cancel_btn")
             ) {
                 Text(
-                    text = "Cancel",
+                    text = strings.btnCancel,
                     color = Color(0xFFA0A7BD)
                 )
             }

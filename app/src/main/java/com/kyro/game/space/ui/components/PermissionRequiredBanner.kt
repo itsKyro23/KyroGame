@@ -38,10 +38,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.kyro.game.space.data.model.ConnectionOverview
-import com.kyro.game.space.data.model.ExecutionMethod
 import com.kyro.game.space.ui.theme.KyroCyan
 import com.kyro.game.space.ui.theme.KyroOrange
-import com.kyro.game.space.ui.theme.KyroPrimary
+import com.kyro.game.space.ui.theme.appStrings
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -53,6 +52,7 @@ fun PermissionRequiredBanner(
     modifier: Modifier = Modifier
 ) {
     if (overview.isAnyPermissionActive) return
+    val strings = appStrings()
 
     Card(
         modifier = modifier
@@ -92,12 +92,12 @@ fun PermissionRequiredBanner(
                 }
 
                 Column(modifier = Modifier.weight(1f)) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
                         Text(
-                            text = "ALL FEATURES LOCKED",
+                            text = strings.bannerFeaturesLocked,
                             style = MaterialTheme.typography.labelMedium,
                             fontWeight = FontWeight.Black,
                             letterSpacing = 0.8.sp,
@@ -108,7 +108,7 @@ fun PermissionRequiredBanner(
                             color = KyroOrange.copy(alpha = 0.25f)
                         ) {
                             Text(
-                                text = "1 PERMISSION REQUIRED",
+                                text = strings.bannerOnePermRequired,
                                 style = MaterialTheme.typography.labelSmall,
                                 fontWeight = FontWeight.Bold,
                                 color = KyroOrange,
@@ -117,13 +117,13 @@ fun PermissionRequiredBanner(
                             )
                         }
                     }
-                    Spacer(modifier = Modifier.height(2.dp))
+                    Spacer(modifier = Modifier.height(3.dp))
                     Text(
-                        text = "Activate at least 1 of the 3 execution permissions (Shizuku, Wireless ADB, or Root) to unlock game additions, tactical tools, and pre-launch boosting.",
+                        text = strings.bannerUnlockDesc,
                         style = MaterialTheme.typography.bodySmall,
                         color = Color(0xFFE2C9B0),
-                        fontSize = 11.sp,
-                        lineHeight = 15.sp
+                        fontSize = 11.5.sp,
+                        lineHeight = 16.sp
                     )
                 }
             }
@@ -151,7 +151,7 @@ fun PermissionRequiredBanner(
                     )
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
-                        text = "Open Shizuku",
+                        text = strings.bannerOpenShizuku,
                         style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.Bold
                     )
@@ -174,7 +174,7 @@ fun PermissionRequiredBanner(
                     )
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
-                        text = "Wireless ADB",
+                        text = strings.bannerWirelessAdb,
                         style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.Bold
                     )
@@ -197,7 +197,7 @@ fun PermissionRequiredBanner(
                     )
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
-                        text = "Grant Root",
+                        text = strings.bannerGrantRoot,
                         style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.Bold
                     )

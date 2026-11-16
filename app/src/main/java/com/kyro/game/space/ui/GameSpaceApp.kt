@@ -205,54 +205,46 @@ fun GameSpaceApp(
                 )
             },
             bottomBar = {
-                androidx.compose.foundation.layout.Column {
-                    com.kyro.game.space.ads.AdMobBanner(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = responsive.screenHorizontalPadding, vertical = 2.dp)
-                    )
-
-                    NavigationBar(
-                        containerColor = MaterialTheme.colorScheme.surface,
-                        tonalElevation = 6.dp,
-                        modifier = Modifier.testTag("bottom_nav_bar")
-                    ) {
-                        GameSpaceTab.entries.forEach { tab ->
-                            val isSelected = currentTab == tab && activeSubScreen == ToolSubScreen.NONE
-                            val tabLabel = when (tab) {
-                                GameSpaceTab.HOME -> strings.tabHome
-                                GameSpaceTab.TOOLS -> strings.tabTools
-                                GameSpaceTab.APPS -> strings.tabApps
-                                GameSpaceTab.SETTINGS -> strings.tabSettings
-                            }
-                            NavigationBarItem(
-                                selected = isSelected,
-                                onClick = {
-                                    activeSubScreen = ToolSubScreen.NONE
-                                    currentTab = tab
-                                },
-                                icon = {
-                                    Icon(
-                                        imageVector = if (isSelected) tab.selectedIcon else tab.unselectedIcon,
-                                        contentDescription = tabLabel
-                                    )
-                                },
-                                label = {
-                                    Text(
-                                        text = tabLabel,
-                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                },
-                                colors = NavigationBarItemDefaults.colors(
-                                    selectedIconColor = MaterialTheme.colorScheme.onPrimary,
-                                    selectedTextColor = KyroAccent,
-                                    indicatorColor = KyroPrimary
-                                ),
-                                modifier = Modifier.testTag("tab_${tab.name.lowercase()}")
-                            )
+                NavigationBar(
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    tonalElevation = 6.dp,
+                    modifier = Modifier.testTag("bottom_nav_bar")
+                ) {
+                    GameSpaceTab.entries.forEach { tab ->
+                        val isSelected = currentTab == tab && activeSubScreen == ToolSubScreen.NONE
+                        val tabLabel = when (tab) {
+                            GameSpaceTab.HOME -> strings.tabHome
+                            GameSpaceTab.TOOLS -> strings.tabTools
+                            GameSpaceTab.APPS -> strings.tabApps
+                            GameSpaceTab.SETTINGS -> strings.tabSettings
                         }
+                        NavigationBarItem(
+                            selected = isSelected,
+                            onClick = {
+                                activeSubScreen = ToolSubScreen.NONE
+                                currentTab = tab
+                            },
+                            icon = {
+                                Icon(
+                                    imageVector = if (isSelected) tab.selectedIcon else tab.unselectedIcon,
+                                    contentDescription = tabLabel
+                                )
+                            },
+                            label = {
+                                Text(
+                                    text = tabLabel,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            },
+                            colors = NavigationBarItemDefaults.colors(
+                                selectedIconColor = MaterialTheme.colorScheme.onPrimary,
+                                selectedTextColor = KyroAccent,
+                                indicatorColor = KyroPrimary
+                            ),
+                            modifier = Modifier.testTag("tab_${tab.name.lowercase()}")
+                        )
                     }
                 }
             }

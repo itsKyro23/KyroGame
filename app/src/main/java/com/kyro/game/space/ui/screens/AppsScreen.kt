@@ -197,7 +197,7 @@ fun AppsScreen(
                         onConnectShizuku = {
                             val status = repository.requestShizukuPermission()
                             if (status != "ALREADY_GRANTED") {
-                                Toast.makeText(context, "Opening Shizuku...", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, strings.toastOpeningShizuku, Toast.LENGTH_SHORT).show()
                             }
                         },
                         onPairAdb = { showPairingDialog = true },
@@ -266,7 +266,7 @@ fun AppsScreen(
                         showPermissionBlockedDialog = false
                         val status = repository.requestShizukuPermission()
                         if (status != "ALREADY_GRANTED") {
-                            Toast.makeText(context, "Opening Shizuku...", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, strings.toastOpeningShizuku, Toast.LENGTH_SHORT).show()
                         }
                     },
                     shape = RoundedCornerShape(12.dp),

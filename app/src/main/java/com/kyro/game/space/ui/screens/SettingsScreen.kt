@@ -112,9 +112,9 @@ fun SettingsScreen(
     }
 
     val activeMethodDisplayName = when (overview.method) {
-        ExecutionMethod.SHIZUKU -> "Shizuku IPC"
-        ExecutionMethod.MANUAL_ADB -> "Wireless ADB Daemon"
-        ExecutionMethod.ROOT -> "Root Access (SU)"
+        ExecutionMethod.SHIZUKU -> strings.engineShizukuBadge
+        ExecutionMethod.MANUAL_ADB -> strings.engineAdbBadge
+        ExecutionMethod.ROOT -> strings.engineRootBadge
     }
 
     LazyColumn(
@@ -194,9 +194,9 @@ fun SettingsScreen(
                     ExecutionOptionRow(
                         title = strings.settingsShizukuTitle,
                         subtitle = if (overview.shizuku.version > 0) {
-                            "Low-latency binder IPC via Shizuku service (API v${overview.shizuku.version})"
+                            "${strings.settingsShizukuSubtitle} (API v${overview.shizuku.version})"
                         } else {
-                            "Low-latency binder IPC via official Shizuku service"
+                            strings.settingsShizukuSubtitle
                         },
                         icon = Icons.Default.Cable,
                         selected = overview.method == ExecutionMethod.SHIZUKU,
@@ -244,19 +244,23 @@ fun SettingsScreen(
                                     onClick = {
                                         val status = repository.requestShizukuPermission()
                                         when (status) {
-                                            "ALREADY_GRANTED" -> Toast.makeText(context, "Shizuku permission is active and verified!", Toast.LENGTH_SHORT).show()
-                                            "REQUESTED" -> Toast.makeText(context, "Requesting Shizuku permission...", Toast.LENGTH_SHORT).show()
-                                            "OPENED_SHIZUKU" -> Toast.makeText(context, "Opening Shizuku app. Please ensure Shizuku service is running.", Toast.LENGTH_LONG).show()
-                                            "NOT_INSTALLED" -> Toast.makeText(context, "Shizuku app is not installed on this device.", Toast.LENGTH_LONG).show()
+                                            "ALREADY_GRANTED" -> Toast.makeText(context, strings.toastShizukuActive, Toast.LENGTH_SHORT).show()
+                                            "REQUESTED" -> Toast.makeText(context, strings.toastShizukuRequesting, Toast.LENGTH_SHORT).show()
+                                            "OPENED_SHIZUKU" -> Toast.makeText(context, strings.toastShizukuOpenApp, Toast.LENGTH_LONG).show()
+                                            "NOT_INSTALLED" -> Toast.makeText(context, strings.toastShizukuNotInstalled, Toast.LENGTH_LONG).show()
                                             else -> Toast.makeText(context, status, Toast.LENGTH_SHORT).show()
                                         }
                                     },
                                     modifier = Modifier
                                         .weight(1f)
                                         .testTag("request_shizuku_perm_btn"),
-                                    shape = RoundedCornerShape(12.dp)
+                                    shape = RoundedCornerShape(12.dp),
+                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 10.dp)
                                 ) {
-                                    Text(strings.btnCheckGrantShizuku, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                    Text(
+                                        text = if (overview.shizuku.isPermissionGranted) strings.btnShizukuActive else strings.btnCheckGrantShizuku,
+                                        maxLines = 1
+                                    )
                                 }
                             }
                             ExecutionMethod.MANUAL_ADB -> {
@@ -380,7 +384,7 @@ fun SettingsScreen(
                             checked = floatingHudEnabled,
                             onCheckedChange = { isEnabled ->
                                 if (isEnabled && !isOverlayGranted) {
-                                    Toast.makeText(context, "Please grant 'Display over other apps' permission first", Toast.LENGTH_LONG).show()
+                                    Toast.makeText(context, strings.toastOverlayFirst, Toast.LENGTH_LONG).show()
                                     val intent = Intent(
                                         Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
                                         Uri.parse("package:${context.packageName}")
@@ -392,10 +396,10 @@ fun SettingsScreen(
                                     repository.setFloatingHudEnabled(isEnabled)
                                     if (isEnabled) {
                                         FloatingHudService.start(context)
-                                        Toast.makeText(context, "In-Game Floating HUD enabled", Toast.LENGTH_SHORT).show()
+                                        Toast.makeText(context, strings.toastHudEnabled, Toast.LENGTH_SHORT).show()
                                     } else {
                                         FloatingHudService.stop(context)
-                                        Toast.makeText(context, "In-Game Floating HUD disabled", Toast.LENGTH_SHORT).show()
+                                        Toast.makeText(context, strings.toastHudDisabled, Toast.LENGTH_SHORT).show()
                                     }
                                 }
                             },
@@ -505,7 +509,7 @@ fun SettingsScreen(
                                             repository.setAppLanguage(lang)
                                             Toast.makeText(
                                                 context,
-                                                "Language set to ${lang.label}",
+                                                "${strings.toastLanguageChangedPrefix} ${lang.label}",
                                                 Toast.LENGTH_SHORT
                                             ).show()
                                         },
@@ -689,7 +693,7 @@ fun SettingsScreen(
                         onClick = {
                             scope.launch {
                                 repository.scanAndSyncInstalledApps()
-                                Toast.makeText(context, "Rescanned installed games and synced playtime", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, strings.toastRescannedGames, Toast.LENGTH_SHORT).show()
                             }
                         },
                         modifier = Modifier.fillMaxWidth(),
@@ -777,12 +781,12 @@ fun SettingsScreen(
                         }
 
                         val (badgeText, badgeColor) = when (updateState) {
-                            is AppUpdateState.Checking -> Pair("CHECKING...", KyroCyan)
-                            is AppUpdateState.Available -> Pair("UPDATE AVAILABLE", KyroAccent)
-                            is AppUpdateState.Downloading -> Pair("DOWNLOADING", KyroCyan)
-                            is AppUpdateState.Downloaded -> Pair("READY TO INSTALL", KyroGreen)
-                            is AppUpdateState.Error -> Pair("PLAY STORE", Color(0xFFE57373))
-                            is AppUpdateState.UpToDate -> Pair("LATEST VERSION", KyroGreen)
+                            is AppUpdateState.Checking -> Pair(strings.updateBadgeChecking, KyroCyan)
+                            is AppUpdateState.Available -> Pair(strings.updateBadgeAvailable, KyroAccent)
+                            is AppUpdateState.Downloading -> Pair(strings.updateBadgeDownloading, KyroCyan)
+                            is AppUpdateState.Downloaded -> Pair(strings.updateBadgeReady, KyroGreen)
+                            is AppUpdateState.Error -> Pair(strings.updateBadgePlayStore, Color(0xFFE57373))
+                            is AppUpdateState.UpToDate -> Pair(strings.updateBadgeLatest, KyroGreen)
                             AppUpdateState.Idle -> Pair("v${BuildConfig.VERSION_NAME}", KyroGreen)
                         }
 
@@ -810,7 +814,7 @@ fun SettingsScreen(
                         is AppUpdateState.Checking -> {
                             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                                 Text(
-                                    text = "Connecting to Google Play Store to query version catalog...",
+                                    text = strings.updateCheckingText,
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -832,7 +836,7 @@ fun SettingsScreen(
                                     verticalArrangement = Arrangement.spacedBy(10.dp)
                                 ) {
                                     Text(
-                                        text = "A new release of NOX - Game Space (Build ${state.availableVersionCode}) is available on Google Play!",
+                                        text = "NOX - Game Space (Build ${state.availableVersionCode})",
                                         style = MaterialTheme.typography.bodySmall,
                                         fontWeight = FontWeight.Bold,
                                         color = Color.White
@@ -855,7 +859,7 @@ fun SettingsScreen(
                                         shape = RoundedCornerShape(10.dp),
                                         colors = ButtonDefaults.buttonColors(containerColor = KyroAccent)
                                     ) {
-                                        Text("Update Now (Google Play)", fontWeight = FontWeight.Bold)
+                                        Text(strings.updateAvailableBtn, fontWeight = FontWeight.Bold)
                                     }
                                 }
                             }
@@ -866,7 +870,7 @@ fun SettingsScreen(
                                     state.bytesDownloaded.toFloat() / state.totalBytes.toFloat()
                                 } else 0f
                                 Text(
-                                    text = "Downloading update from Google Play: ${state.bytesDownloaded / (1024 * 1024)}MB / ${state.totalBytes / (1024 * 1024)}MB",
+                                    text = "${state.bytesDownloaded / (1024 * 1024)}MB / ${state.totalBytes / (1024 * 1024)}MB",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = KyroCyan
                                 )
@@ -889,7 +893,7 @@ fun SettingsScreen(
                                     verticalArrangement = Arrangement.spacedBy(10.dp)
                                 ) {
                                     Text(
-                                        text = "Update downloaded and ready to install! Restart the app to apply changes.",
+                                        text = strings.updateDownloadedText,
                                         style = MaterialTheme.typography.bodySmall,
                                         fontWeight = FontWeight.Bold,
                                         color = KyroGreen
@@ -902,21 +906,21 @@ fun SettingsScreen(
                                         shape = RoundedCornerShape(10.dp),
                                         colors = ButtonDefaults.buttonColors(containerColor = KyroGreen)
                                     ) {
-                                        Text("Restart & Complete Update", color = Color.Black, fontWeight = FontWeight.Bold)
+                                        Text(strings.updateRestartBtn, color = Color.Black, fontWeight = FontWeight.Bold)
                                     }
                                 }
                             }
                         }
                         is AppUpdateState.Error -> {
                             Text(
-                                text = "Status: ${state.message}",
+                                text = state.message,
                                 style = MaterialTheme.typography.bodySmall,
                                 color = Color(0xFFE57373)
                             )
                         }
                         is AppUpdateState.UpToDate, AppUpdateState.Idle -> {
                             Text(
-                                text = "Current installed version: v${BuildConfig.VERSION_NAME} (Build ${BuildConfig.VERSION_CODE}). You are running the latest official build.",
+                                text = strings.formatCurrentVersionText(BuildConfig.VERSION_NAME, BuildConfig.VERSION_CODE),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -931,7 +935,7 @@ fun SettingsScreen(
                             onClick = {
                                 GooglePlayManager.checkForUpdate(context) { result ->
                                     if (result is AppUpdateState.UpToDate) {
-                                        Toast.makeText(context, "App is up to date (v${BuildConfig.VERSION_NAME})", Toast.LENGTH_SHORT).show()
+                                        Toast.makeText(context, "${strings.toastAppUpToDatePrefix} (v${BuildConfig.VERSION_NAME})", Toast.LENGTH_SHORT).show()
                                     }
                                 }
                             },
@@ -1228,7 +1232,7 @@ fun SettingsScreen(
                                 }
                             }
                             Text(
-                                text = "Tactical Gaming Performance & Hardware Optimization Suite",
+                                text = strings.aboutSubtitle,
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -1237,7 +1241,7 @@ fun SettingsScreen(
 
                     // Description
                     Text(
-                        text = "NOX - Game Space is a dedicated Android gaming performance hub engineered for competitive mobile gamers. It provides per-game hardware boosting, safe display resolution scaling with auto-revert protection, GPU mipmap/LOD lightweight texture tuning, multi-DNS stability benchmarking, and a live translucent in-game FPS, CPU, and GPU telemetry overlay.",
+                        text = strings.aboutDescription,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         lineHeight = 18.sp
@@ -1283,13 +1287,13 @@ fun SettingsScreen(
                                 }
                                 Column {
                                     Text(
-                                        text = "Privacy Policy & Compliance",
+                                        text = strings.aboutPrivacyTitle,
                                         style = MaterialTheme.typography.titleSmall,
                                         fontWeight = FontWeight.Bold,
                                         color = Color.White
                                     )
                                     Text(
-                                        text = "Contact: kyrostudios23@gmail.com • Tap to view & copy",
+                                        text = strings.aboutPrivacySubtitle,
                                         style = MaterialTheme.typography.labelSmall,
                                         color = Color(0xFF8E99B3),
                                         fontSize = 11.sp
@@ -1302,7 +1306,7 @@ fun SettingsScreen(
                                 border = BorderStroke(1.dp, KyroCyan.copy(alpha = 0.45f))
                             ) {
                                 Text(
-                                    text = "View & Copy",
+                                    text = strings.aboutViewCopyBtn,
                                     style = MaterialTheme.typography.labelSmall,
                                     fontWeight = FontWeight.Bold,
                                     color = KyroCyan,
@@ -1318,27 +1322,27 @@ fun SettingsScreen(
                     // Application Details Rows
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         AppInfoDetailRow(
-                            label = "Application Version",
+                            label = strings.aboutLabelVersion,
                             value = "${BuildConfig.VERSION_NAME} (Build ${BuildConfig.VERSION_CODE})"
                         )
                         AppInfoDetailRow(
-                            label = "Package Identifier",
+                            label = strings.aboutLabelPackage,
                             value = BuildConfig.APPLICATION_ID
                         )
                         AppInfoDetailRow(
-                            label = "Privacy Contact",
+                            label = strings.aboutLabelContact,
                             value = "kyrostudios23@gmail.com"
                         )
                         AppInfoDetailRow(
-                            label = "Permission Engines",
-                            value = "Shizuku IPC • Wireless ADB • Root (SU)"
+                            label = strings.aboutLabelEngines,
+                            value = "Shizuku • Wireless ADB • Root (SU)"
                         )
                         AppInfoDetailRow(
-                            label = "Tactical Modules",
-                            value = "Resolution Changer • Lightweight Texture • Network Optimizer • Live HUD"
+                            label = strings.aboutLabelModules,
+                            value = "${strings.toolAotTitle} • ${strings.toolResolutionTitle} • ${strings.toolTextureTitle} • ${strings.toolNetworkTitle}"
                         )
                         AppInfoDetailRow(
-                            label = "Device Environment",
+                            label = strings.aboutLabelDevice,
                             value = "${Build.MANUFACTURER} ${Build.MODEL} (Android ${Build.VERSION.RELEASE} • API ${Build.VERSION.SDK_INT})"
                         )
                     }

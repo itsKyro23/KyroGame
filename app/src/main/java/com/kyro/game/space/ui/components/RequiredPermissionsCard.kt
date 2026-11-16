@@ -86,14 +86,14 @@ fun RequiredPermissionsCard(
     var restrictedDialogTitle by remember { mutableStateOf("") }
 
     val execPermTitle = when (executionMethod) {
-        ExecutionMethod.SHIZUKU -> "Shizuku Permission"
-        ExecutionMethod.MANUAL_ADB -> "Wireless ADB / Daemon"
-        ExecutionMethod.ROOT -> "Root Access (su)"
+        ExecutionMethod.SHIZUKU -> strings.permShizukuTitle
+        ExecutionMethod.MANUAL_ADB -> strings.permAdbTitle
+        ExecutionMethod.ROOT -> strings.permRootTitle
     }
     val execPermDesc = when (executionMethod) {
-        ExecutionMethod.SHIZUKU -> "Executes elevated commands strictly via Shizuku IPC."
-        ExecutionMethod.MANUAL_ADB -> "Executes elevated commands strictly via Wireless ADB / Daemon."
-        ExecutionMethod.ROOT -> "Executes elevated commands strictly via Root shell (su)."
+        ExecutionMethod.SHIZUKU -> strings.permShizukuDesc
+        ExecutionMethod.MANUAL_ADB -> strings.permAdbDesc
+        ExecutionMethod.ROOT -> strings.permRootDesc
     }
 
     val permissions = listOf(
@@ -107,14 +107,14 @@ fun RequiredPermissionsCard(
         ),
         PermissionRequirement(
             id = "usage_stats",
-            name = "Usage Access",
-            description = "Required to track actual screen time and playtime for each game.",
+            name = strings.permUsageTitle,
+            description = strings.permUsageDesc,
             icon = Icons.Default.BarChart,
             isGranted = isUsageAccessGranted,
             isRestrictedTarget = true,
             onGrant = { ctx ->
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !isUsageAccessGranted) {
-                    restrictedDialogTitle = "Usage Access"
+                    restrictedDialogTitle = strings.permUsageTitle
                     restrictedDialogTargetAction = Settings.ACTION_USAGE_ACCESS_SETTINGS
                     showRestrictedGuideDialog = true
                 } else {
@@ -127,14 +127,14 @@ fun RequiredPermissionsCard(
         ),
         PermissionRequirement(
             id = "overlay",
-            name = "Display Over Other Apps",
-            description = "Powers the in-game Floating HUD performance window overlay.",
+            name = strings.permOverlayTitle,
+            description = strings.permOverlayDesc,
             icon = Icons.Default.Layers,
             isGranted = isOverlayGranted,
             isRestrictedTarget = true,
             onGrant = { ctx ->
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !isOverlayGranted) {
-                    restrictedDialogTitle = "Display Over Other Apps"
+                    restrictedDialogTitle = strings.permOverlayTitle
                     restrictedDialogTargetAction = Settings.ACTION_MANAGE_OVERLAY_PERMISSION
                     showRestrictedGuideDialog = true
                 } else {
@@ -150,8 +150,8 @@ fun RequiredPermissionsCard(
         ),
         PermissionRequirement(
             id = "notifications",
-            name = "Notifications",
-            description = "Maintains the Floating Window HUD service active in foreground.",
+            name = strings.permNotifTitle,
+            description = strings.permNotifDesc,
             icon = Icons.Default.Notifications,
             isGranted = isNotificationGranted,
             onGrant = { onRequestNotification() }
@@ -233,7 +233,7 @@ fun RequiredPermissionsCard(
                     )
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
-                        text = "App Info (⋮)",
+                        text = strings.permAppInfoBtn,
                         style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.Bold,
                         maxLines = 1
@@ -275,7 +275,7 @@ fun RequiredPermissionsCard(
             },
             title = {
                 Text(
-                    text = "How to Unlock 'Restricted Setting'",
+                    text = strings.permRestrictedDialogTitle,
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
@@ -283,13 +283,7 @@ fun RequiredPermissionsCard(
             text = {
                 Column {
                     Text(
-                        text = "On Android 13/14/15/16, special permissions for sideloaded APKs are initially greyed out ('Controlled by restricted setting').\n\n" +
-                                "Follow these steps:\n" +
-                                "1. Tap '1. Open App Info (⋮)' below.\n" +
-                                "2. On the App Info screen, tap the 3-dot menu (⋮) in the top-right corner.\n" +
-                                "3. Select 'Allow restricted settings'.\n" +
-                                "4. Verify with your device PIN or fingerprint.\n" +
-                                "5. Then tap '2. Open Permission' to enable the toggle!",
+                        text = strings.permRestrictedDialogBody,
                         style = MaterialTheme.typography.bodyMedium,
                         lineHeight = 20.sp
                     )
@@ -311,7 +305,7 @@ fun RequiredPermissionsCard(
                         modifier = Modifier.size(16.dp)
                     )
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text("1. Open App Info (⋮)")
+                    Text(strings.permRestrictedStep1Btn)
                 }
             },
             dismissButton = {
@@ -328,7 +322,7 @@ fun RequiredPermissionsCard(
                     },
                     shape = RoundedCornerShape(10.dp)
                 ) {
-                    Text("2. Open Permission")
+                    Text(strings.permRestrictedStep2Btn)
                 }
             }
         )
@@ -461,7 +455,7 @@ private fun PermissionRowItem(
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
-                            text = "Switch greyed out? Open App Info > 3 dots (⋮) > Allow restricted settings.",
+                            text = strings.permRestrictedTip,
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.weight(1f),
@@ -472,7 +466,7 @@ private fun PermissionRowItem(
                             contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 6.dp, vertical = 0.dp)
                         ) {
                             Text(
-                                text = "Open (⋮)",
+                                text = strings.permOpenBtn,
                                 style = MaterialTheme.typography.labelSmall,
                                 fontWeight = FontWeight.Bold
                             )

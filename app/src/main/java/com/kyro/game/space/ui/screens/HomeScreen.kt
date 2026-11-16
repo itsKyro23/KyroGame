@@ -140,18 +140,18 @@ fun HomeScreen(
                                 repository.updateShizukuStatus()
                                 val shizuku = repository.connectionState.value.shizuku
                                 val msg = when {
-                                    shizuku.isPermissionGranted -> "Shizuku connected & permission verified!"
-                                    shizuku.isRunning -> "Shizuku is running. Grant permission to execute commands."
-                                    else -> "Shizuku service is not running."
+                                    shizuku.isPermissionGranted -> strings.toastShizukuActive
+                                    shizuku.isRunning -> strings.toastShizukuGrantPrompt
+                                    else -> strings.toastShizukuNotRunning
                                 }
                                 Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
                             }
                             ExecutionMethod.MANUAL_ADB -> {
                                 val alive = repository.checkDaemonAndSyncState()
                                 val msg = if (alive) {
-                                    "Persistent Daemon is Active & Connected!"
+                                    strings.toastDaemonActive
                                 } else {
-                                    "Refreshed Wireless ADB / Daemon status"
+                                    strings.toastDaemonRefreshed
                                 }
                                 Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
                             }
@@ -176,10 +176,10 @@ fun HomeScreen(
                         ExecutionMethod.SHIZUKU -> {
                             val status = repository.requestShizukuPermission()
                             when (status) {
-                                "ALREADY_GRANTED" -> Toast.makeText(context, "Shizuku permission is active and verified!", Toast.LENGTH_SHORT).show()
-                                "REQUESTED" -> Toast.makeText(context, "Requesting Shizuku permission...", Toast.LENGTH_SHORT).show()
-                                "OPENED_SHIZUKU" -> Toast.makeText(context, "Opening Shizuku app. Please ensure Shizuku service is Running.", Toast.LENGTH_LONG).show()
-                                "NOT_INSTALLED" -> Toast.makeText(context, "Shizuku app is not installed on this device.", Toast.LENGTH_LONG).show()
+                                "ALREADY_GRANTED" -> Toast.makeText(context, strings.toastShizukuActive, Toast.LENGTH_SHORT).show()
+                                "REQUESTED" -> Toast.makeText(context, strings.toastShizukuRequesting, Toast.LENGTH_SHORT).show()
+                                "OPENED_SHIZUKU" -> Toast.makeText(context, strings.toastShizukuOpenApp, Toast.LENGTH_LONG).show()
+                                "NOT_INSTALLED" -> Toast.makeText(context, strings.toastShizukuNotInstalled, Toast.LENGTH_LONG).show()
                                 else -> Toast.makeText(context, status, Toast.LENGTH_SHORT).show()
                             }
                         }
@@ -199,7 +199,7 @@ fun HomeScreen(
                     onConnectShizuku = {
                         val status = repository.requestShizukuPermission()
                         if (status != "ALREADY_GRANTED") {
-                            Toast.makeText(context, "Opening Shizuku...", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, strings.toastOpeningShizuku, Toast.LENGTH_SHORT).show()
                         }
                     },
                     onPairAdb = { showPairingDialog = true },
@@ -239,7 +239,9 @@ fun HomeScreen(
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(end = 6.dp)
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(end = 8.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Default.SportsEsports,
@@ -252,7 +254,7 @@ fun HomeScreen(
                         text = strings.myGamesTitle,
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
-                        letterSpacing = if (responsive.isCompactWidth) 0.5.sp else 1.sp,
+                        letterSpacing = if (responsive.isCompactWidth) 0.4.sp else 0.8.sp,
                         maxLines = 1
                     )
                 }
@@ -270,13 +272,11 @@ fun HomeScreen(
                             1.dp,
                             tierBadgeColor.copy(alpha = 0.45f)
                         ),
-                        modifier = Modifier
-                            .weight(1f, fill = false)
-                            .testTag("open_play_boost_settings_btn")
+                        modifier = Modifier.testTag("open_play_boost_settings_btn")
                     ) {
                         Row(
                             modifier = Modifier.padding(
-                                horizontal = if (responsive.isCompactWidth) 8.dp else 10.dp,
+                                horizontal = if (responsive.isCompactWidth) 9.dp else 10.dp,
                                 vertical = 5.dp
                             ),
                             verticalAlignment = Alignment.CenterVertically,
@@ -289,55 +289,18 @@ fun HomeScreen(
                                 modifier = Modifier.size(14.dp)
                             )
                             Text(
-                                text = if (responsive.isCompactWidth) playBoostConfig.tier.title else "${strings.boostPrefix}: ${playBoostConfig.tier.title}",
+                                text = playBoostConfig.tier.title,
                                 style = MaterialTheme.typography.labelSmall,
                                 color = Color.White,
                                 fontWeight = FontWeight.Bold,
-                                fontSize = if (responsive.isCompactWidth) 10.sp else 11.sp,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
+                                fontSize = if (responsive.isCompactWidth) 10.5.sp else 11.sp,
+                                maxLines = 1
                             )
                             Icon(
                                 imageVector = Icons.Default.Tune,
                                 contentDescription = null,
                                 tint = tierBadgeColor,
                                 modifier = Modifier.size(13.dp)
-                            )
-                        }
-                    }
-
-                    // Quick AOT DEX Compiler Button
-                    Surface(
-                        onClick = onNavigateToAotCompiler,
-                        shape = RoundedCornerShape(12.dp),
-                        color = KyroOrange.copy(alpha = 0.14f),
-                        border = androidx.compose.foundation.BorderStroke(
-                            1.dp,
-                            KyroOrange.copy(alpha = 0.45f)
-                        ),
-                        modifier = Modifier.testTag("home_open_aot_compiler_btn")
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(
-                                horizontal = if (responsive.isCompactWidth) 8.dp else 10.dp,
-                                vertical = 5.dp
-                            ),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Bolt,
-                                contentDescription = "AOT Game DEX Compiler",
-                                tint = KyroOrange,
-                                modifier = Modifier.size(13.dp)
-                            )
-                            Text(
-                                text = "AOT DEX",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = KyroOrange,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = if (responsive.isCompactWidth) 10.sp else 11.sp,
-                                maxLines = 1
                             )
                         }
                     }
@@ -436,14 +399,14 @@ fun HomeScreen(
                     game = game,
                     onPlayClick = {
                         if (!overview.isAnyPermissionActive) {
-                            showPermissionBlockedDialog = "Cannot Boost & Launch: Active Shizuku, Wireless ADB, or Root permission is required to optimize and boost games before playing."
+                            showPermissionBlockedDialog = strings.permBlockedPlayMsg
                         } else {
                             boostingGame = game
                         }
                     },
                     onCustomizeClick = {
                         if (!overview.isAnyPermissionActive) {
-                            showPermissionBlockedDialog = "Cannot Tune Game: Active Shizuku, Wireless ADB, or Root permission is required to customize game graphics and fps."
+                            showPermissionBlockedDialog = strings.permBlockedTuneMsg
                         } else {
                             customizingGame = game
                         }
@@ -451,7 +414,7 @@ fun HomeScreen(
                     onRemoveClick = {
                         scope.launch {
                             repository.setAddedToHome(game.packageName, false)
-                            Toast.makeText(context, "Removed ${game.appName} from Home", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, "${strings.toastRemovedFromHomePrefix} ${game.appName}", Toast.LENGTH_SHORT).show()
                         }
                     }
                 )
@@ -485,10 +448,10 @@ fun HomeScreen(
                         ExecutionMethod.SHIZUKU -> {
                             val status = repository.requestShizukuPermission()
                             when (status) {
-                                "ALREADY_GRANTED" -> Toast.makeText(context, "Shizuku permission is active and verified!", Toast.LENGTH_SHORT).show()
-                                "REQUESTED" -> Toast.makeText(context, "Requesting Shizuku permission...", Toast.LENGTH_SHORT).show()
-                                "OPENED_SHIZUKU" -> Toast.makeText(context, "Opening Shizuku app. Please ensure Shizuku service is Running.", Toast.LENGTH_LONG).show()
-                                "NOT_INSTALLED" -> Toast.makeText(context, "Shizuku app is not installed on this device.", Toast.LENGTH_LONG).show()
+                                "ALREADY_GRANTED" -> Toast.makeText(context, strings.toastShizukuActive, Toast.LENGTH_SHORT).show()
+                                "REQUESTED" -> Toast.makeText(context, strings.toastShizukuRequesting, Toast.LENGTH_SHORT).show()
+                                "OPENED_SHIZUKU" -> Toast.makeText(context, strings.toastShizukuOpenApp, Toast.LENGTH_LONG).show()
+                                "NOT_INSTALLED" -> Toast.makeText(context, strings.toastShizukuNotInstalled, Toast.LENGTH_LONG).show()
                                 else -> Toast.makeText(context, status, Toast.LENGTH_SHORT).show()
                             }
                         }
@@ -596,7 +559,7 @@ fun HomeScreen(
                         showPermissionBlockedDialog = null
                         val status = repository.requestShizukuPermission()
                         if (status != "ALREADY_GRANTED") {
-                            Toast.makeText(context, "Opening Shizuku...", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, strings.toastOpeningShizuku, Toast.LENGTH_SHORT).show()
                         }
                     },
                     shape = RoundedCornerShape(12.dp),

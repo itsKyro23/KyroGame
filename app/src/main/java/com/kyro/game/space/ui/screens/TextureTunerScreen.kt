@@ -93,6 +93,7 @@ import com.kyro.game.space.data.repository.GameSpaceRepository
 import com.kyro.game.space.ui.theme.KyroCyan
 import com.kyro.game.space.ui.theme.KyroGreen
 import com.kyro.game.space.ui.theme.KyroOrange
+import com.kyro.game.space.ui.theme.appStrings
 import com.kyro.game.space.util.AppIconCache
 import kotlinx.coroutines.launch
 import java.util.Locale
@@ -112,6 +113,7 @@ fun TextureTunerScreen(
     BackHandler(onBack = onBack)
 
     val context = LocalContext.current
+    val strings = appStrings()
     val scope = rememberCoroutineScope()
     val tunerState by repository.textureTunerState.collectAsState()
     val connectionOverview by repository.connectionState.collectAsState()
@@ -1344,7 +1346,7 @@ fun TextureTunerScreen(
             },
             confirmButton = {
                 TextButton(onClick = { showTargetPickerDialog = false }) {
-                    Text("Close")
+                    Text(strings.btnClose)
                 }
             }
         )

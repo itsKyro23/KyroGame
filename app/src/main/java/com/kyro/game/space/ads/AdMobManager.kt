@@ -2,33 +2,8 @@ package com.kyro.game.space.ads
 
 import android.app.Activity
 import android.content.Context
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import androidx.compose.ui.viewinterop.AndroidView
 import com.google.android.gms.ads.AdError
 import com.google.android.gms.ads.AdRequest
-import com.google.android.gms.ads.AdSize
-import com.google.android.gms.ads.AdView
 import com.google.android.gms.ads.FullScreenContentCallback
 import com.google.android.gms.ads.LoadAdError
 import com.google.android.gms.ads.MobileAds
@@ -38,7 +13,7 @@ import com.google.android.gms.ads.rewarded.RewardedAd
 import com.google.android.gms.ads.rewarded.RewardedAdLoadCallback
 
 /**
- * Manages Google AdMob Ads (App Open Ad, Rewarded Energy Ad, and Banner Ad).
+ * Manages Google AdMob Ads (App Open Ad and Rewarded Energy Ad).
  * Configured with Real Production AdMob Unit IDs.
  */
 object AdMobManager {
@@ -255,74 +230,6 @@ object AdMobManager {
             isShowingRewarded = false
             loadRewardedAd(activity)
             onAdUnavailable()
-        }
-    }
-}
-
-/**
- * Clean Adaptive Banner Ad composable embedded with gaming card styling.
- * Placed in a persistent, non-scrolling position so it never reloads on scroll.
- */
-@Composable
-fun AdMobBanner(
-    modifier: Modifier = Modifier
-) {
-    val currentUnitId = AdMobManager.currentBannerAdId
-    val isTestMode = AdMobManager.USE_TEST_ADS
-
-    Card(
-        modifier = modifier
-            .fillMaxWidth()
-            .testTag("admob_banner_card"),
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = Color(0xFF10121C)
-        ),
-        border = BorderStroke(1.dp, Color(0xFF202638))
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 4.dp, horizontal = 8.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(4.dp)
-        ) {
-            // Subtle "Ad" tag badge
-            Surface(
-                shape = RoundedCornerShape(4.dp),
-                color = Color(0xFF262D42),
-                modifier = Modifier.align(Alignment.Start)
-            ) {
-                Text(
-                    text = if (isTestMode) "AD • TEST" else "AD",
-                    style = MaterialTheme.typography.labelSmall,
-                    fontSize = 9.sp,
-                    fontFamily = FontFamily.Monospace,
-                    fontWeight = FontWeight.Bold,
-                    color = Color(0xFF8E99B3),
-                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                )
-            }
-
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(min = 50.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                AndroidView(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag("admob_adview"),
-                    factory = { ctx ->
-                        AdView(ctx).apply {
-                            setAdSize(AdSize.BANNER)
-                            adUnitId = currentUnitId
-                            loadAd(AdRequest.Builder().build())
-                        }
-                    }
-                )
-            }
         }
     }
 }
