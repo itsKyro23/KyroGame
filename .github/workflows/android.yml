@@ -14,8 +14,9 @@ on:
       - master
   workflow_dispatch:
 
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+permissions:
+  contents: read
+  actions: write
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -76,41 +77,48 @@ jobs:
       - name: Build Debug APK
         run: ./gradlew assembleDebug --no-configuration-cache
 
-      - name: Build Android App Bundle (AAB)
+      - name: Build Release App Bundle (AAB)
         env:
           STORE_PASSWORD: ${{ secrets.STORE_PASSWORD || 'android' }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD || 'android' }}
-        run: ./gradlew bundleDebug bundleRelease --no-configuration-cache
+        run: ./gradlew bundleRelease --no-configuration-cache
 
-      - name: Upload Debug APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: NoxGameSpace-debug-apk
-          path: app/build/outputs/apk/debug/*.apk
-          retention-days: 14
-          if-no-files-found: error
-
-      - name: Upload Debug AAB
-        uses: actions/upload-artifact@v4
-        with:
-          name: NoxGameSpace-debug-aab
-          path: app/build/outputs/bundle/debug/*.aab
-          retention-days: 14
-          if-no-files-found: error
+      - name: Prune Old Artifacts
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          echo "Deleting previous artifacts to prevent hitting storage quota..."
+          ARTIFACT_IDS=$(gh api -X GET "/repos/${{ github.repository }}/actions/artifacts?per_page=100" --jq '.artifacts[].id' 2>/dev/null || true)
+          for id in $ARTIFACT_IDS; do
+            echo "Deleting artifact ID: $id"
+            gh api -X DELETE "/repos/${{ github.repository }}/actions/artifacts/$id" 2>/dev/null || true
+          done
 
       - name: Upload Release AAB
         uses: actions/upload-artifact@v4
         with:
           name: NoxGameSpace-release-aab
           path: app/build/outputs/bundle/release/*.aab
-          retention-days: 14
+          retention-days: 1
+          compression-level: 9
           if-no-files-found: warn
+
+      - name: Upload Debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: NoxGameSpace-debug-apk
+          path: app/build/outputs/apk/debug/*.apk
+          retention-days: 1
+          compression-level: 9
+          if-no-files-found: error
 
       - name: Upload Test Reports
         uses: actions/upload-artifact@v4
-        if: always()
+        if: failure()
         with:
           name: unit-test-results
           path: app/build/reports/tests/testDebugUnitTest/
-          retention-days: 7
+          retention-days: 1
+          compression-level: 9
           if-no-files-found: ignore
