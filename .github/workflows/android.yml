@@ -72,16 +72,16 @@ jobs:
           chmod +x gradlew
 
       - name: Run Unit Tests
-        run: ./gradlew testDebugUnitTest --no-configuration-cache
+        run: ./gradlew testDebugUnitTest --no-configuration-cache --no-parallel -Dkotlin.compiler.execution.strategy=daemon -Pkotlin.compiler.execution.strategy=daemon
 
       - name: Build Debug APK
-        run: ./gradlew assembleDebug --no-configuration-cache
+        run: ./gradlew assembleDebug --no-configuration-cache --no-parallel -Dkotlin.compiler.execution.strategy=daemon -Pkotlin.compiler.execution.strategy=daemon
 
       - name: Build Release App Bundle (AAB)
         env:
           STORE_PASSWORD: ${{ secrets.STORE_PASSWORD || 'android' }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD || 'android' }}
-        run: ./gradlew bundleRelease --no-configuration-cache
+        run: ./gradlew bundleRelease --no-configuration-cache --no-parallel -Dkotlin.compiler.execution.strategy=daemon -Pkotlin.compiler.execution.strategy=daemon
 
       - name: Prune Old Artifacts
         if: always()
@@ -89,7 +89,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           echo "Deleting previous artifacts to prevent hitting storage quota..."
-          ARTIFACT_IDS=$(gh api -X GET "/repos/${{ github.repository }}/actions/artifacts?per_page=100" --jq '.artifacts[].id' 2>/dev/null || true)
+          ARTIFACT_IDS=$(gh api --paginate "/repos/${{ github.repository }}/actions/artifacts?per_page=100" --jq '.artifacts[].id' 2>/dev/null || true)
           for id in $ARTIFACT_IDS; do
             echo "Deleting artifact ID: $id"
             gh api -X DELETE "/repos/${{ github.repository }}/actions/artifacts/$id" 2>/dev/null || true
