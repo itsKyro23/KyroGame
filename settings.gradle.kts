@@ -5,10 +5,11 @@ pluginManagement {
         includeGroupByRegex("com\\.android.*")
         includeGroupByRegex("com\\.google.*")
         includeGroupByRegex("androidx.*")
+        excludeGroupByRegex("com\\.google\\.devtools\\.ksp.*")
       }
     }
-    mavenCentral()
     gradlePluginPortal()
+    mavenCentral()
   }
 }
 
